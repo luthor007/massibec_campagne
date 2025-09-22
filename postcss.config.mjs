@@ -1,4 +1,10 @@
 /** @type {import('postcss-load-config').Config} */
+module.exports = {
+  plugins: [
+    require('tailwindcss'),
+    require('autoprefixer'),
+  ],
+};
 const config = {
   plugins: {
     tailwindcss: {},
@@ -6,3 +12,4 @@ const config = {
 };
 
 export default config;
+

@@ -1,0 +1,75 @@
+/* styles/campaignDetails.css */
+
+/* General Styles */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 5 1rem;
+  }
+  
+  .min-h-screen {
+    min-height: 100vh;
+  }
+  
+  .bg-gradient-to-b {
+    background-image: linear-gradient(to bottom, var(--tw-gradient-stops));
+  }
+  
+  /* Table Styles */
+  #orderTable {
+    width: 100%;
+    margin-top: 20px;
+  }
+  
+  #orderTable table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  #orderTable th, #orderTable td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  #orderTable th {
+    background-color: #f5f5f5;
+  }
+  
+  @media print {
+    /* Hide all elements except the main content */
+    body * {
+      visibility: hidden;
+    }
+  
+    .min-h-screen, .min-h-screen * {
+      visibility: visible;
+    }
+  
+    .min-h-screen {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+    }
+  
+    /* Hide buttons and interactive elements */
+    button, input, select, .progress, .cursor-pointer {
+      display: none;
+    }
+  
+    /* Adjust table styles for print */
+    #orderTable table {
+      border: 1px solid #000;
+    }
+  
+    #orderTable th, #orderTable td {
+      border: 1px solid #000;
+      padding: 8px;
+    }
+  
+    /* Optional: Page breaks between sections */
+    section {
+      page-break-after: always;
+    }
+  }
