@@ -33,7 +33,7 @@ export default function MultiStepInscriptionForm() {
     adresse: '',
     app: '',
     ville: '',
-    province: '',
+    province: 'QC',
     codePostal: '',
     telephone: ''
   })
