@@ -294,12 +294,12 @@ const EmailExample = () => {
               Dépôts automatiques
             </Label>
             <p className="text-sm text-gray-600">
-              Permet aux clients de faire des dépôts automatiques sans question de sécurité
+             Mon compte bancaire est configuré pour recevoir les dépôts automatiques.
             </p>
           </div>
           <div className="flex items-center space-x-3">
             <span className={`text-sm font-medium ${!formData.autoDeposit ? 'text-gray-600' : 'text-gray-400'}`}>
-              Désactivé
+              Non
             </span>
             <Switch
               id="autoDeposit"
@@ -308,7 +308,7 @@ const EmailExample = () => {
               className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
             />
             <span className={`text-sm font-medium ${formData.autoDeposit ? 'text-green-600' : 'text-gray-400'}`}>
-              Activé
+              Oui
             </span>
           </div>
         </div>
@@ -322,12 +322,14 @@ const EmailExample = () => {
               Réductions automatiques
             </Label>
             <p className="text-sm text-blue-600">
-              5% de réduction dès 6 produits commandés
+              {formData.discountEnabled 
+                ? "5% de réduction dès 6 produits commandés" 
+                : "Les réductions sont désactivées pour cette boutique"}
             </p>
           </div>
           <div className="flex items-center space-x-3">
             <span className={`text-sm font-medium ${!formData.discountEnabled ? 'text-gray-600' : 'text-gray-400'}`}>
-              Désactivé
+              Non
             </span>
             <Switch
               id="discountEnabled"
@@ -336,7 +338,7 @@ const EmailExample = () => {
               className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
             />
             <span className={`text-sm font-medium ${formData.discountEnabled ? 'text-green-600' : 'text-gray-400'}`}>
-              Activé
+              Oui
             </span>
           </div>
         </div>
