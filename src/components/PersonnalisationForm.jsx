@@ -63,11 +63,22 @@ export default function PersonnalisationForm() {
             console.error('Erreur lors du chargement de la date de livraison:', error);
           }
           
+          // Format delivery date
+          const formatDate = (dateString) => {
+            if (!dateString) return 'la date de livraison'
+            const date = new Date(dateString)
+            return date.toLocaleDateString('fr-CA', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })
+          }
+
           // Only set initial form data if not already set
           setFormData(prevData => ({
             ...prevData,
             nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
-            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${data?.dateDeLivraison || 'la date de livraison'}. 🙏 Merci pour votre soutien et bon appétit !`,
+            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(data?.dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`,
             hoursAvailable: prevData.hoursAvailable || '',
           }))
         }
