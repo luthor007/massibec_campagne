@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { useRouter } from 'next/router'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronLeft, ChevronRight, Mail, User, Home, CheckCircle, AlertCircle, X, Sparkles, Star } from 'lucide-react'
+import { ChevronRight, CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function MultiStepInscriptionForm() {
   const router = useRouter()
@@ -41,9 +41,9 @@ export default function MultiStepInscriptionForm() {
   const [school, setSchool] = useState(null)
 
   const steps = [
-    { id: 1, title: 'Informations de base', icon: User },
-    { id: 2, title: 'École & Objectif', icon: Home },
-    { id: 3, title: 'Informations parent', icon: User }
+    { id: 1, title: 'Informations de base' },
+    { id: 2, title: 'École & Objectif' },
+    { id: 3, title: 'Informations parent' }
   ]
 
   const handleChange = (e) => {
@@ -220,21 +220,17 @@ export default function MultiStepInscriptionForm() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
+            className="space-y-6"
           >
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mb-4">
-                <User className="h-8 w-8 text-white" />
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-3">Créer votre compte</h2>
-              <p className="text-gray-600 text-lg">Commençons par vos informations de base</p>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Créer votre compte</h2>
+              <p className="text-gray-600">Commençons par vos informations de base</p>
             </div>
 
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <Label htmlFor="email" className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                  <Mail className="h-4 w-4 text-blue-500" />
-                  Adresse e-mail *
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Adresse e-mail
                 </Label>
                 <div className="relative">
                   <Input
@@ -243,34 +239,36 @@ export default function MultiStepInscriptionForm() {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className={`pr-12 py-3 text-base rounded-xl border-2 transition-all duration-200 focus:ring-2 focus:ring-blue-500/20 ${
-                      emailExists ? 'border-red-400 bg-red-50' : 
-                      formData.email && !emailExists ? 'border-green-400 bg-green-50' : 
-                      'border-gray-200 hover:border-gray-300 focus:border-blue-500'
+                    className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      emailExists ? 'border-red-300 bg-red-50' : 
+                      formData.email && !emailExists ? 'border-green-300 bg-green-50' : 
+                      'border-gray-300'
                     }`}
                     placeholder="votre@email.com"
                     required
                   />
                   {isCheckingEmail && (
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                     </div>
                   )}
                   {!isCheckingEmail && formData.email && (
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                       {emailExists ? (
-                        <AlertCircle className="h-5 w-5 text-red-500" />
+                        <AlertCircle className="h-4 w-4 text-red-500" />
                       ) : (
-                        <CheckCircle className="h-5 w-5 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-green-500" />
                       )}
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label htmlFor="prenom" className="text-sm font-semibold text-gray-700">Prénom *</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="prenom" className="block text-sm font-medium text-gray-700 mb-1">
+                    Prénom
+                  </Label>
                   <Input
                     type="text"
                     id="prenom"
@@ -278,12 +276,14 @@ export default function MultiStepInscriptionForm() {
                     value={formData.prenom}
                     onChange={handleChange}
                     placeholder="Votre prénom"
-                    className="py-3 text-base rounded-xl border-2 border-gray-200 hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
-                <div className="space-y-3">
-                  <Label htmlFor="nom" className="text-sm font-semibold text-gray-700">Nom *</Label>
+                <div>
+                  <Label htmlFor="nom" className="block text-sm font-medium text-gray-700 mb-1">
+                    Nom
+                  </Label>
                   <Input
                     type="text"
                     id="nom"
@@ -291,14 +291,16 @@ export default function MultiStepInscriptionForm() {
                     value={formData.nom}
                     onChange={handleChange}
                     placeholder="Votre nom"
-                    className="py-3 text-base rounded-xl border-2 border-gray-200 hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <Label htmlFor="motDePasse" className="text-sm font-semibold text-gray-700">Mot de passe *</Label>
+              <div>
+                <Label htmlFor="motDePasse" className="block text-sm font-medium text-gray-700 mb-1">
+                  Mot de passe
+                </Label>
                 <Input
                   type="password"
                   id="motDePasse"
@@ -306,13 +308,15 @@ export default function MultiStepInscriptionForm() {
                   value={formData.motDePasse}
                   onChange={handleChange}
                   placeholder="Minimum 6 caractères"
-                  className="py-3 text-base rounded-xl border-2 border-gray-200 hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
 
-              <div className="space-y-3">
-                <Label htmlFor="confirmationMotDePasse" className="text-sm font-semibold text-gray-700">Confirmer le mot de passe *</Label>
+              <div>
+                <Label htmlFor="confirmationMotDePasse" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirmer le mot de passe
+                </Label>
                 <Input
                   type="password"
                   id="confirmationMotDePasse"
@@ -320,16 +324,15 @@ export default function MultiStepInscriptionForm() {
                   value={formData.confirmationMotDePasse}
                   onChange={handleChange}
                   placeholder="Répétez votre mot de passe"
-                  className={`py-3 text-base rounded-xl border-2 transition-all duration-200 focus:ring-2 focus:ring-blue-500/20 ${
+                  className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     formData.confirmationMotDePasse && formData.motDePasse !== formData.confirmationMotDePasse 
-                      ? 'border-red-400 bg-red-50' 
-                      : 'border-gray-200 hover:border-gray-300 focus:border-blue-500'
+                      ? 'border-red-300 bg-red-50' 
+                      : 'border-gray-300'
                   }`}
                   required
                 />
                 {formData.confirmationMotDePasse && formData.motDePasse !== formData.confirmationMotDePasse && (
-                  <p className="text-sm text-red-500 flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
+                  <p className="text-sm text-red-500 mt-1">
                     Les mots de passe ne correspondent pas
                   </p>
                 )}
@@ -345,19 +348,18 @@ export default function MultiStepInscriptionForm() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
+            className="space-y-6"
           >
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full mb-4">
-                <Home className="h-8 w-8 text-white" />
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-3">Votre école</h2>
-              <p className="text-gray-600 text-lg">Indiquez votre école et votre objectif personnel</p>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Votre école</h2>
+              <p className="text-gray-600">Indiquez votre école et votre objectif personnel</p>
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="schoolCode">Code d'identification de l'école *</Label>
+              <div>
+                <Label htmlFor="schoolCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  Code d'identification de l'école
+                </Label>
                 <Input
                   type="text"
                   id="schoolCode"
@@ -365,10 +367,11 @@ export default function MultiStepInscriptionForm() {
                   value={formData.schoolCode}
                   onChange={handleChange}
                   placeholder="Entrez le code fourni par votre école"
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
                 {school && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
                     <p className="text-sm text-green-700">
                       <strong>École trouvée:</strong> {school.name}
                     </p>
@@ -376,10 +379,12 @@ export default function MultiStepInscriptionForm() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="objectifPersonnel">Objectif personnel de vente *</Label>
+              <div>
+                <Label htmlFor="objectifPersonnel" className="block text-sm font-medium text-gray-700 mb-1">
+                  Objectif personnel de vente
+                </Label>
                 <Select value={formData.objectifPersonnel} onValueChange={(value) => setFormData(prev => ({ ...prev, objectifPersonnel: value }))}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     <SelectValue placeholder="Sélectionnez votre objectif" />
                   </SelectTrigger>
                   <SelectContent>
@@ -411,20 +416,19 @@ export default function MultiStepInscriptionForm() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="space-y-8"
+            className="space-y-6"
           >
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mb-4">
-                <User className="h-8 w-8 text-white" />
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-3">Informations parent</h2>
-              <p className="text-gray-600 text-lg">Dernière étape ! Informations du parent responsable</p>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Informations parent</h2>
+              <p className="text-gray-600">Dernière étape ! Informations du parent responsable</p>
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="prenomParent">Prénom du parent *</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="prenomParent" className="block text-sm font-medium text-gray-700 mb-1">
+                    Prénom du parent
+                  </Label>
                   <Input
                     type="text"
                     id="prenomParent"
@@ -432,11 +436,14 @@ export default function MultiStepInscriptionForm() {
                     value={formData.prenomParent}
                     onChange={handleChange}
                     placeholder="Prénom du parent"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nomParent">Nom du parent *</Label>
+                <div>
+                  <Label htmlFor="nomParent" className="block text-sm font-medium text-gray-700 mb-1">
+                    Nom du parent
+                  </Label>
                   <Input
                     type="text"
                     id="nomParent"
@@ -444,13 +451,16 @@ export default function MultiStepInscriptionForm() {
                     value={formData.nomParent}
                     onChange={handleChange}
                     placeholder="Nom du parent"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="adresse">Adresse *</Label>
+              <div>
+                <Label htmlFor="adresse" className="block text-sm font-medium text-gray-700 mb-1">
+                  Adresse
+                </Label>
                 <Input
                   type="text"
                   id="adresse"
@@ -458,13 +468,16 @@ export default function MultiStepInscriptionForm() {
                   value={formData.adresse}
                   onChange={handleChange}
                   placeholder="Numéro et nom de rue"
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="app">Appartement</Label>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="app" className="block text-sm font-medium text-gray-700 mb-1">
+                    Appartement
+                  </Label>
                   <Input
                     type="text"
                     id="app"
@@ -472,10 +485,13 @@ export default function MultiStepInscriptionForm() {
                     value={formData.app}
                     onChange={handleChange}
                     placeholder="Apt, suite, etc."
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ville">Ville *</Label>
+                <div>
+                  <Label htmlFor="ville" className="block text-sm font-medium text-gray-700 mb-1">
+                    Ville
+                  </Label>
                   <Input
                     type="text"
                     id="ville"
@@ -483,13 +499,16 @@ export default function MultiStepInscriptionForm() {
                     value={formData.ville}
                     onChange={handleChange}
                     placeholder="Ville"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="province">Province *</Label>
+                <div>
+                  <Label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-1">
+                    Province
+                  </Label>
                   <Select value={formData.province} onValueChange={(value) => setFormData(prev => ({ ...prev, province: value }))}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                       <SelectValue placeholder="Province" />
                     </SelectTrigger>
                     <SelectContent>
@@ -511,9 +530,11 @@ export default function MultiStepInscriptionForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="codePostal">Code postal *</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="codePostal" className="block text-sm font-medium text-gray-700 mb-1">
+                    Code postal
+                  </Label>
                   <Input
                     type="text"
                     id="codePostal"
@@ -521,11 +542,14 @@ export default function MultiStepInscriptionForm() {
                     value={formData.codePostal}
                     onChange={handleChange}
                     placeholder="A1A 1A1"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="telephone">Téléphone *</Label>
+                <div>
+                  <Label htmlFor="telephone" className="block text-sm font-medium text-gray-700 mb-1">
+                    Téléphone
+                  </Label>
                   <Input
                     type="tel"
                     id="telephone"
@@ -533,6 +557,7 @@ export default function MultiStepInscriptionForm() {
                     value={formData.telephone}
                     onChange={handleChange}
                     placeholder="(555) 123-4567"
+                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
                 </div>
@@ -547,157 +572,71 @@ export default function MultiStepInscriptionForm() {
   }
 
   return (
-    <div className="py-8">
-      <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-auto overflow-hidden"
-        >
-        {/* Header */}
-        <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 p-6 text-white">
-          <div className="text-center">
-            <div className="flex items-center justify-center mb-4">
-              <div className="bg-white/20 backdrop-blur-sm rounded-full p-3 mr-4">
-                <Sparkles className="h-8 w-8" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold">Inscription élève</h1>
-                <p className="text-blue-100">Rejoignez la campagne de financement Massibec</p>
-              </div>
-            </div>
+    <div className="min-h-screen flex items-center justify-center py-12 px-4">
+      <div className="w-full max-w-md">
+        {/* Simple Progress */}
+        <div className="mb-8">
+          <div className="flex justify-center space-x-2 mb-4">
+            {steps.map((step, index) => (
+              <div
+                key={step.id}
+                className={`w-2 h-2 rounded-full transition-colors ${
+                  currentStep >= step.id ? 'bg-blue-500' : 'bg-gray-200'
+                }`}
+              />
+            ))}
           </div>
+          <p className="text-center text-sm text-gray-500">
+            Étape {currentStep} sur {steps.length}
+          </p>
         </div>
 
-        {/* Progress Indicator */}
-        <div className="px-8 py-6 bg-gray-50 border-b">
-          <div className="flex items-center justify-between mb-4">
-            {steps.map((step, index) => {
-              const Icon = step.icon
-              const isActive = currentStep === step.id
-              const isCompleted = currentStep > step.id
-              
-              return (
-                <div key={step.id} className="flex flex-col items-center relative">
-                  <motion.div 
-                    className={`
-                      w-14 h-14 rounded-full flex items-center justify-center mb-3 transition-all duration-300 shadow-lg
-                      ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white scale-110' : 
-                        isCompleted ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' : 
-                        'bg-white text-gray-400 border-2 border-gray-200'}
-                    `}
-                    whileHover={{ scale: isActive ? 1.1 : 1.05 }}
-                  >
-                    {isCompleted ? <CheckCircle className="h-7 w-7" /> : <Icon className="h-7 w-7" />}
-                  </motion.div>
-                  <span className={`text-sm font-semibold ${isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
-                    {step.title}
-                  </span>
-                  
-                  {/* Connection line */}
-                  {index < steps.length - 1 && (
-                    <div className="absolute top-7 left-1/2 w-full h-0.5 bg-gray-200 -z-10">
-                      <div 
-                        className={`h-full transition-all duration-500 ${
-                          currentStep > step.id ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gray-200'
-                        }`}
-                        style={{ width: currentStep > step.id ? '100%' : '0%' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {errorMessage}
           </div>
-          
-          {/* Progress percentage */}
-          <div className="text-center">
-            <span className="text-sm text-gray-600">
-              Étape {currentStep} sur {steps.length} • {Math.round((currentStep / steps.length) * 100)}% complété
-            </span>
-          </div>
-        </div>
+        )}
 
-        {/* Content Area */}
-        <div className="p-8">
-          {/* Error Message */}
-          {errorMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-red-50 border-l-4 border-red-400 text-red-700 px-4 py-3 rounded-r-md mb-6 flex items-center gap-3"
-            >
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              <p className="text-sm font-medium">{errorMessage}</p>
-            </motion.div>
-          )}
+        {/* Form Content */}
+        <form onSubmit={currentStep === 3 ? handleSubmit : (e) => e.preventDefault()}>
+          <AnimatePresence mode="wait">
+            {renderStepContent()}
+          </AnimatePresence>
+        </form>
 
-          {/* Form Content */}
-          <form onSubmit={currentStep === 3 ? handleSubmit : (e) => e.preventDefault()}>
-            <AnimatePresence mode="wait">
-              {renderStepContent()}
-            </AnimatePresence>
-          </form>
-        </div>
-
-        {/* Footer with Navigation */}
-        <div className="bg-gray-50 px-8 py-6 border-t">
-          <div className="flex justify-between items-center">
+        {/* Simple Navigation */}
+        <div className="mt-8">
+          {currentStep < 3 ? (
             <Button
               type="button"
-              variant="outline"
-              onClick={prevStep}
-              disabled={currentStep === 1}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl border-2 hover:bg-gray-100 transition-all duration-200"
+              onClick={nextStep}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium"
             >
-              <ChevronLeft className="h-4 w-4" />
-              Précédent
+              Continuer
+              <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
-
-            <div className="text-center">
-              <p className="text-sm text-gray-600">
-                Déjà inscrit ?{' '}
-                <button
-                  onClick={() => router.push('/connexion')}
-                  className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"
-                >
-                  Se connecter
-                </button>
-              </p>
-            </div>
-
-            {currentStep < 3 ? (
-              <Button
-                type="button"
-                onClick={nextStep}
-                className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-              >
-                Suivant
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                onClick={handleSubmit}
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Inscription en cours...
-                  </>
-                ) : (
-                  <>
-                    <Star className="h-4 w-4" />
-                    Finaliser l'inscription
-                  </>
-                )}
-              </Button>
-            )}
-          </div>
+          ) : (
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium disabled:opacity-50"
+              onClick={handleSubmit}
+            >
+              {isSubmitting ? 'Inscription en cours...' : 'Finaliser l\'inscription'}
+            </Button>
+          )}
+          
+          <p className="text-center text-sm text-gray-500 mt-4">
+            Déjà inscrit ?{' '}
+            <button
+              onClick={() => router.push('/connexion')}
+              className="text-blue-500 hover:text-blue-600"
+            >
+              Se connecter
+            </button>
+          </p>
         </div>
-        </motion.div>
       </div>
     </div>
   )
