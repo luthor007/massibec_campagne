@@ -47,12 +47,13 @@ import {
 } from 'recharts'
 import {
   Award, Gift, Share2, TrendingUp, Star, Zap, Target,
-  AlertTriangle, Check, ArrowUp, ArrowDown, Trophy
+  AlertTriangle, Check, ArrowUp, ArrowDown, Trophy, Calendar
 } from 'lucide-react'
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Info } from 'lucide-react'
 import { Users, ShoppingCart, DollarSign } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 
 // Reward Levels
@@ -130,11 +131,34 @@ const colors = {
   background: "hsl(220, 100%, 98%)",
 }
 
+// School year definitions
+const schoolYears = [
+  { 
+    id: '2024-2025', 
+    label: '2024-2025', 
+    startDate: '2024-08-01', 
+    endDate: '2025-07-31' 
+  },
+  { 
+    id: '2025-2026', 
+    label: '2025-2026', 
+    startDate: '2025-08-01', 
+    endDate: '2026-07-31' 
+  },
+  { 
+    id: '2026-2027', 
+    label: '2026-2027', 
+    startDate: '2026-08-01', 
+    endDate: '2027-07-31' 
+  }
+]
+
 export default function StatistiquesEtudiantUltime() {
 
   const [activeTab, setActiveTab] = useState("apercu")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState('2025-2026')
   
   const [orders, setOrders] = useState([])
   const [school, setSchool] = useState(null)
@@ -153,6 +177,25 @@ export default function StatistiquesEtudiantUltime() {
   const userId = session?.user?.id
   const schoolId = session?.user?.school
 
+  // Get current school year date range
+  const getCurrentSchoolYear = () => {
+    return schoolYears.find(year => year.id === selectedSchoolYear) || schoolYears[1] // Default to 2025-2026
+  }
+
+  // Filter orders by school year
+  const getFilteredOrders = useCallback(() => {
+    if (!orders || orders.length === 0) return []
+    
+    const currentYear = schoolYears.find(year => year.id === selectedSchoolYear) || schoolYears[1]
+    const startDate = new Date(currentYear.startDate)
+    const endDate = new Date(currentYear.endDate)
+    
+    return orders.filter(order => {
+      const orderDate = new Date(order.createdAt)
+      return orderDate >= startDate && orderDate <= endDate
+    })
+  }, [orders, selectedSchoolYear])
+
   useEffect(() => {
     console.log('Session:', session);
     console.log('Status:', status);
@@ -161,20 +204,21 @@ export default function StatistiquesEtudiantUltime() {
   }, [session, status, userId, schoolId]);
 
   // Calculate total products sold
-// Calculate total products sold
   const calculateTotalProductsSold = useCallback(() => {
-    if (!orders || orders.length === 0) return 0;
-    return orders.reduce((total, order) => {
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders || filteredOrders.length === 0) return 0;
+    return filteredOrders.reduce((total, order) => {
       return total + order.products.reduce((sum, product) => sum + product.quantity, 0);
     }, 0);
-  }, [orders]);
+  }, [getFilteredOrders]);
 
   // Calculate total student earnings
   const calculateTotalStudentEarnings = useCallback(() => {
-    if (!orders || !school) return 0;
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders || !school) return 0;
     let totalEarnings = 0;
 
-    orders.forEach(order => {
+    filteredOrders.forEach(order => {
       const { products, tip } = order;
 
       // Calculate total cost of products in the order
@@ -193,15 +237,16 @@ export default function StatistiquesEtudiantUltime() {
     });
 
     return totalEarnings;
-  }, [orders, school]);
+  }, [getFilteredOrders, school]);
 
 
-    // Calculate total student earnings
+    // Calculate total student tip
     const calculateTotalStudentTip = useCallback(() => {
-      if (!orders || !school) return 0;
+      const filteredOrders = getFilteredOrders()
+      if (!filteredOrders || !school) return 0;
       let totalTip = 0;
   
-      orders.forEach(order => {
+      filteredOrders.forEach(order => {
         const { tip } = order;
   
         // Add to total earnings
@@ -209,14 +254,15 @@ export default function StatistiquesEtudiantUltime() {
       });
   
       return totalTip;
-    }, [orders, school]);
+    }, [getFilteredOrders, school]);
 
     // Calculate total student sales
   const calculateTotalStudentSales = useCallback(() => {
-    if (!orders || !school) return 0;
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders || !school) return 0;
     let totalSales = 0;
 
-    orders.forEach(order => {
+    filteredOrders.forEach(order => {
       const { products } = order;
 
       // Calculate total sales from products in the order
@@ -229,14 +275,15 @@ export default function StatistiquesEtudiantUltime() {
     });
 
     return totalSales;
-  }, [orders, school]);
+  }, [getFilteredOrders, school]);
 
   // Calculate total student cost
   const calculateTotalStudentCost = useCallback(() => {
-    if (!orders || !school) return 0;
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders || !school) return 0;
     let totalCost = 0;
 
-    orders.forEach(order => {
+    filteredOrders.forEach(order => {
       const { products } = order;
 
       // Calculate total cost of products in the order
@@ -246,7 +293,7 @@ export default function StatistiquesEtudiantUltime() {
     });
 
     return totalCost;
-  }, [orders, school]);
+  }, [getFilteredOrders, school]);
 
   // Handle real-time updates (if applicable)
   const handleUpdate = useCallback((newData) => {
@@ -255,7 +302,7 @@ export default function StatistiquesEtudiantUltime() {
     // setOrders(newData.orders)
     // setTopPerformers(newData.topPerformers)
     // Implement according to your actual data structure
-  }, [toast])
+  }, [])
 
   // Fetch User Data
   const fetchUser = useCallback(async (userId) => {
@@ -414,7 +461,8 @@ export default function StatistiquesEtudiantUltime() {
 
     // Function to calculate product breakdown from orders
     const getProductBreakdown = (orders) => {
-      const productBreakdown = orders.reduce((breakdown, order) => {
+      const filteredOrders = getFilteredOrders()
+      const productBreakdown = filteredOrders.reduce((breakdown, order) => {
         order.products.forEach(product => {
           const existingProduct = breakdown.find(p => p.name === product.name)
           if (existingProduct) {
@@ -512,6 +560,23 @@ export default function StatistiquesEtudiantUltime() {
         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
           Tableau de Bord de Campagne
         </h1>
+        
+        {/* School Year Selector */}
+        <div className="flex items-center space-x-2">
+          <Calendar className="h-5 w-5 text-gray-600" />
+          <Select value={selectedSchoolYear} onValueChange={setSelectedSchoolYear}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Année scolaire" />
+            </SelectTrigger>
+            <SelectContent>
+              {schoolYears.map((year) => (
+                <SelectItem key={year.id} value={year.id}>
+                  {year.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </motion.div>
 
       {/* Cards Section */}
