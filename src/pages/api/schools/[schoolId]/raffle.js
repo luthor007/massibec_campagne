@@ -4,7 +4,7 @@ import dbConnect from '../../../../lib/mongodb';
 import Order from '../../../../models/Order';
 import School from '../../../../models/School';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../auth/[...nextauth]';
+import { authOptions } from '../../auth/[...nextauth]';
 
 const calculateOrderProfit = (order) => {
   const { products, totalAmount } = order;
