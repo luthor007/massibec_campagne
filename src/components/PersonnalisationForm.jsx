@@ -72,7 +72,7 @@ export default function PersonnalisationForm() {
           setFormData(prevData => ({
             ...prevData,
             nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
-            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Profitez de 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
+            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${prevData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
             hoursAvailable: prevData.hoursAvailable || '',
           }))
         }
@@ -96,7 +96,7 @@ export default function PersonnalisationForm() {
       }))
     }
   }, [formData.discountEnabled, dateDeLivraison, formData.nomBoutique])
-
+  
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
