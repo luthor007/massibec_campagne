@@ -46,62 +46,57 @@ export default function PersonnalisationForm() {
     fetchStoreData();
   }, []); // Empty dependency array to run once on mount
 
+  // Fetch user and delivery date
   useEffect(() => {
-      const fetchUser = async () => {
-        const session = await getSession();
-        if (session) {
-          setUser(session.user)
-          
-          // Fetch Delivery Date
-          try {
-            const response = await fetch(`/api/schools/${session.user.school}`);
-            if (response.ok) {
-              const data = await response.json();
-              setDateDeLivraison(data.dateDeLivraison);
-            }
-          } catch (error) {
-            console.error('Erreur lors du chargement de la date de livraison:', error);
+    const fetchUserAndDate = async () => {
+      const session = await getSession();
+      if (session) {
+        setUser(session.user)
+        
+        // Fetch Delivery Date
+        try {
+          const response = await fetch(`/api/schools/${session.user.school}`);
+          if (response.ok) {
+            const data = await response.json();
+            setDateDeLivraison(data.dateDeLivraison);
           }
-          
-          // Format delivery date
-          const formatDate = (dateString) => {
-            if (!dateString) return 'la date de livraison'
-            const date = new Date(dateString)
-            return date.toLocaleDateString('fr-CA', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })
-          }
-
-          // Only set initial form data if not already set
-          setFormData(prevData => ({
-            ...prevData,
-            nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
-            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(data?.dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`,
-            hoursAvailable: prevData.hoursAvailable || '',
-          }))
+        } catch (error) {
+          console.error('Erreur lors du chargement de la date de livraison:', error);
         }
+        
+        // Set initial form data
+        setFormData(prevData => ({
+          ...prevData,
+          nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
+          hoursAvailable: prevData.hoursAvailable || '',
+        }))
       }
+    }
 
-      fetchUser()
-    }, [])
+    fetchUserAndDate()
+  }, [])
 
-  // Update description when discount toggle changes
+  // Update description when delivery date is available
   useEffect(() => {
-    if (dateDeLivraison) {
-      const discountText = formData.discountEnabled 
-        ? 'Profitez de 5 % de rabais dès 6 produits. ' 
-        : ''
+    if (dateDeLivraison && !formData.description) {
+      const formatDate = (dateString) => {
+        if (!dateString) return 'la date de livraison'
+        const date = new Date(dateString)
+        return date.toLocaleDateString('fr-CA', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })
+      }
       
-      const newDescription = `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${discountText}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`
+      const newDescription = `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`
       
       setFormData(prevData => ({
         ...prevData,
         description: newDescription
       }))
     }
-  }, [formData.discountEnabled, dateDeLivraison])
+  }, [dateDeLivraison, formData.description])
   
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
