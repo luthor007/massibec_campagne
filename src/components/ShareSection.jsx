@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Facebook, Twitter, Mail, Link as LinkIcon, Check } from 'lucide-react'
+import { Facebook, Instagram, Mail, Link as LinkIcon, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -37,10 +37,15 @@ export default function ShareSection({ isOwner, ownerName }) {
       color: 'bg-blue-600 hover:bg-blue-700',
     },
     {
-      name: 'Twitter',
-      icon: <Twitter className="h-4 w-4" />,
-      href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(currentUrl)}&text=${encodeURIComponent('Découvrez cette boutique!')}`,
-      color: 'bg-sky-500 hover:bg-sky-600',
+      name: 'Instagram',
+      icon: <Instagram className="h-4 w-4" />,
+      href: `https://www.instagram.com/`,
+      color: 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:from-purple-600 hover:via-pink-600 hover:to-orange-600',
+      onClick: (e) => {
+        e.preventDefault();
+        navigator.clipboard.writeText(currentUrl);
+        alert('Lien copié! Collez-le dans votre story ou publication Instagram.');
+      }
     },
     {
       name: 'Email',
@@ -68,15 +73,25 @@ export default function ShareSection({ isOwner, ownerName }) {
             <TooltipProvider key={button.name}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                <Link
-  href={button.href}
-  target="_blank"
-  rel="noopener noreferrer"
-  className={`w-full ${button.color} text-white border-none flex items-center justify-center p-2 rounded-md`}
->
-  {button.icon}
-  <span className="ml-2 hidden sm:inline">{button.name}</span>
-</Link>
+                {button.onClick ? (
+                  <button
+                    onClick={button.onClick}
+                    className={`w-full ${button.color} text-white border-none flex items-center justify-center p-2 rounded-md cursor-pointer`}
+                  >
+                    {button.icon}
+                    <span className="ml-2 hidden sm:inline">{button.name}</span>
+                  </button>
+                ) : (
+                  <Link
+                    href={button.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`w-full ${button.color} text-white border-none flex items-center justify-center p-2 rounded-md`}
+                  >
+                    {button.icon}
+                    <span className="ml-2 hidden sm:inline">{button.name}</span>
+                  </Link>
+                )}
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Partager sur {button.name}</p>
