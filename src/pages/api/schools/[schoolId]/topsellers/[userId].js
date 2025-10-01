@@ -101,8 +101,16 @@ const determineUserCategory = (totalEarnings) => {
   return "Noob";
 };
 
+// School year definitions
+const schoolYears = {
+  '2024-2025': { startDate: '2024-08-01', endDate: '2025-07-31' },
+  '2025-2026': { startDate: '2025-08-01', endDate: '2026-07-31' },
+  '2026-2027': { startDate: '2026-08-01', endDate: '2027-07-31' }
+};
+
 export default async function handler(req, res) {
   const { schoolId, userId } = req.query;
+  const { schoolYear = '2025-2026' } = req.body;
 
   try {
     await dbConnect();
@@ -113,15 +121,30 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'School not found' });
     }
 
+    // Get date range for the selected school year
+    const yearData = schoolYears[schoolYear];
+    if (!yearData) {
+      return res.status(400).json({ message: 'Invalid school year' });
+    }
+
+    const startDate = new Date(yearData.startDate);
+    const endDate = new Date(yearData.endDate);
+
     // Fetch all students in the school
     const students = await User.find({ school: schoolId, role: 'student' });
     if (!students || students.length === 0) {
       return res.status(404).json({ message: 'No students found for this school.' });
     }
 
-    // Calculate total earnings for each student
+    // Calculate total earnings for each student (filtered by school year)
     const studentData = await Promise.all(students.map(async student => {
-      const orders = await Order.find({ user: student._id });
+      const orders = await Order.find({ 
+        user: student._id,
+        createdAt: {
+          $gte: startDate,
+          $lte: endDate
+        }
+      });
       const totalEarnings = calculateTotalEarnings(orders, school);
       const totalProductsSold = orders.reduce((acc, order) => acc + order.products.reduce((sum, p) => sum + p.quantity, 0), 0);
       const category = determineUserCategory(totalEarnings);

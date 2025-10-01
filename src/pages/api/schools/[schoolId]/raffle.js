@@ -17,8 +17,16 @@ const calculateOrderProfit = (order) => {
   return profit;
 };
 
+// School year definitions
+const schoolYears = {
+  '2024-2025': { startDate: '2024-08-01', endDate: '2025-07-31' },
+  '2025-2026': { startDate: '2025-08-01', endDate: '2026-07-31' },
+  '2026-2027': { startDate: '2026-08-01', endDate: '2027-07-31' }
+};
+
 export default async function handler(req, res) {
   const { schoolId } = req.query;
+  const { schoolYear = '2025-2026' } = req.body;
 
   // Only allow GET requests
   if (req.method !== 'GET') {
@@ -35,6 +43,15 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
 
+    // Get date range for the selected school year
+    const yearData = schoolYears[schoolYear];
+    if (!yearData) {
+      return res.status(400).json({ message: 'Invalid school year' });
+    }
+
+    const startDate = new Date(yearData.startDate);
+    const endDate = new Date(yearData.endDate);
+
     // Fetch the school to get the raffleBenefit percentage
     const school = await School.findById(schoolId);
     if (!school) {
@@ -43,8 +60,14 @@ export default async function handler(req, res) {
 
     const raffleBenefitPercentage = school.split.raffleBenefit; // e.g., 5%
 
-    // Fetch all orders for the given schoolId
-    const orders = await Order.find({ school: schoolId });
+    // Fetch all orders for the given schoolId within the school year period
+    const orders = await Order.find({ 
+      school: schoolId,
+      createdAt: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    });
 
     if (!orders || orders.length === 0) {
       return res.status(404).json({ message: 'Aucune commande trouvée pour cette école.' });

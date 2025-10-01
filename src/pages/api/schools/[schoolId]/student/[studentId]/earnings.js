@@ -34,8 +34,16 @@ const getWeeklyIntervals = (startDate, endDate) => {
   return weeks;
 };
 
+// School year definitions
+const schoolYears = {
+  '2024-2025': { startDate: '2024-08-01', endDate: '2025-07-31' },
+  '2025-2026': { startDate: '2025-08-01', endDate: '2026-07-31' },
+  '2026-2027': { startDate: '2026-08-01', endDate: '2027-07-31' }
+};
+
 export default async function handler(req, res) {
   const { schoolId, studentId } = req.query;
+  const { schoolYear = '2025-2026' } = req.body;
 
   // Only allow GET requests
   if (req.method !== 'GET') {
@@ -52,25 +60,29 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
 
+    // Get date range for the selected school year
+    const yearData = schoolYears[schoolYear];
+    if (!yearData) {
+      return res.status(400).json({ message: 'Invalid school year' });
+    }
+
+    const startDate = new Date(yearData.startDate);
+    const endDate = new Date(yearData.endDate);
+
     // Fetch the school to get the campaign dates
     const school = await School.findById(schoolId);
     if (!school) {
       return res.status(404).json({ message: 'École non trouvée' });
     }
 
-    const { debutCampagne, finCampagne } = school;
-    if (!debutCampagne || !finCampagne) {
-      return res.status(400).json({ message: 'Dates de la campagne manquantes.' });
-    }
+    // Split the school year period into weekly intervals
+    const weeklyIntervals = getWeeklyIntervals(startDate, endDate);
 
-    // Split the fundraising period into weekly intervals
-    const weeklyIntervals = getWeeklyIntervals(new Date(debutCampagne), new Date(finCampagne));
-
-    // Fetch all orders for the given student and school within the campaign period
+    // Fetch all orders for the given student and school within the school year period
     const orders = await Order.find({
       user: new mongoose.Types.ObjectId(studentId),
       school: schoolId,
-      createdAt: { $gte: new Date(debutCampagne), $lte: new Date(finCampagne) },
+      createdAt: { $gte: startDate, $lte: endDate },
     });
 
     if (!orders || orders.length === 0) {

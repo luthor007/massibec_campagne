@@ -349,7 +349,13 @@ export default function StatistiquesEtudiantUltime() {
   // Fetch Top Sellers
   const fetchTopSellers = useCallback(async (schoolId, userId) => {
     try {
-      const response = await fetch(`/api/schools/${schoolId}/topsellers/${userId}`)
+      const response = await fetch(`/api/schools/${schoolId}/topsellers/${userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schoolYear: selectedSchoolYear })
+      })
       if (!response.ok) {
         throw new Error('Failed to fetch top sellers')
       }
@@ -361,12 +367,18 @@ export default function StatistiquesEtudiantUltime() {
     } catch (error) {
       setError(error.message)
     }
-  }, [])
+  }, [selectedSchoolYear])
 
   // Fetch School Raffle
   const fetchSchoolRaffle = useCallback(async (schoolId) => {
     try {
-      const response = await fetch(`/api/schools/${schoolId}/raffle`)
+      const response = await fetch(`/api/schools/${schoolId}/raffle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schoolYear: selectedSchoolYear })
+      })
       if (!response.ok) {
         throw new Error('Failed to fetch school raffle')
       }
@@ -375,12 +387,18 @@ export default function StatistiquesEtudiantUltime() {
     } catch (error) {
       setError(error.message)
     }
-  }, [])
+  }, [selectedSchoolYear])
 
   // Fetch Weekly Earnings
   const fetchWeeklyEarnings = useCallback(async (schoolId, userId) => {
     try {
-      const response = await fetch(`/api/schools/${schoolId}/student/${userId}/earnings`)
+      const response = await fetch(`/api/schools/${schoolId}/student/${userId}/earnings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schoolYear: selectedSchoolYear })
+      })
       if (!response.ok) {
         throw new Error('Failed to fetch weekly earnings')
       }
@@ -395,7 +413,7 @@ export default function StatistiquesEtudiantUltime() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedSchoolYear])
 
   // Fetch Products (Assuming updateProductListWithSchool is defined elsewhere)
   const fetchProducts = useCallback(async () => {
@@ -448,7 +466,7 @@ export default function StatistiquesEtudiantUltime() {
       fetchSchoolRaffle(schoolId)
       fetchWeeklyEarnings(schoolId, userId)
     }
-  }, [user, schoolId, fetchSchoolData, fetchTopSellers, fetchSchoolRaffle, fetchWeeklyEarnings, userId])
+  }, [user, schoolId, fetchSchoolData, fetchTopSellers, fetchSchoolRaffle, fetchWeeklyEarnings, userId, selectedSchoolYear])
 
   // useEffect to fetch orders and products on mount
   useEffect(() => {
