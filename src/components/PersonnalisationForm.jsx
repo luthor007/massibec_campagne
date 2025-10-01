@@ -9,7 +9,7 @@ import { useRouter } from 'next/router';
 import { motion } from 'framer-motion'
 import BankGuides from '../components/BankGuides'
 
-import { Save, Percent } from 'lucide-react'
+import { Save, Percent, Store, FileText, CreditCard, Settings, Sparkles } from 'lucide-react'
 export default function PersonnalisationForm() {
   const [isHovered, setIsHovered] = useState(false)
   const [user, setUser] = useState();
@@ -268,193 +268,204 @@ const EmailExample = () => {
 
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="space-y-10 pb-8">
-        <div className="space-y-2">
-          <Label htmlFor="nomBoutique"><strong>Nom de la boutique:</strong></Label>
-          <Input
-            type="text"
-            id="nomBoutique"
-            name="nomBoutique"
-            value={formData.nomBoutique}
-            onChange={handleChange}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="description"><strong>Description:</strong></Label>
-          <Textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            required
-            rows={4}
-          />
-        </div>
-        {/* Tip for Automatic Deposits */}
-        <div className="mt-4 p-4 border border-blue-300 rounded-md bg-blue-50">
-          <p>
-            Pensez à configurer vos dépôts automatiques pour faciliter la gestion de vos fonds. 
-            Vous pouvez le faire avec les guides ci-dessous.
-          </p>
-        </div>
-
-      {/* Bank Guides Component */}
-      <BankGuides />
-
-      <div className="space-y-4 p-6 border-2 border-gray-300 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 shadow-md">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Label htmlFor="autoDeposit" className="text-base font-semibold text-gray-800">
-              Dépôts automatiques
-            </Label>
-            <p className="text-sm text-gray-600">
-             Mon compte bancaire est configuré pour recevoir les dépôts automatiques.
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <span className={`text-sm font-medium ${!formData.autoDeposit ? 'text-gray-600' : 'text-gray-400'}`}>
-              Non
-            </span>
-            <Switch
-              id="autoDeposit"
-              checked={formData.autoDeposit}
-              onCheckedChange={(checked) => setFormData({ ...formData, autoDeposit: checked })}
-              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
-            />
-            <span className={`text-sm font-medium ${formData.autoDeposit ? 'text-green-600' : 'text-gray-400'}`}>
-              Oui
-            </span>
+    <div className="min-h-screen bg-white py-8">
+      <div className="container mx-auto px-4 max-w-2xl">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <div className="bg-blue-100 rounded-full p-3 mr-4">
+              <Settings className="h-8 w-8 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Paramètres de la boutique</h1>
+              <p className="text-gray-600">Personnalisez votre boutique de financement</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="space-y-4 p-6 border-2 border-blue-300 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 shadow-md">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Label htmlFor="discountEnabled" className="text-base font-semibold text-blue-800 flex items-center gap-2">
-              <Percent className="h-5 w-5" />
-              Réductions automatiques
-            </Label>
-            <p className="text-sm text-blue-600">
-              {formData.discountEnabled 
-                ? "5% de réduction dès 6 produits commandés" 
-                : "Les réductions sont désactivées pour cette boutique"}
-            </p>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Store Information */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <Store className="h-5 w-5 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Informations de la boutique</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="nomBoutique" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nom de la boutique
+                </Label>
+                <Input
+                  type="text"
+                  id="nomBoutique"
+                  name="nomBoutique"
+                  value={formData.nomBoutique}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  rows={4}
+                />
+              </div>
+            </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <span className={`text-sm font-medium ${!formData.discountEnabled ? 'text-gray-600' : 'text-gray-400'}`}>
-              Non
-            </span>
-            <Switch
-              id="discountEnabled"
-              checked={formData.discountEnabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, discountEnabled: checked })}
-              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
-            />
-            <span className={`text-sm font-medium ${formData.discountEnabled ? 'text-green-600' : 'text-gray-400'}`}>
-              Oui
-            </span>
+
+          {/* Payment Settings */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <CreditCard className="h-5 w-5 text-green-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Paramètres de paiement</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="bg-green-100 rounded-full p-2">
+                    <CreditCard className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <Label htmlFor="autoDeposit" className="text-base font-semibold text-gray-800">
+                      Dépôts automatiques
+                    </Label>
+                    <p className="text-sm text-gray-600">
+                      Mon compte bancaire est configuré pour recevoir les dépôts automatiques
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="autoDeposit"
+                  checked={formData.autoDeposit}
+                  onCheckedChange={(checked) => setFormData({ ...formData, autoDeposit: checked })}
+                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
+                />
+              </div>
+
+              {formData.autoDeposit && (
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm text-blue-800 font-medium">Conseil</p>
+                      <p className="text-sm text-blue-700">
+                        Configurez vos dépôts automatiques pour faciliter la gestion de vos fonds. 
+                        Consultez les guides ci-dessous pour votre banque.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
-        <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
->
-      <Button
-        variant="default"
-        size="lg"
-        type="submit"
-        className={`
-          relative overflow-hidden transition-all duration-300 ease-out
-          transform hover:scale-105 hover:shadow-lg
-          bg-gradient-to-r from-blue-500 to-indigo-600
-          text-white font-semibold py-3 px-6 rounded-full
-          focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
-        `}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <motion.span
-          className="relative z-10 flex items-center space-x-2"
-          animate={{ x: isHovered ? 5 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <Save className="w-5 h-5" />
-          <span>Enregistrer</span>
-        </motion.span>
-        <motion.div
-          className="absolute inset-0 bg-white"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: isHovered ? 1.5 : 0, opacity: isHovered ? 0.15 : 0 }}
-          transition={{ duration: 0.3 }}
-          style={{ borderRadius: '100%', zIndex: 0 }}
-        />
-      </Button>
-    </motion.div>
-      </form>
+          {/* Discount Settings */}
+          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <Percent className="h-5 w-5 text-purple-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Réductions</h2>
+            </div>
+            
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 rounded-full p-2">
+                  <Percent className="h-4 w-4 text-purple-600" />
+                </div>
+                <div>
+                  <Label htmlFor="discountEnabled" className="text-base font-semibold text-gray-800">
+                    Réductions automatiques
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    {formData.discountEnabled 
+                      ? "5% de réduction dès 6 produits commandés" 
+                      : "Les réductions sont désactivées pour cette boutique"}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="discountEnabled"
+                checked={formData.discountEnabled}
+                onCheckedChange={(checked) => setFormData({ ...formData, discountEnabled: checked })}
+                className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
+              />
+            </div>
+          </div>
 
-      <p>Voici un exemple de courriel qui sera envoyé à vos clients lorsqu'ils auront commandé:</p><br/>
-      {/* Bouton pour afficher le popup */}
-      <Button onClick={() => setShowEmailExample(true)}>Voir un exemple de courriel</Button>
+          {/* Bank Guides */}
+          {formData.autoDeposit && (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <FileText className="h-5 w-5 text-orange-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Guides bancaires</h2>
+              </div>
+              <BankGuides />
+            </div>
+          )}
 
-      {/* Popup */}
-      {showEmailExample && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            overflowY: 'auto',
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            zIndex: 1000,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: '20px',
-          }}
-          onClick={() => setShowEmailExample(false)}
-        >
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              maxWidth: '600px',
-              maxHeight: '90%',
-              backgroundColor: '#fff',
-              padding: '20px',
-              borderRadius: '8px',
-              overflowY: 'auto',
-            }}
-            onClick={(e) => e.stopPropagation()}
+          {/* Submit Button */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="pt-6"
           >
-            {/* Bouton pour fermer le popup */}
-            <button
-              onClick={() => setShowEmailExample(false)}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                background: 'transparent',
-                border: 'none',
-                fontSize: '24px',
-                cursor: 'pointer',
-              }}
-              aria-label="Fermer"
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              &times;
-            </button>
-            {/* Contenu de l'exemple de courriel */}
-            <EmailExample />
+              <Save className="w-5 h-5" />
+              {isSubmitting ? 'Enregistrement en cours...' : 'Enregistrer les paramètres'}
+            </Button>
+          </motion.div>
+        </form>
+
+        {/* Email Preview Section */}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mt-8">
+          <div className="flex items-center gap-3 mb-4">
+            <FileText className="h-5 w-5 text-orange-600" />
+            <h2 className="text-xl font-semibold text-gray-900">Aperçu de l'email</h2>
           </div>
+          <p className="text-gray-600 mb-4">Voici un exemple de courriel qui sera envoyé à vos clients lorsqu'ils auront commandé :</p>
+          <Button 
+            onClick={() => setShowEmailExample(true)}
+            variant="outline"
+            className="border-blue-300 text-blue-600 hover:bg-blue-50"
+          >
+            Voir un exemple de courriel
+          </Button>
         </div>
-      )}
-    </>
+
+        {/* Email Preview Modal */}
+        {showEmailExample && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto relative">
+              <button
+                onClick={() => setShowEmailExample(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl font-bold z-10"
+                aria-label="Fermer"
+              >
+                ×
+              </button>
+              <div className="p-6">
+                <EmailExample />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
