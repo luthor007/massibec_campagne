@@ -31,7 +31,7 @@ export default function PersonnalisationForm() {
           const data = await response.json();
           setFormData(prevData => ({
             ...prevData,
-            nomBoutique: data.name,
+            nomBoutique: data.name || prevData.nomBoutique,
             description: data.description || prevData.description,
             hoursAvailable: data.hoursAvailable || '',
             autoDeposit: data.autoDeposit !== false, // Default to true if not set
@@ -46,40 +46,35 @@ export default function PersonnalisationForm() {
     fetchStoreData();
   }, []); // Empty dependency array to run once on mount
 
-  // Fetch Delivery Date
-  useEffect(() => {
-    const fetchDateDeLivraison = async () => {
-      try {
-        const response = await fetch(`/api/schools/${session.user.school}`);
-        if (response.ok) {
-          const data = await response.json();
-          setDateDeLivraison(data.dateDeLivraison);
-        }
-      } catch (error) {
-        console.error('Erreur lors du chargement de la date de livraison:', error);
-      }
-    };
-
-    fetchDateDeLivraison();
-  }, []); // Empty dependency array to run once on mount
-
   useEffect(() => {
       const fetchUser = async () => {
         const session = await getSession();
         if (session) {
           setUser(session.user)
+          
+          // Fetch Delivery Date
+          try {
+            const response = await fetch(`/api/schools/${session.user.school}`);
+            if (response.ok) {
+              const data = await response.json();
+              setDateDeLivraison(data.dateDeLivraison);
+            }
+          } catch (error) {
+            console.error('Erreur lors du chargement de la date de livraison:', error);
+          }
+          
           // Only set initial form data if not already set
           setFormData(prevData => ({
             ...prevData,
             nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
-            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${prevData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
+            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${data?.dateDeLivraison || 'la date de livraison'}. 🙏 Merci pour votre soutien et bon appétit !`,
             hoursAvailable: prevData.hoursAvailable || '',
           }))
         }
       }
 
       fetchUser()
-    }, [dateDeLivraison])
+    }, [])
 
   // Update description when discount toggle changes
   useEffect(() => {
