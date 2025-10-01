@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
 
-export default NextAuth({
+export const authOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -66,4 +66,6 @@ export default NextAuth({
       },
     },
   },
-});
+};
+
+export default NextAuth(authOptions);
