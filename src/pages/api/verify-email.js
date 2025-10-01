@@ -26,8 +26,8 @@ export default async function handler(req, res) {
 
       // Update the user's emailVerified status and remove the verification token
       user.emailVerified = true;
-      user.emailVerificationToken = undefined;
-      user.emailVerificationExpires = undefined;
+      user.verificationToken = undefined;
+      user.verificationTokenExpires = undefined;
       await user.save();
 
       // Optionally, you can redirect the user to a success page or send a response

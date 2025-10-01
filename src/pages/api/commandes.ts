@@ -87,6 +87,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ message: 'École non trouvée.' });
       }
 
+      const activeCampaign = schoolData.campaigns?.find((campaign: any) => campaign.isActive);
+      const campaignNumber = activeCampaign?.campaignNumber || schoolData.currentCampaignNumber || 1;
+      const campaignId = activeCampaign?._id || null;
+
       const storeData = await Store.findById(storeId);
       if (!storeData) {
         return res.status(400).json({ message: 'Store non trouvée.' });
@@ -114,6 +118,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         store: storeId,
         orderId: newOrderId,
         school: schoolData._id,
+        campaignId,
+        campaignNumber,
         phoneNumber: phoneNumber,
         tip: tip
         //orderDate: new Date(),

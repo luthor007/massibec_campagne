@@ -17,6 +17,8 @@ export interface IOrder extends Document {
   user: mongoose.Types.ObjectId; // Propriétaire de la boutique
   store: mongoose.Types.ObjectId; // Référence à la boutique
   school: string;
+  campaignId?: mongoose.Types.ObjectId;
+  campaignNumber?: number;
   products: IProductItem[];
   totalAmount: number;
   customerName: string;
@@ -30,6 +32,8 @@ const OrderSchema: Schema = new Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   store: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', required: true },
   school: { type: String, required: true },
+  campaignId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  campaignNumber: { type: Number, default: null },
   products: [{
     product: { type: mongoose.Schema.Types.ObjectId, ref: Product, required: true },
     quantity: { type: Number, required: true },

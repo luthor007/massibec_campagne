@@ -484,18 +484,10 @@ export default function Commandes() {
                             <SelectValue placeholder="Statut" />
                           </SelectTrigger>
                           <SelectContent className="bg-gray-200">
-                            {order.status !== "Commander" && order.status !== "Complété" && (
-                              <>
-                                <SelectItem value="En attente">En attente</SelectItem>
-                                <SelectItem value="Payé">Payé</SelectItem>
-                              </>
-                            )}
-                            {order.status !== "En attente" && order.status !== "Payé" && (
-                              <>
+                            <SelectItem value="En attente">En attente</SelectItem>
+                            <SelectItem value="Payé">Payé</SelectItem>
                             <SelectItem value="Commander">Commander</SelectItem>
                             <SelectItem value="Complété">Complété</SelectItem>
-                            </>
-                            )}
                           </SelectContent>
                         </Select>
                       </TableCell>

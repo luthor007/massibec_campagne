@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -43,6 +43,7 @@ import {
 const AVAILABLE_COLUMNS = [
   { key: '_id', label: 'Order ID unique' },
   { key: 'orderId', label: 'Order ID' },
+  { key: 'campaignNumber', label: 'Numéro de campagne' },
   { key: 'email', label: 'Email' },
   { key: 'studentName', label: 'Student Name' },
   { key: 'parentName', label: 'Parent Name' },
@@ -53,6 +54,7 @@ const AVAILABLE_COLUMNS = [
   { key: 'studentBenefit', label: 'Student Benefit ($)' },
   { key: 'organizationBenefit', label: 'Organization Benefit ($)' },
   { key: 'raffleBenefit', label: 'Raffle Benefit ($)' },
+  { key: 'campaignEndDate', label: 'Date de fin de campagne' },
   { key: 'timestamp', label: 'Date' },
 ];
 
@@ -69,7 +71,7 @@ const PRODUCT_MAPPING = {
   "Pâté à la viande": "21675"
 };
 
-const SchoolOrders = ({ schoolId }) => {
+const SchoolOrders = ({ schoolId, school }) => {
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [errorOrders, setErrorOrders] = useState(null);
@@ -100,13 +102,7 @@ const SchoolOrders = ({ schoolId }) => {
 
   const [editingOrder, setEditingOrder] = useState(null);
 
-  useEffect(() => {
-    if (schoolId) {
-      fetchOrders(schoolId);
-    }
-  }, [schoolId]);
-
-  const fetchOrders = async (id) => {
+  const fetchOrders = useCallback(async (id) => {
     setLoadingOrders(true);
     setErrorOrders(null);
     try {
@@ -119,17 +115,34 @@ const SchoolOrders = ({ schoolId }) => {
       // Fetch parent names for all orders
       const ordersWithParentNames = await Promise.all(
         data.orders.map(async (order) => {
+          const plainOrder = order.toObject ? order.toObject() : { ...order };
+          const orderCampaignNumber = plainOrder.campaignNumber ?? order.campaignNumber;
+          const campaignDetails = school?.campaigns?.find(
+            (campaign) => campaign.campaignNumber === orderCampaignNumber
+          );
+          const endDateCandidate = campaignDetails?.endDate || school?.finCampagne;
+          const campaignEndDate = endDateCandidate
+            ? new Date(endDateCandidate).toISOString().split('T')[0]
+            : 'N/A';
+
           const userResponse = await fetch(`/api/users/by-email?email=${order.email}`);
           if (userResponse.ok) {
             const userData = await userResponse.json();
             return {
-              ...order,
+              ...plainOrder,
+              campaignNumber: orderCampaignNumber != null ? String(orderCampaignNumber) : 'N/A',
+              campaignEndDate,
               parentName: userData.parentInfo ? 
                 `${userData.parentInfo.prenomParent} ${userData.parentInfo.nomParent}` : 
                 'N/A'
             };
           }
-          return { ...order, parentName: 'N/A' };
+          return {
+            ...plainOrder,
+            campaignNumber: orderCampaignNumber != null ? String(orderCampaignNumber) : 'N/A',
+            campaignEndDate,
+            parentName: 'N/A'
+          };
         })
       );
       
@@ -139,7 +152,13 @@ const SchoolOrders = ({ schoolId }) => {
     } finally {
       setLoadingOrders(false);
     }
-  };
+  }, [school]);
+
+  useEffect(() => {
+    if (schoolId && school) {
+      fetchOrders(schoolId);
+    }
+  }, [schoolId, school, fetchOrders]);
 
   const exportToCSV = () => {
     if (filteredOrders.length === 0) {
@@ -174,8 +193,12 @@ const SchoolOrders = ({ schoolId }) => {
           switch (col.key) {
             case '_id':
               return order._id;
+            case 'campaignNumber':
+              return order.campaignNumber || 'N/A';
             case 'timestamp':
               return orderDate;
+            case 'campaignEndDate':
+              return order.campaignEndDate || 'N/A';
             case 'totalAmount':
             case 'amountPaid':
             case 'studentBenefit':

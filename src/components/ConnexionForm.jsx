@@ -55,9 +55,8 @@ export default function ConnexionForm() {
 
           if (!emailVerified) {
             alert('Veuillez vérifier votre e-mail avant de vous connecter');
-            await signOut({ callbackUrl: '/connexion' });
-
-            router.push('/resend-verification');
+            await signOut({ callbackUrl: '/resend-verification' });
+            return; // Exit early to prevent further execution
           }
 
           // Redirect based on the user role

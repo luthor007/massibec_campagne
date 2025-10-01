@@ -6,6 +6,15 @@ const BonusSchema = new mongoose.Schema({
   totalBonusRange: { type: String, required: true }, // Total possible bonus range
 });
 
+const CampaignSchema = new mongoose.Schema({
+  campaignNumber: { type: Number, required: true },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  deliveryDate: { type: Date },
+  isActive: { type: Boolean, default: false },
+  notes: { type: String },
+}, { timestamps: true });
+
 const SchoolSchema = new mongoose.Schema({
   code: { type: String, required: true, unique: true, default: () => Math.floor(Math.random() * 900000) + 100000 }, // Random 6 numbers code
   name: { type: String, required: true, unique: true },
@@ -15,6 +24,9 @@ const SchoolSchema = new mongoose.Schema({
   orderCounter: { type: Number, default: 0 }, // Initialize counter to 0
   finCampagne: { type: Date, required: true },
   dateDeLivraison: { type: Date, required: true },
+  currentCampaignNumber: { type: Number, default: 1 },
+  campaigns: { type: [CampaignSchema], default: [] },
+  activeCampaignId: { type: mongoose.Schema.Types.ObjectId, default: null },
   telephone: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   approved: { type: Boolean, required: true, default: false },
@@ -42,6 +54,37 @@ const SchoolSchema = new mongoose.Schema({
   accumba: { type: String },
   expNum: { type: String },
   customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
+});
+
+SchoolSchema.pre('save', function syncActiveCampaign(next) {
+  if (!this.campaigns || this.campaigns.length === 0) {
+    return next();
+  }
+
+  let activeCampaign = this.campaigns.find((campaign) => campaign.isActive);
+
+  if (!activeCampaign) {
+    activeCampaign = this.campaigns[0];
+    activeCampaign.isActive = true;
+  }
+
+  const activeId = activeCampaign._id?.toString();
+
+  this.campaigns.forEach((campaign) => {
+    const isActive = campaign._id?.toString() === activeId;
+    campaign.isActive = isActive;
+    if (isActive) {
+      activeCampaign = campaign;
+    }
+  });
+
+  this.activeCampaignId = activeCampaign._id;
+  this.currentCampaignNumber = activeCampaign.campaignNumber;
+  this.debutCampagne = activeCampaign.startDate;
+  this.finCampagne = activeCampaign.endDate;
+  this.dateDeLivraison = activeCampaign.deliveryDate;
+
+  next();
 });
 
 export default mongoose.models.School || mongoose.model('School', SchoolSchema);

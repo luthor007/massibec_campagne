@@ -10,9 +10,15 @@ export default function Cart({ id }) {
   const [items, setItems] = useState([])
   const [showCheckout, setShowCheckout] = useState(false)
   const [discount, setDiscount] = useState(0)
+  const [discountEnabled, setDiscountEnabled] = useState(true)
 
   // Memoize updateDiscount to prevent unnecessary re-renders
   const updateDiscount = useCallback((cartItems) => {
+    if (!discountEnabled) {
+      setDiscount(0)
+      return
+    }
+    
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
     if (totalItems >= 12) {
       setDiscount(0.1)
@@ -21,7 +27,7 @@ export default function Cart({ id }) {
     } else {
       setDiscount(0)
     }
-  }, [])
+  }, [discountEnabled])
 
   // Memoize fetchCartItems
   const fetchCartItems = useCallback(() => {
@@ -30,13 +36,29 @@ export default function Cart({ id }) {
     updateDiscount(savedItems)
   }, [updateDiscount])
 
+  // Fetch store data to get discount settings
+  const fetchStoreData = useCallback(async () => {
+    if (!id) return
+    
+    try {
+      const response = await fetch(`/api/stores/${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setDiscountEnabled(data.discountEnabled !== false) // Default to true if not set
+      }
+    } catch (error) {
+      console.error('Error fetching store data:', error)
+    }
+  }, [id])
+
   useEffect(() => {
     fetchCartItems()
+    fetchStoreData()
     window.addEventListener('storage', fetchCartItems)
     return () => {
       window.removeEventListener('storage', fetchCartItems)
     }
-  }, [fetchCartItems])
+  }, [fetchCartItems, fetchStoreData])
 
   // Calculate Cart Item Count
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -46,7 +68,10 @@ export default function Cart({ id }) {
   let discountProgress = 0
   let message = ''
 
-  if (cartItemCount < 6) {
+  if (!discountEnabled) {
+    discountProgress = 0
+    message = 'Les réductions sont désactivées pour cette boutique.'
+  } else if (cartItemCount < 6) {
     discountProgress = (cartItemCount / 6) * 100
     message = `Ajoutez ${6 - cartItemCount} produit${6 - cartItemCount !== 1 ? 's' : ''} de plus pour obtenir 5% de réduction!`
   } else if (cartItemCount < 12) {
@@ -111,23 +136,35 @@ export default function Cart({ id }) {
       <CardContent className="p-4">
 
         {/* New Discount Progress Bar and Info */}
-        <div className="bg-blue-100 border-l-4 border-blue-500 p-4 mb-8 rounded-r-lg shadow-md">
+        <div className={`border-l-4 p-4 mb-8 rounded-r-lg shadow-md ${
+          !discountEnabled 
+            ? 'bg-gray-100 border-gray-400' 
+            : 'bg-blue-100 border-blue-500'
+        }`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center">
-              <ShoppingBag className="h-6 w-6 text-blue-500 mr-2" />
-              <span className="font-semibold text-blue-800">
+              <ShoppingBag className={`h-6 w-6 mr-2 ${
+                !discountEnabled ? 'text-gray-500' : 'text-blue-500'
+              }`} />
+              <span className={`font-semibold ${
+                !discountEnabled ? 'text-gray-700' : 'text-blue-800'
+              }`}>
                 {cartItemCount} produit{cartItemCount !== 1 ? 's' : ''} dans votre panier
               </span>
             </div>
             <div className="flex items-center">
-              <span className="font-semibold text-green-700">{currentDiscount}% de réduction</span>
+              <span className={`font-semibold ${
+                !discountEnabled ? 'text-gray-600' : 'text-green-700'
+              }`}>
+                {currentDiscount}% de réduction
+              </span>
             </div>
           </div>
           <Progress value={discountProgress} className="h-2 mb-2" />
-          <p className="text-sm text-blue-700">
-            {discountProgress < 100
-              ? `Ajoutez ${cartItemCount <6 ? 6 - cartItemCount : 12 - cartItemCount} produit${(cartItemCount <6 ? 6 - cartItemCount : 12 - cartItemCount) !==1 ? 's' : ''} de plus pour obtenir ${cartItemCount <6 ? '5' : '10'}% de réduction!`
-              : "Félicitations! Vous bénéficiez de la réduction maximale de 10%!"}
+          <p className={`text-sm ${
+            !discountEnabled ? 'text-gray-600' : 'text-blue-700'
+          }`}>
+            {message}
           </p>
         </div>
 

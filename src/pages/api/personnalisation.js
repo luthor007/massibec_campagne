@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const userId = token.sub;  // Extract the user ID from the token
 
     if (req.method === 'POST') {
-      const { name, description, autoDeposit } = req.body;
+      const { name, description, autoDeposit, discountEnabled } = req.body;
 
       try {
         let store = await Store.findOne({ user: userId });
@@ -24,12 +24,19 @@ export default async function handler(req, res) {
           store.name = name;
           store.description = description;
           store.autoDeposit = autoDeposit;
+          store.discountEnabled = discountEnabled !== undefined ? discountEnabled : true;
           //store.hoursAvailable = hoursAvailable
           //store.colorPalette = colorPalette;
         } else {
           console.log(description)
           console.log(name)
-          store = new Store({ user: userId, name: name, description: description, autoDeposit: autoDeposit });
+          store = new Store({ 
+            user: userId, 
+            name: name, 
+            description: description, 
+            autoDeposit: autoDeposit,
+            discountEnabled: discountEnabled !== undefined ? discountEnabled : true
+          });
         }
 
         await store.save();

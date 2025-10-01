@@ -110,6 +110,9 @@ export default async function handler(req, res) {
         return res.status(404).json({ message: 'École non trouvée.' });
       }
 
+      const activeCampaign = school.campaigns?.find((campaign) => campaign.isActive);
+      const campaignNumber = activeCampaign?.campaignNumber || school.currentCampaignNumber || 1;
+
 
       const { studentBenefit, organizationBenefit, raffleBenefit } = school.split;
 
@@ -161,6 +164,7 @@ export default async function handler(req, res) {
         studentName,
         phoneNumber,
         school: schoolId,
+        campaignNumber,
         products: calculatedProducts,
         totalUnits,
         totalAmount,

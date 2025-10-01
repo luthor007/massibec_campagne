@@ -31,8 +31,8 @@ export default async function handler(req, res) {
       const verificationTokenExpires = Date.now() + 24 * 60 * 60 * 1000; // Token valid for 24 hours
 
       // Update the user with the new token and expiration
-      user.emailVerificationToken = verificationToken;
-      user.emailVerificationExpires = verificationTokenExpires;
+      user.verificationToken = verificationToken;
+      user.verificationTokenExpires = verificationTokenExpires;
       await user.save();
 
       // Send verification email

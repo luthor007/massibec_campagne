@@ -45,6 +45,14 @@ export default async function handler(req, res) {
       };
 
       // Create a new School
+      const initialCampaign = {
+        campaignNumber: 1,
+        startDate: sanitizeString(school.debutCampagne),
+        endDate: sanitizeString(school.finCampagne),
+        deliveryDate: sanitizeString(school.dateDeLivraison),
+        isActive: true,
+      };
+
       const newSchool = new School({
         name: sanitizeString(school.name),
         address: sanitizeString(school.address),
@@ -54,8 +62,12 @@ export default async function handler(req, res) {
         debutCampagne: sanitizeString(school.debutCampagne),
         finCampagne: sanitizeString(school.finCampagne),
         dateDeLivraison: sanitizeString(school.dateDeLivraison),
+        currentCampaignNumber: 1,
+        campaigns: [initialCampaign],
         approved: false
       });
+
+      newSchool.activeCampaignId = newSchool.campaigns[0]._id;
 
       await newSchool.save();
 

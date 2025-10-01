@@ -14,6 +14,7 @@ export default function PersonnalisationForm() {
   const [user, setUser] = useState();
   const [formData, setFormData] = useState({
     autoDeposit: false, // Set up autoDeposit in the formData
+    discountEnabled: true, // Set up discountEnabled in the formData
   });
   const router = useRouter();
 
@@ -33,6 +34,7 @@ export default function PersonnalisationForm() {
             description: data.description || prevData.description,
             hoursAvailable: data.hoursAvailable || '',
             autoDeposit: data.autoDeposit || false, // Set up autoDeposit in the formData
+            discountEnabled: data.discountEnabled !== false, // Default to true if not set
           }));
         }
       } catch (error) {
@@ -67,16 +69,17 @@ export default function PersonnalisationForm() {
           setUser(session.user)
           setFormData(  {
             nomBoutique: `Campagne de ${user?.name || ''}`,
-            description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu’un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Profitez de 5 % de rabais dès 6 produits et 10 % dès 12. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
+            description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${formData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits et 10 % dès 12. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
             hoursAvailable: '',
             autoDeposit: false, // Set up autoDeposit in the formData
+            discountEnabled: true, // Set up discountEnabled in the formData
           })
         }
 
       }
 
       fetchUser()
-    }, [])
+    }, [dateDeLivraison, formData.discountEnabled, user?.name])
   
 
   const handleChange = (e) => {
@@ -103,6 +106,7 @@ export default function PersonnalisationForm() {
           //colorPalette: formData.couleurPrincipale,
           hoursAvailable: formData.hoursAvailable,
           autoDeposit: formData.autoDeposit, // Pass autoDeposit to the api
+          discountEnabled: formData.discountEnabled, // Pass discountEnabled to the api
         }),
       });
   
@@ -293,6 +297,19 @@ const EmailExample = () => {
             className={`px-4 py-2 ${formData.autoDeposit ? 'bg-green-500' : 'bg-gray-500'} text-white rounded`}
           >
             {formData.autoDeposit ? 'Activé' : 'Désactivé'}
+          </Button>
+      </div>
+
+      <div className="space-y-2">
+          <Label htmlFor="discountEnabled"><strong>Réductions automatiques (5% dès 6 produits, 10% dès 12):</strong></Label>
+          <Button
+            id="discountEnabled"
+            name="discountEnabled"
+            type="button"
+            onClick={() => setFormData({ ...formData, discountEnabled: !formData.discountEnabled })}
+            className={`px-4 py-2 ${formData.discountEnabled ? 'bg-green-500' : 'bg-gray-500'} text-white rounded`}
+          >
+            {formData.discountEnabled ? 'Activé' : 'Désactivé'}
           </Button>
       </div>
 

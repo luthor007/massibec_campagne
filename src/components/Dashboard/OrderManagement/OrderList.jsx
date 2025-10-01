@@ -41,6 +41,17 @@ export default function Overview() {
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [editingProducts, setEditingProducts] = useState(false);
   const [modifiedProducts, setModifiedProducts] = useState([]);
+  const [selectedReportSchoolId, setSelectedReportSchoolId] = useState('');
+
+  const schoolOptions = useMemo(() => {
+    const map = new Map();
+    livraisons.forEach((livraison) => {
+      if (livraison.schoolId && !map.has(livraison.schoolId)) {
+        map.set(livraison.schoolId, livraison.school || 'École');
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [livraisons]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,6 +69,17 @@ export default function Overview() {
 
     fetchData()
   }, [periode])
+
+  useEffect(() => {
+    if (!schoolOptions.length) {
+      setSelectedReportSchoolId('');
+      return;
+    }
+
+    if (!schoolOptions.some((option) => option.id === selectedReportSchoolId)) {
+      setSelectedReportSchoolId(schoolOptions[0].id);
+    }
+  }, [schoolOptions, selectedReportSchoolId])
 
   const filteredLivraisons = useMemo(() => {
     return livraisons.filter(livraison => {
@@ -77,18 +99,31 @@ export default function Overview() {
   }, [livraisons, searchFilters]);
 
   const handleGenererRapport = async () => {
+    if (!selectedReportSchoolId) {
+      toast({
+        title: "Sélection requise",
+        description: "Veuillez sélectionner une école avant de générer le rapport.",
+        duration: 3000,
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
-      await generateDeliveryReport()
+      await generateDeliveryReport(selectedReportSchoolId)
+      const schoolName = schoolOptions.find((option) => option.id === selectedReportSchoolId)?.name
       toast({
         title: "Rapport généré",
-        description: "Le rapport des livraisons a été généré avec succès.",
+        description: schoolName
+          ? `Le rapport de livraisons pour ${schoolName} a été téléchargé.`
+          : "Le rapport des livraisons a été généré avec succès.",
         duration: 3000,
       })
     } catch (err) {
       console.error(err)
       toast({
         title: "Erreur",
-        description: "Impossible de générer le rapport.",
+        description: err.message || "Impossible de générer le rapport.",
         duration: 3000,
         variant: "destructive",
       })
@@ -568,9 +603,39 @@ export default function Overview() {
             </DialogContent>
           </Dialog>
 
-          <Button onClick={handleGenererRapport} className="mt-4">
-            <FileText className="mr-2 h-4 w-4" /> Générer le Rapport des Livraisons
-          </Button>
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div className="sm:w-1/2">
+              <Label htmlFor="reportSchool">École pour le rapport</Label>
+              <Select
+                value={selectedReportSchoolId}
+                onValueChange={(value) => setSelectedReportSchoolId(value)}
+              >
+                <SelectTrigger id="reportSchool">
+                  <SelectValue placeholder="Sélectionnez une école" />
+                </SelectTrigger>
+                <SelectContent>
+                  {schoolOptions.length === 0 ? (
+                    <SelectItem value="" disabled>
+                      Aucune école disponible
+                    </SelectItem>
+                  ) : (
+                    schoolOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={handleGenererRapport}
+              className="sm:self-end"
+              disabled={!selectedReportSchoolId}
+            >
+              <FileText className="mr-2 h-4 w-4" /> Générer le Rapport des Livraisons
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

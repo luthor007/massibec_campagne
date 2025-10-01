@@ -9,6 +9,7 @@ const OrderStudentSchema = new mongoose.Schema({
   studentName: { type: String, required: true }, // Prénom et nom de l'élève
   phoneNumber: { type: String, required: true }, // Numéro de téléphone
   school: { type: mongoose.Schema.Types.ObjectId, ref: School, required: true }, // Référence à l'école
+  campaignNumber: { type: Number },
   products: [{
     productName: { type: String, required: true },
     quantity: { type: Number, required: true },

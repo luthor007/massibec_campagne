@@ -65,20 +65,35 @@
     return response.json();
   };
 
-  export const generateDeliveryReport = async () => {
-    const response = await fetch('/api/generate-delivery-report', {
+  export const generateDeliveryReport = async (schoolId: string) => {
+    if (!schoolId) {
+      throw new Error('Veuillez sélectionner une école avant de générer le rapport.');
+    }
+
+    const response = await fetch(`/api/generate-delivery-report?schoolId=${schoolId}`, {
       method: 'POST',
     });
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.message || 'Failed to generate delivery report');
     }
-    // Assuming the backend sends the PDF as a blob
+
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'delivery_report.pdf';
+
+    const disposition = response.headers.get('Content-Disposition');
+    let fileName = 'rapport_livraisons.csv';
+    if (disposition) {
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      if (match && match[1]) {
+        fileName = match[1];
+      }
+    }
+
+    a.download = fileName;
     a.click();
     window.URL.revokeObjectURL(url);
   };

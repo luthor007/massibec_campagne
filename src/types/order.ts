@@ -13,6 +13,8 @@ export interface IOrder {
   _id: Types.ObjectId; // ID de la commande (MongoDB _id)
   user: Types.ObjectId; // ID de l'utilisateur (propriétaire de la boutique)
   school: string;
+  campaignId?: Types.ObjectId;
+  campaignNumber?: number;
   products: IProductItem[];
   totalAmount: number;
   customerName: string;

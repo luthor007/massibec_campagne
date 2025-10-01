@@ -32,19 +32,21 @@
            const orders = await Order.find({ school: school._id }).lean();
 
            orders.forEach(order => {
-             livraisons.push({
-               _id: order._id,
-               user: order.user,
-               store: order.store,
-               school: school.name,
-               customerName: order.customerName,
+           livraisons.push({
+              _id: order._id,
+              user: order.user,
+              store: order.store,
+              school: school.name,
+               schoolId: school._id,
+              customerName: order.customerName,
                customerEmail: order.customerEmail,
                customerPhone: order.phoneNumber,
                totalAmount: order.totalAmount,
                createdAt: order.createdAt,
                status: order.status,
-               orderId: order.orderId,
-               tip: order.tip,
+              orderId: order.orderId,
+               campaignNumber: order.campaignNumber || null,
+              tip: order.tip,
                discount: order.discount,
                products: order.products,
                ecole: school.name,

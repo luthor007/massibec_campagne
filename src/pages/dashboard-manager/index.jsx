@@ -292,6 +292,48 @@ const handleCopy = (code) => {
               </CardFooter>
             </Card>
 
+            {/* Campaign Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Calendar className="mr-2 h-5 w-5" />
+                  Informations de Campagne
+                </CardTitle>
+                <CardDescription>
+                  Dates importantes de votre campagne de financement
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm font-medium text-blue-600 mb-1">Début de Campagne</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {school.debutCampagne ? new Date(school.debutCampagne).toLocaleDateString('fr-CA') : 'Non défini'}
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-lg">
+                    <p className="text-sm font-medium text-orange-600 mb-1">Fin de Campagne</p>
+                    <p className="text-lg font-bold text-orange-900">
+                      {school.finCampagne ? new Date(school.finCampagne).toLocaleDateString('fr-CA') : 'Non défini'}
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <p className="text-sm font-medium text-green-600 mb-1">Date de Livraison</p>
+                    <p className="text-lg font-bold text-green-900">
+                      {school.dateDeLivraison ? new Date(school.dateDeLivraison).toLocaleDateString('fr-CA') : 'Non défini'}
+                    </p>
+                  </div>
+                </div>
+                {school.currentCampaignNumber && (
+                  <div className="mt-4 text-center">
+                    <Badge variant="outline" className="text-sm">
+                      Campagne #{school.currentCampaignNumber}
+                    </Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Top Performers */}
             <Card>
               <CardHeader>

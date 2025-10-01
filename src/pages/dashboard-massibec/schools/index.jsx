@@ -48,7 +48,7 @@ const SchoolsPage = () => {
       {schoolData && (
         <div className="space-y-8">
           <SchoolInfo school={schoolData} />
-          <SchoolOrders schoolId={selectedSchoolId} />
+          <SchoolOrders schoolId={selectedSchoolId} school={schoolData} />
           <SchoolSalesData schoolId={selectedSchoolId} />
         </div>
       )}
