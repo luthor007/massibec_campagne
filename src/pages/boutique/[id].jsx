@@ -168,7 +168,12 @@ export default function Boutique() {
         ownerPhone={ownerPhone}
         schoolName={schoolName}
       />
-      <ShareSection isOwner={isOwner} ownerName={ownerName} />
+      <ShareSection 
+        isOwner={isOwner} 
+        ownerName={ownerName} 
+        deliveryDate={deliveryDate}
+        schoolName={schoolName}
+      />
     </div>
   </div>
 </div>
