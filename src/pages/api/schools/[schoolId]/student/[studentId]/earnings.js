@@ -45,8 +45,8 @@ export default async function handler(req, res) {
   const { schoolId, studentId } = req.query;
   const { schoolYear = '2025-2026' } = req.body;
 
-  // Only allow GET requests
-  if (req.method !== 'GET') {
+  // Allow both GET and POST requests
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ message: 'Méthode non autorisée' });
   }
 
