@@ -83,7 +83,7 @@ export default function PersonnalisationForm() {
 
   // Update description when discount toggle changes
   useEffect(() => {
-    if (formData.nomBoutique && dateDeLivraison) {
+    if (dateDeLivraison) {
       const discountText = formData.discountEnabled 
         ? 'Profitez de 5 % de rabais dès 6 produits. ' 
         : ''
@@ -95,7 +95,7 @@ export default function PersonnalisationForm() {
         description: newDescription
       }))
     }
-  }, [formData.discountEnabled, dateDeLivraison, formData.nomBoutique])
+  }, [formData.discountEnabled, dateDeLivraison])
   
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
