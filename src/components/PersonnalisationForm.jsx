@@ -12,6 +12,7 @@ import BankGuides from '../components/BankGuides'
 import { Save, Percent, Store, FileText, CreditCard, Settings, Sparkles } from 'lucide-react'
 export default function PersonnalisationForm() {
   const [isHovered, setIsHovered] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [user, setUser] = useState();
   const [formData, setFormData] = useState({
     autoDeposit: true, // Default to true
@@ -104,6 +105,7 @@ export default function PersonnalisationForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
     try {
       const session = await getSession();
@@ -141,6 +143,8 @@ export default function PersonnalisationForm() {
     } catch (error) {
       console.error('Erreur:', error);
       alert('Une erreur est survenue lors de l\'enregistrement de la personnalisation');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
