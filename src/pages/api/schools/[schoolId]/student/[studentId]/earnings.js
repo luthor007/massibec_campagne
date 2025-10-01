@@ -3,7 +3,8 @@
 import dbConnect from '../../../../../../lib/mongodb';
 import Order from '../../../../../../models/Order';
 import School from '../../../../../../models/School';
-import { getSession } from 'next-auth/react';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../../../../auth/[...nextauth]';
 import mongoose from 'mongoose';
 
 const calculateOrderProfit = (order, school) => {
@@ -55,7 +56,7 @@ export default async function handler(req, res) {
     await dbConnect();
 
     // Get the session to authenticate the user
-    const session = await getSession({ req });
+    const session = await getServerSession(req, res, authOptions);
     if (!session) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
