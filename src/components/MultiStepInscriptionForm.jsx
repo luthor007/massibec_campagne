@@ -572,7 +572,7 @@ export default function MultiStepInscriptionForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-white">
       <div className="w-full max-w-md">
         {/* Simple Progress */}
         <div className="mb-8">
