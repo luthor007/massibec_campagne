@@ -68,19 +68,18 @@ export default function PersonnalisationForm() {
         const session = await getSession();
         if (session) {
           setUser(session.user)
-          setFormData(  {
-            nomBoutique: `Campagne de ${user?.name || ''}`,
-            description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${formData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
-            hoursAvailable: '',
-            autoDeposit: true, // Default to true
-            discountEnabled: true, // Default to true
-          })
+          // Only set initial form data if not already set
+          setFormData(prevData => ({
+            ...prevData,
+            nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
+            description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Profitez de 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
+            hoursAvailable: prevData.hoursAvailable || '',
+          }))
         }
-
       }
 
       fetchUser()
-    }, [dateDeLivraison, formData.discountEnabled, user?.name])
+    }, [dateDeLivraison])
   
 
   const handleChange = (e) => {
@@ -288,40 +287,58 @@ const EmailExample = () => {
       {/* Bank Guides Component */}
       <BankGuides />
 
-      <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+      <div className="space-y-4 p-6 border-2 border-gray-300 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 shadow-md">
         <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <Label htmlFor="autoDeposit" className="text-sm font-medium">
+          <div className="space-y-2">
+            <Label htmlFor="autoDeposit" className="text-base font-semibold text-gray-800">
               Dépôts automatiques
             </Label>
-            <p className="text-xs text-gray-600">
+            <p className="text-sm text-gray-600">
               Permet aux clients de faire des dépôts automatiques sans question de sécurité
             </p>
           </div>
-          <Switch
-            id="autoDeposit"
-            checked={formData.autoDeposit}
-            onCheckedChange={(checked) => setFormData({ ...formData, autoDeposit: checked })}
-          />
+          <div className="flex items-center space-x-3">
+            <span className={`text-sm font-medium ${!formData.autoDeposit ? 'text-gray-600' : 'text-gray-400'}`}>
+              Désactivé
+            </span>
+            <Switch
+              id="autoDeposit"
+              checked={formData.autoDeposit}
+              onCheckedChange={(checked) => setFormData({ ...formData, autoDeposit: checked })}
+              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
+            />
+            <span className={`text-sm font-medium ${formData.autoDeposit ? 'text-green-600' : 'text-gray-400'}`}>
+              Activé
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
+      <div className="space-y-4 p-6 border-2 border-blue-300 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 shadow-md">
         <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <Label htmlFor="discountEnabled" className="text-sm font-medium flex items-center gap-2">
-              <Percent className="h-4 w-4" />
+          <div className="space-y-2">
+            <Label htmlFor="discountEnabled" className="text-base font-semibold text-blue-800 flex items-center gap-2">
+              <Percent className="h-5 w-5" />
               Réductions automatiques
             </Label>
-            <p className="text-xs text-gray-600">
+            <p className="text-sm text-blue-600">
               5% de réduction dès 6 produits commandés
             </p>
           </div>
-          <Switch
-            id="discountEnabled"
-            checked={formData.discountEnabled}
-            onCheckedChange={(checked) => setFormData({ ...formData, discountEnabled: checked })}
-          />
+          <div className="flex items-center space-x-3">
+            <span className={`text-sm font-medium ${!formData.discountEnabled ? 'text-gray-600' : 'text-gray-400'}`}>
+              Désactivé
+            </span>
+            <Switch
+              id="discountEnabled"
+              checked={formData.discountEnabled}
+              onCheckedChange={(checked) => setFormData({ ...formData, discountEnabled: checked })}
+              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
+            />
+            <span className={`text-sm font-medium ${formData.discountEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+              Activé
+            </span>
+          </div>
         </div>
       </div>
 
