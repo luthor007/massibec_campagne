@@ -547,26 +547,15 @@ export default function MultiStepInscriptionForm() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
-      >
+    <div className="py-8">
+      <div className="container mx-auto px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-auto overflow-hidden"
+        >
         {/* Header */}
         <div className="relative bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 p-6 text-white">
-          <div className="absolute top-4 right-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/')}
-              className="text-white hover:bg-white/20"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          
           <div className="text-center">
             <div className="flex items-center justify-center mb-4">
               <div className="bg-white/20 backdrop-blur-sm rounded-full p-3 mr-4">
@@ -630,7 +619,7 @@ export default function MultiStepInscriptionForm() {
         </div>
 
         {/* Content Area */}
-        <div className="p-8 max-h-[60vh] overflow-y-auto">
+        <div className="p-8">
           {/* Error Message */}
           {errorMessage && (
             <motion.div
@@ -708,7 +697,8 @@ export default function MultiStepInscriptionForm() {
             )}
           </div>
         </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   )
 }
