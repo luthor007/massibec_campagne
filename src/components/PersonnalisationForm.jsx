@@ -80,7 +80,22 @@ export default function PersonnalisationForm() {
 
       fetchUser()
     }, [dateDeLivraison])
-  
+
+  // Update description when discount toggle changes
+  useEffect(() => {
+    if (formData.nomBoutique && dateDeLivraison) {
+      const discountText = formData.discountEnabled 
+        ? 'Profitez de 5 % de rabais dès 6 produits. ' 
+        : ''
+      
+      const newDescription = `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${discountText}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`
+      
+      setFormData(prevData => ({
+        ...prevData,
+        description: newDescription
+      }))
+    }
+  }, [formData.discountEnabled, dateDeLivraison, formData.nomBoutique])
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
