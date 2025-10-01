@@ -14,8 +14,8 @@ export default function PersonnalisationForm() {
   const [isHovered, setIsHovered] = useState(false)
   const [user, setUser] = useState();
   const [formData, setFormData] = useState({
-    autoDeposit: false, // Set up autoDeposit in the formData
-    discountEnabled: true, // Set up discountEnabled in the formData
+    autoDeposit: true, // Default to true
+    discountEnabled: true, // Default to true
   });
   const router = useRouter();
 
@@ -34,7 +34,7 @@ export default function PersonnalisationForm() {
             nomBoutique: data.name,
             description: data.description || prevData.description,
             hoursAvailable: data.hoursAvailable || '',
-            autoDeposit: data.autoDeposit || false, // Set up autoDeposit in the formData
+            autoDeposit: data.autoDeposit !== false, // Default to true if not set
             discountEnabled: data.discountEnabled !== false, // Default to true if not set
           }));
         }
@@ -72,8 +72,8 @@ export default function PersonnalisationForm() {
             nomBoutique: `Campagne de ${user?.name || ''}`,
             description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${formData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
             hoursAvailable: '',
-            autoDeposit: false, // Set up autoDeposit in the formData
-            discountEnabled: true, // Set up discountEnabled in the formData
+            autoDeposit: true, // Default to true
+            discountEnabled: true, // Default to true
           })
         }
 
