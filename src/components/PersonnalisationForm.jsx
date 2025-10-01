@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import { getSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion'
 import BankGuides from '../components/BankGuides'
 
-import { Save } from 'lucide-react'
+import { Save, Percent } from 'lucide-react'
 export default function PersonnalisationForm() {
   const [isHovered, setIsHovered] = useState(false)
   const [user, setUser] = useState();
@@ -69,7 +70,7 @@ export default function PersonnalisationForm() {
           setUser(session.user)
           setFormData(  {
             nomBoutique: `Campagne de ${user?.name || ''}`,
-            description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${formData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits et 10 % dès 12. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
+            description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! ${formData.discountEnabled ? 'Profitez de 5 % de rabais dès 6 produits. ' : ''}Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${dateDeLivraison}. 🙏 Merci pour votre soutien et bon appétit !`,
             hoursAvailable: '',
             autoDeposit: false, // Set up autoDeposit in the formData
             discountEnabled: true, // Set up discountEnabled in the formData
@@ -287,30 +288,41 @@ const EmailExample = () => {
       {/* Bank Guides Component */}
       <BankGuides />
 
-      <div className="space-y-2">
-          <Label htmlFor="autoDeposit"><strong>Dépôts automatiques:</strong></Label>
-          <Button
+      <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label htmlFor="autoDeposit" className="text-sm font-medium">
+              Dépôts automatiques
+            </Label>
+            <p className="text-xs text-gray-600">
+              Permet aux clients de faire des dépôts automatiques sans question de sécurité
+            </p>
+          </div>
+          <Switch
             id="autoDeposit"
-            name="autoDeposit"
-            type="button"
-            onClick={() => setFormData({ ...formData, autoDeposit: !formData.autoDeposit })}
-            className={`px-4 py-2 ${formData.autoDeposit ? 'bg-green-500' : 'bg-gray-500'} text-white rounded`}
-          >
-            {formData.autoDeposit ? 'Activé' : 'Désactivé'}
-          </Button>
+            checked={formData.autoDeposit}
+            onCheckedChange={(checked) => setFormData({ ...formData, autoDeposit: checked })}
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-          <Label htmlFor="discountEnabled"><strong>Réductions automatiques (5% dès 6 produits, 10% dès 12):</strong></Label>
-          <Button
+      <div className="space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label htmlFor="discountEnabled" className="text-sm font-medium flex items-center gap-2">
+              <Percent className="h-4 w-4" />
+              Réductions automatiques
+            </Label>
+            <p className="text-xs text-gray-600">
+              5% de réduction dès 6 produits commandés
+            </p>
+          </div>
+          <Switch
             id="discountEnabled"
-            name="discountEnabled"
-            type="button"
-            onClick={() => setFormData({ ...formData, discountEnabled: !formData.discountEnabled })}
-            className={`px-4 py-2 ${formData.discountEnabled ? 'bg-green-500' : 'bg-gray-500'} text-white rounded`}
-          >
-            {formData.discountEnabled ? 'Activé' : 'Désactivé'}
-          </Button>
+            checked={formData.discountEnabled}
+            onCheckedChange={(checked) => setFormData({ ...formData, discountEnabled: checked })}
+          />
+        </div>
       </div>
 
         <motion.div

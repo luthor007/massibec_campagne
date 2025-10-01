@@ -20,10 +20,8 @@ export default function Cart({ id }) {
     }
     
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
-    if (totalItems >= 12) {
-      setDiscount(0.1)
-    } else if (totalItems >= 6) {
-      setDiscount(0.05)
+    if (totalItems >= 6) {
+      setDiscount(0.05) // Only 5% discount, no 10% discount
     } else {
       setDiscount(0)
     }
@@ -62,7 +60,7 @@ export default function Cart({ id }) {
 
   // Calculate Cart Item Count
   const cartItemCount = items.reduce((sum, item) => sum + item.quantity, 0)
-  const currentDiscount = discount * 100 // Convert to percentage (0, 5, 10)
+  const currentDiscount = discount * 100 // Convert to percentage (0, 5)
 
   // Calculate Discount Progress and Message
   let discountProgress = 0
@@ -74,12 +72,9 @@ export default function Cart({ id }) {
   } else if (cartItemCount < 6) {
     discountProgress = (cartItemCount / 6) * 100
     message = `Ajoutez ${6 - cartItemCount} produit${6 - cartItemCount !== 1 ? 's' : ''} de plus pour obtenir 5% de réduction!`
-  } else if (cartItemCount < 12) {
-    discountProgress = ((cartItemCount - 6) / 6) * 100
-    message = `Ajoutez ${12 - cartItemCount} produit${12 - cartItemCount !== 1 ? 's' : ''} de plus pour obtenir 10% de réduction!`
   } else {
     discountProgress = 100
-    message = "Félicitations! Vous bénéficiez de la réduction maximale de 10%!"
+    message = "Félicitations! Vous bénéficiez de la réduction de 5%!"
   }
 
   // Calculate Totals
