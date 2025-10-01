@@ -69,7 +69,16 @@ export default async function handler(req, res) {
       res.status(201).json({ message: 'Utilisateur créé avec succès' });
     } catch (error) {
       console.error('Error during registration:', error);
-      res.status(400).json({ message: 'Erreur lors de l\'inscription' });
+      
+      // Check if it's a duplicate email error
+      if (error.code === 11000 && error.keyPattern?.email) {
+        res.status(400).json({ 
+          message: 'Un compte existe déjà avec cette adresse e-mail. Veuillez vous connecter ou utiliser une autre adresse e-mail.',
+          code: 'DUPLICATE_EMAIL'
+        });
+      } else {
+        res.status(400).json({ message: 'Erreur lors de l\'inscription' });
+      }
     }
   } else {
     res.status(405).json({ message: 'Méthode non autorisée' });

@@ -13,6 +13,8 @@ import { LogIn } from 'lucide-react'
 
 export default function InscriptionForm() {
   const [isHovered, setIsHovered] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     nom: '',
     prenom: '',
@@ -100,10 +102,13 @@ export default function InscriptionForm() {
     const schoolId = school._id;
 
     if (formData.objectifPersonnel === "" || !formData.prenom || !formData.nom || !formData.nomParent || !formData.prenomParent || !formData.adresse || !formData.ville || !formData.telephone) {
-      return alert("Veuiller remplir tout les champs obligatoires");
+      setErrorMessage("Veuillez remplir tous les champs obligatoires");
+      setIsSubmitting(false);
+      return;
     }
 
     try {
+      setIsSubmitting(true);
       const response = await fetch('/api/inscription', {
         method: 'POST',
         headers: {
@@ -137,12 +142,23 @@ export default function InscriptionForm() {
       }
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Une erreur est survenue lors de l\'inscription');
+      // Show a more user-friendly error message instead of alert
+      const errorMsg = error.message || 'Une erreur est survenue lors de l\'inscription';
+      setErrorMessage(errorMsg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          <p className="text-sm">{errorMessage}</p>
+        </div>
+      )}
+      
       {/* Prénom */}
       <Button onClick={() => router.push('/connexion')} className="w-full mt-4 bg-blue-300">
         Déjà inscrit? Connection
@@ -420,12 +436,14 @@ export default function InscriptionForm() {
         variant="default"
         size="lg"
         type="submit"
+        disabled={isSubmitting}
         className={`
           relative overflow-hidden transition-all duration-300 ease-out
           transform hover:scale-105 hover:shadow-lg
           bg-gradient-to-r from-blue-500 to-indigo-600
           text-white font-semibold py-3 px-6 rounded-full
           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
+          ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}
         `}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -436,7 +454,7 @@ export default function InscriptionForm() {
           transition={{ duration: 0.2 }}
         >
           <LogIn className="w-5 h-5" />
-          <span>S'inscrire</span>
+          <span>{isSubmitting ? 'Inscription en cours...' : 'S\'inscrire'}</span>
         </motion.span>
         <motion.div
           className="absolute inset-0 bg-white"
