@@ -22858,6 +22858,943 @@ Lines added: 2, lines removed: 1
 
 Tool use: **search_replace**
 
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/components/InscriptionManagerForm.jsx</summary>
+
+**Chunk 1**
+Lines added: 104, lines removed: undefined
+
+```diff
+@@ -238,4 +238,108 @@
+          />
+        </div>
++ 
++       {/* Configuration de la répartition des profits */}
++       <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
++         <div className="flex items-center space-x-2 mb-4">
++           <Percent className="h-5 w-5 text-blue-600" />
++           <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
++           <div className="group relative">
++             <Info className="h-4 w-4 text-blue-500 cursor-help" />
++             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
++               Ces paramètres peuvent être modifiés plus tard dans votre tableau de bord
++             </div>
++           </div>
++         </div>
++         
++         <div className="space-y-4">
++           <div>
++             <Label htmlFor="profitSplitType" className="text-sm font-medium text-gray-700">
++               Type de répartition
++             </Label>
++             <Select 
++               value={formData.profitSplitType} 
++               onValueChange={(value) => setFormData({ ...formData, profitSplitType: value })}
++             >
++               <SelectTrigger className="mt-1">
++                 <SelectValue placeholder="Sélectionnez le type de répartition" />
++               </SelectTrigger>
++               <SelectContent>
++                 <SelectItem value="percentage">
++                   <div className="flex items-center space-x-2">
++                     <Percent className="h-4 w-4" />
++                     <span>Pourcentage par produit</span>
++                   </div>
++                 </SelectItem>
++                 <SelectItem value="absolute">
++                   <div className="flex items-center space-x-2">
++                     <DollarSign className="h-4 w-4" />
++                     <span>Valeur absolue par produit</span>
++                   </div>
++                 </SelectItem>
++               </SelectContent>
++             </Select>
++           </div>
++ 
++           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
++             <div>
++               <Label htmlFor="studentBenefit" className="text-sm font-medium text-gray-700">
++                 Bénéfice étudiant (%)
++               </Label>
++               <Input
++                 type="number"
++                 id="studentBenefit"
++                 name="studentBenefit"
++                 value={formData.studentBenefit}
++                 onChange={handleChange}
++                 min="0"
++                 max="100"
++                 step="0.1"
++                 className="mt-1"
++               />
++             </div>
++             <div>
++               <Label htmlFor="organizationBenefit" className="text-sm font-medium text-gray-700">
++                 Bénéfice organisation (%)
++               </Label>
++               <Input
++                 type="number"
++                 id="organizationBenefit"
++                 name="organizationBenefit"
++                 value={formData.organizationBenefit}
++                 onChange={handleChange}
++                 min="0"
++                 max="100"
++                 step="0.1"
++                 className="mt-1"
++               />
++             </div>
++             <div>
++               <Label htmlFor="raffleBenefit" className="text-sm font-medium text-gray-700">
++                 Bénéfice tirage (%)
++               </Label>
++               <Input
++                 type="number"
++                 id="raffleBenefit"
++                 name="raffleBenefit"
++                 value={formData.raffleBenefit}
++                 onChange={handleChange}
++                 min="0"
++                 max="100"
++                 step="0.1"
++                 className="mt-1"
++               />
++             </div>
++           </div>
++           
++           <div className="p-3 bg-blue-100 rounded-lg">
++             <p className="text-sm text-blue-800">
++               <strong>Total:</strong> {(parseFloat(formData.studentBenefit) + parseFloat(formData.organizationBenefit) + parseFloat(formData.raffleBenefit)).toFixed(1)}%
++               {Math.abs((parseFloat(formData.studentBenefit) + parseFloat(formData.organizationBenefit) + parseFloat(formData.raffleBenefit)) - 100) > 0.1 && (
++                 <span className="text-red-600 ml-2">⚠️ Les pourcentages doivent totaliser 100%</span>
++               )}
++             </p>
++           </div>
++         </div>
++       </div>
+        {/* Bouton de Soumission */}
+        <motion.div
+```
+
+</details>
+
+---
+
+Mise à jour de l’API d’inscription pour gérer la répartition des profits.
+
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/inscription-manager.js</summary>
+
+**Chunk 1**
+Lines added: 23, lines removed: 19
+
+```diff
+@@ -19,23 +19,27 @@
+  
+        // Destructure and sanitize the fields from the request body
+-       const {
+-         nomComplet,
+-         email,
+-         motDePasse,
+-         telephone,
+-         organisme,
+-         titreOuFonction,
+-         ville,
+-         codePostal,
+-         emailEcole,
+-         telephoneEcole,
+-         adresse,
+-         objectifFinancier,
+-         nombreParticipants,
+-         debutCampagne,
+-         finCampagne,
+-         dateDeLivraison,
+-         momentPourJoindre
+-       } = req.body;
++           const {
++             nomComplet,
++             email,
++             motDePasse,
++             telephone,
++             organisme,
++             titreOuFonction,
++             ville,
++             codePostal,
++             emailEcole,
++             telephoneEcole,
++             adresse,
++             objectifFinancier,
++             nombreParticipants,
++             debutCampagne,
++             finCampagne,
++             dateDeLivraison,
++             momentPourJoindre,
++             profitSplitType,
++             studentBenefit,
++             organizationBenefit,
++             raffleBenefit
++           } = req.body;
+  
+  
+```
+
+</details>
+
+---
+
+The string to replace was not found in the file.
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/inscription-manager.js
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/inscription-manager.js
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/inscription-manager.js</summary>
+
+**Chunk 1**
+Lines added: 8, lines removed: undefined
+
+```diff
+@@ -67,4 +67,12 @@
+          deliveryDate: sanitizeString(dateDeLivraison),
+          isActive: true,
++         status: 'pending_approval', // Changed to pending approval
++         financialGoal: objectifFinancier,
++         profitSplitType: profitSplitType || 'percentage',
++         profitSplit: {
++           studentBenefit: parseFloat(studentBenefit) || 85.6,
++           organizationBenefit: parseFloat(organizationBenefit) || 9.4,
++           raffleBenefit: parseFloat(raffleBenefit) || 5.0
++         }
+        };
+  
+```
+
+</details>
+
+---
+
+Ajout de l’affichage de la campagne en attente d’approbation dans le dashboard.
+
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: undefined
+
+```diff
+@@ -107,4 +107,7 @@
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState('all');
++   const [showEditSchoolModal, setShowEditSchoolModal] = useState(false);
++   const [showEditProfitModal, setShowEditProfitModal] = useState(false);
++   const [editingCampaign, setEditingCampaign] = useState(null);
+  
+  
+```
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: undefined
+
+```diff
+@@ -300,4 +300,7 @@
+      new Date() >= new Date(school.debutCampagne) && new Date() <= new Date(school.finCampagne);
+    
++   // Find pending campaign
++   const pendingCampaign = school?.campaigns?.find(campaign => campaign.status === 'pending_approval');
++   
+    // Filter participants based on search and status
+    const filteredParticipants = participants.filter(participant => {
+```
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 76, lines removed: undefined
+
+```diff
+@@ -857,4 +857,80 @@
+                </Card>
+              </motion.div>
++ 
++             {/* Pending Campaign Alert */}
++             {pendingCampaign && (
++               <motion.div
++                 initial={{ opacity: 0, y: 20 }}
++                 animate={{ opacity: 1, y: 0 }}
++                 transition={{ delay: 0.8 }}
++               >
++                 <Card className="border-0 shadow-xl bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200">
++                   <CardHeader>
++                     <div className="flex items-center justify-between">
++                       <div className="flex items-center space-x-3">
++                         <div className="p-3 bg-yellow-500 rounded-full">
++                           <Clock className="h-6 w-6 text-white" />
++                         </div>
++                         <div>
++                           <CardTitle className="text-xl font-bold text-yellow-900">
++                             Campagne en attente d'approbation
++                           </CardTitle>
++                           <CardDescription className="text-yellow-700">
++                             Votre campagne #{pendingCampaign.campaignNumber} est en cours d'examen par Massibec
++                           </CardDescription>
++                         </div>
++                       </div>
++                       <Badge className="bg-yellow-500 text-white">
++                         En attente
++                       </Badge>
++                     </div>
++                   </CardHeader>
++                   <CardContent>
++                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
++                       <div className="space-y-4">
++                         <div>
++                           <h4 className="font-semibold text-yellow-900 mb-2">Dates de la campagne</h4>
++                           <div className="space-y-2 text-sm">
++                             <p><span className="font-medium">Début:</span> {new Date(pendingCampaign.startDate).toLocaleDateString('fr-CA')}</p>
++                             <p><span className="font-medium">Fin:</span> {new Date(pendingCampaign.endDate).toLocaleDateString('fr-CA')}</p>
++                             <p><span className="font-medium">Livraison:</span> {new Date(pendingCampaign.deliveryDate).toLocaleDateString('fr-CA')}</p>
++                           </div>
++                         </div>
++                         <div>
++                           <h4 className="font-semibold text-yellow-900 mb-2">Objectif financier</h4>
++                           <p className="text-lg font-bold text-yellow-900">{pendingCampaign.financialGoal?.toLocaleString()}$</p>
++                         </div>
++                       </div>
++                       <div className="space-y-4">
++                         <div>
++                           <h4 className="font-semibold text-yellow-900 mb-2">Répartition des profits</h4>
++                           <div className="space-y-2 text-sm">
++                             <p><span className="font-medium">Type:</span> {pendingCampaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}</p>
++                             <p><span className="font-medium">Étudiant:</span> {pendingCampaign.profitSplit?.studentBenefit}%</p>
++                             <p><span className="font-medium">Organisation:</span> {pendingCampaign.profitSplit?.organizationBenefit}%</p>
++                             <p><span className="font-medium">Tirage:</span> {pendingCampaign.profitSplit?.raffleBenefit}%</p>
++                           </div>
++                         </div>
++                         <Button 
++                           onClick={() => {
++                             setEditingCampaign(pendingCampaign);
++                             setShowEditProfitModal(true);
++                           }}
++                           className="bg-yellow-600 hover:bg-yellow-700 text-white"
++                         >
++                           <Settings className="h-4 w-4 mr-2" />
++                           Modifier la répartition
++                         </Button>
++                       </div>
++                     </div>
++                     <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
++                       <p className="text-sm text-yellow-800">
++                         💡 Vous pouvez modifier la répartition des profits pendant que votre campagne est en attente d'approbation.
++                       </p>
++                     </div>
++                   </CardContent>
++                 </Card>
++               </motion.div>
++             )}
+  
+              {/* Enhanced School Information */}
+```
+
+**Chunk 2**
+Lines added: 15, lines removed: 4
+
+```diff
+@@ -876,8 +952,19 @@
+                        </CardDescription>
+                      </div>
+-                     <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+-                       <Info className="h-3 w-3 mr-1" />
+-                       Contact
+-                     </Badge>
++                     <div className="flex items-center space-x-2">
++                       <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
++                         <Info className="h-3 w-3 mr-1" />
++                         Contact
++                       </Badge>
++                       <Button 
++                         variant="outline" 
++                         size="sm"
++                         onClick={() => setShowEditSchoolModal(true)}
++                         className="border-blue-300 text-blue-700 hover:bg-blue-50"
++                       >
++                         <Settings className="h-4 w-4 mr-2" />
++                         Modifier
++                       </Button>
++                     </div>
+                    </div>
+                  </CardHeader>
+```
+
+</details>
+
+---
+
+Ajout des modales d’édition en fin de fichier.
+
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 189, lines removed: undefined
+
+```diff
+@@ -1679,4 +1679,193 @@
+          </Tabs>
+        </main>
++ 
++       {/* Edit School Information Modal */}
++       {showEditSchoolModal && (
++         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
++           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
++             <div className="p-6">
++               <div className="flex items-center justify-between mb-6">
++                 <h2 className="text-2xl font-bold text-gray-900">Modifier les informations de l'école</h2>
++                 <Button
++                   variant="ghost"
++                   size="sm"
++                   onClick={() => setShowEditSchoolModal(false)}
++                 >
++                   <X className="h-4 w-4" />
++                 </Button>
++               </div>
++               
++               <form className="space-y-4">
++                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                   <div>
++                     <Label htmlFor="editName">Nom de l'école</Label>
++                     <Input
++                       id="editName"
++                       defaultValue={school.name}
++                       className="mt-1"
++                     />
++                   </div>
++                   <div>
++                     <Label htmlFor="editEmail">Email</Label>
++                     <Input
++                       id="editEmail"
++                       type="email"
++                       defaultValue={school.email}
++                       className="mt-1"
++                     />
++                   </div>
++                 </div>
++                 
++                 <div>
++                   <Label htmlFor="editAddress">Adresse</Label>
++                   <Input
++                     id="editAddress"
++                     defaultValue={school.address}
++                     className="mt-1"
++                   />
++                 </div>
++                 
++                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++                   <div>
++                     <Label htmlFor="editTelephone">Téléphone</Label>
++                     <Input
++                       id="editTelephone"
++                       defaultValue={school.telephone}
++                       className="mt-1"
++                     />
++                   </div>
++                   <div>
++                     <Label htmlFor="editCode">Code d'identification</Label>
++                     <Input
++                       id="editCode"
++                       defaultValue={school.code}
++                       className="mt-1"
++                       disabled
++                     />
++                     <p className="text-xs text-gray-500 mt-1">Le code ne peut pas être modifié</p>
++                   </div>
++                 </div>
++                 
++                 <div className="flex justify-end space-x-3 pt-4">
++                   <Button
++                     variant="outline"
++                     onClick={() => setShowEditSchoolModal(false)}
++                   >
++                     Annuler
++                   </Button>
++                   <Button className="bg-blue-600 hover:bg-blue-700">
++                     Sauvegarder
++                   </Button>
++                 </div>
++               </form>
++             </div>
++           </div>
++         </div>
++       )}
++ 
++       {/* Edit Profit Split Modal */}
++       {showEditProfitModal && editingCampaign && (
++         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
++           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
++             <div className="p-6">
++               <div className="flex items-center justify-between mb-6">
++                 <h2 className="text-2xl font-bold text-gray-900">Modifier la répartition des profits</h2>
++                 <Button
++                   variant="ghost"
++                   size="sm"
++                   onClick={() => setShowEditProfitModal(false)}
++                 >
++                   <X className="h-4 w-4" />
++                 </Button>
++               </div>
++               
++               <form className="space-y-6">
++                 <div>
++                   <Label htmlFor="editProfitSplitType">Type de répartition</Label>
++                   <Select defaultValue={editingCampaign.profitSplitType}>
++                     <SelectTrigger className="mt-1">
++                       <SelectValue placeholder="Sélectionnez le type de répartition" />
++                     </SelectTrigger>
++                     <SelectContent>
++                       <SelectItem value="percentage">
++                         <div className="flex items-center space-x-2">
++                           <Percent className="h-4 w-4" />
++                           <span>Pourcentage par produit</span>
++                         </div>
++                       </SelectItem>
++                       <SelectItem value="absolute">
++                         <div className="flex items-center space-x-2">
++                           <DollarSign className="h-4 w-4" />
++                           <span>Valeur absolue par produit</span>
++                         </div>
++                       </SelectItem>
++                     </SelectContent>
++                   </Select>
++                 </div>
++ 
++                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
++                   <div>
++                     <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
++                     <Input
++                       id="editStudentBenefit"
++                       type="number"
++                       defaultValue={editingCampaign.profitSplit?.studentBenefit}
++                       min="0"
++                       max="100"
++                       step="0.1"
++                       className="mt-1"
++                     />
++                   </div>
++                   <div>
++                     <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
++                     <Input
++                       id="editOrganizationBenefit"
++                       type="number"
++                       defaultValue={editingCampaign.profitSplit?.organizationBenefit}
++                       min="0"
++                       max="100"
++                       step="0.1"
++                       className="mt-1"
++                     />
++                   </div>
++                   <div>
++                     <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
++                     <Input
++                       id="editRaffleBenefit"
++                       type="number"
++                       defaultValue={editingCampaign.profitSplit?.raffleBenefit}
++                       min="0"
++                       max="100"
++                       step="0.1"
++                       className="mt-1"
++                     />
++                   </div>
++                 </div>
++                 
++                 <div className="p-4 bg-blue-50 rounded-lg">
++                   <p className="text-sm text-blue-800">
++                     <strong>Total:</strong> {(editingCampaign.profitSplit?.studentBenefit + editingCampaign.profitSplit?.organizationBenefit + editingCampaign.profitSplit?.raffleBenefit).toFixed(1)}%
++                   </p>
++                   <p className="text-xs text-blue-600 mt-1">
++                     Les pourcentages doivent totaliser 100%
++                   </p>
++                 </div>
++                 
++                 <div className="flex justify-end space-x-3 pt-4">
++                   <Button
++                     variant="outline"
++                     onClick={() => setShowEditProfitModal(false)}
++                   >
++                     Annuler
++                   </Button>
++                   <Button className="bg-yellow-600 hover:bg-yellow-700">
++                     Sauvegarder
++                   </Button>
++                 </div>
++               </form>
++             </div>
++           </div>
++         </div>
++       )}
+      </div>
+    );
+```
+
+</details>
+
+---
+
+
+
+---
+
+_**User (2025-10-01 22:25Z)**_
+
+And don't forget to fly deploy, finally the new schools that are created should be visible in the dashboard of massibec. After we will improve their dashboard too.
+
+---
+
+_**Assistant (default)**_
+
+Tool use: **todo_write**
+
+## Todo List
+
+- [x] Ajouter la configuration de la répartition des profits lors de l'inscription
+- [x] Afficher la campagne en attente avec possibilité de modifier la répartition
+- [x] Rendre les informations de l'école éditables
+- [x] Créer des modals pour éditer les informations
+- [-] Déployer les changements sur Fly.io
+- [ ] Mettre à jour le dashboard Massibec pour afficher les nouvelles écoles
+
+---
+
+Tool use: **read_lints**
+
+<details>
+          <summary>Read lints for 3 files</summary>
+      
+Lint paths:
+
+- `/Users/alexismassicotte/project/massibec-financement/src/components/InscriptionManagerForm.jsx`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/api/inscription-manager.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx`
+
+Lint results
+
+Lint errors for `src/pages/api/inscription-manager.js`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| Le fichier de déclaration du module 'bcryptjs' est introuvable. '/Users/alexismassicotte/project/massibec-financement/node_modules/bcryptjs/index.js' a implicitement un type 'any'.<br/>  Essayez 'npm i --save-dev @types/bcryptjs' s'il existe, ou ajoutez un nouveau fichier de déclaration (.d.ts) contenant 'declare module 'bcryptjs';' | 6:20-6:30 | DIAGNOSTIC_SEVERITY_HINT |
+| 'codePostal' est déclaré mais sa valeur n'est jamais lue. | 29:13-29:23 | DIAGNOSTIC_SEVERITY_HINT |
+| 'momentPourJoindre' est déclaré mais sa valeur n'est jamais lue. | 38:13-38:30 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+Lint errors for `src/pages/dashboard-manager/index.jsx`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'LineChart' est déclaré mais sa valeur n'est jamais lue. | 16:3-16:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Line' est déclaré mais sa valeur n'est jamais lue. | 17:3-17:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Area' est déclaré mais sa valeur n'est jamais lue. | 18:3-18:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AreaChart' est déclaré mais sa valeur n'est jamais lue. | 19:3-19:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AvatarImage' est déclaré mais sa valeur n'est jamais lue. | 32:34-32:45 | DIAGNOSTIC_SEVERITY_HINT |
+| 'TrendingDown' est déclaré mais sa valeur n'est jamais lue. | 60:3-60:15 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Eye' est déclaré mais sa valeur n'est jamais lue. | 68:3-68:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Plus' est déclaré mais sa valeur n'est jamais lue. | 69:3-69:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Filter' est déclaré mais sa valeur n'est jamais lue. | 70:3-70:9 | DIAGNOSTIC_SEVERITY_HINT |
+| 'HelpCircle' est déclaré mais sa valeur n'est jamais lue. | 72:3-72:13 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AlertCircle' est déclaré mais sa valeur n'est jamais lue. | 75:3-75:14 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Zap' est déclaré mais sa valeur n'est jamais lue. | 78:3-78:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'products' est déclaré mais sa valeur n'est jamais lue. | 90:1-90:46 | DIAGNOSTIC_SEVERITY_HINT |
+| 'totalRaised' est déclaré mais sa valeur n'est jamais lue. | 101:10-101:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'loading' est déclaré mais sa valeur n'est jamais lue. | 103:10-103:17 | DIAGNOSTIC_SEVERITY_HINT |
+| 'lastUpdated' est déclaré mais sa valeur n'est jamais lue. | 105:10-105:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setSearchTerm' est déclaré mais sa valeur n'est jamais lue. | 107:22-107:35 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setFilterStatus' est déclaré mais sa valeur n'est jamais lue. | 108:24-108:39 | DIAGNOSTIC_SEVERITY_HINT |
+| 'result' est déclaré mais sa valeur n'est jamais lue. | 271:15-271:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'filteredParticipants' est déclaré mais sa valeur n'est jamais lue. | 306:9-306:29 | DIAGNOSTIC_SEVERITY_HINT |
+| 'entry' est déclaré mais sa valeur n'est jamais lue. | 1573:39-1573:44 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Label' is not defined. | 1701:22-1701:27 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1709:22-1709:27 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1720:20-1720:25 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1730:22-1730:27 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1738:22-1738:27 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1784:20-1784:25 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Percent' is not defined. | 1792:28-1792:35 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1808:22-1808:27 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1820:22-1820:27 | DIAGNOSTIC_SEVERITY_ERROR |
+| 'Label' is not defined. | 1832:22-1832:27 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: undefined
+
+```diff
+@@ -29,4 +29,5 @@
+  import { Button } from "@/components/ui/button";
+  import { Input } from "@/components/ui/input";
++ import { Label } from "@/components/ui/label";
+  import { Badge } from "@/components/ui/badge";
+  import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+```
+
+</details>
+
+---
+
+Tool use: **read_lints**
+
+<details>
+          <summary>Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx`
+
+Lint results
+
+Lint errors for `src/pages/dashboard-manager/index.jsx`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'LineChart' est déclaré mais sa valeur n'est jamais lue. | 16:3-16:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Line' est déclaré mais sa valeur n'est jamais lue. | 17:3-17:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Area' est déclaré mais sa valeur n'est jamais lue. | 18:3-18:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AreaChart' est déclaré mais sa valeur n'est jamais lue. | 19:3-19:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AvatarImage' est déclaré mais sa valeur n'est jamais lue. | 33:34-33:45 | DIAGNOSTIC_SEVERITY_HINT |
+| 'TrendingDown' est déclaré mais sa valeur n'est jamais lue. | 61:3-61:15 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Eye' est déclaré mais sa valeur n'est jamais lue. | 69:3-69:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Plus' est déclaré mais sa valeur n'est jamais lue. | 70:3-70:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Filter' est déclaré mais sa valeur n'est jamais lue. | 71:3-71:9 | DIAGNOSTIC_SEVERITY_HINT |
+| 'HelpCircle' est déclaré mais sa valeur n'est jamais lue. | 73:3-73:13 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AlertCircle' est déclaré mais sa valeur n'est jamais lue. | 76:3-76:14 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Zap' est déclaré mais sa valeur n'est jamais lue. | 79:3-79:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'products' est déclaré mais sa valeur n'est jamais lue. | 91:1-91:46 | DIAGNOSTIC_SEVERITY_HINT |
+| 'totalRaised' est déclaré mais sa valeur n'est jamais lue. | 102:10-102:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'loading' est déclaré mais sa valeur n'est jamais lue. | 104:10-104:17 | DIAGNOSTIC_SEVERITY_HINT |
+| 'lastUpdated' est déclaré mais sa valeur n'est jamais lue. | 106:10-106:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setSearchTerm' est déclaré mais sa valeur n'est jamais lue. | 108:22-108:35 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setFilterStatus' est déclaré mais sa valeur n'est jamais lue. | 109:24-109:39 | DIAGNOSTIC_SEVERITY_HINT |
+| 'result' est déclaré mais sa valeur n'est jamais lue. | 272:15-272:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'filteredParticipants' est déclaré mais sa valeur n'est jamais lue. | 307:9-307:29 | DIAGNOSTIC_SEVERITY_HINT |
+| 'entry' est déclaré mais sa valeur n'est jamais lue. | 1574:39-1574:44 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Percent' is not defined. | 1793:28-1793:35 | DIAGNOSTIC_SEVERITY_ERROR |
+
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: 1
+
+```diff
+@@ -80,5 +80,6 @@
+    Heart,
+    Sparkles,
+-   X
++   X,
++   Percent
+  } from 'lucide-react';
+  import { toast } from 'react-toastify';
+```
+
+</details>
+
+---
+
+Tool use: **read_lints**
+
+<details>
+          <summary>Read lints for 1 file</summary>
+      
+Lint paths:
+
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx`
+
+Lint results
+
+Lint errors for `src/pages/dashboard-manager/index.jsx`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'LineChart' est déclaré mais sa valeur n'est jamais lue. | 16:3-16:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Line' est déclaré mais sa valeur n'est jamais lue. | 17:3-17:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Area' est déclaré mais sa valeur n'est jamais lue. | 18:3-18:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AreaChart' est déclaré mais sa valeur n'est jamais lue. | 19:3-19:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AvatarImage' est déclaré mais sa valeur n'est jamais lue. | 33:34-33:45 | DIAGNOSTIC_SEVERITY_HINT |
+| 'TrendingDown' est déclaré mais sa valeur n'est jamais lue. | 61:3-61:15 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Eye' est déclaré mais sa valeur n'est jamais lue. | 69:3-69:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Plus' est déclaré mais sa valeur n'est jamais lue. | 70:3-70:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Filter' est déclaré mais sa valeur n'est jamais lue. | 71:3-71:9 | DIAGNOSTIC_SEVERITY_HINT |
+| 'HelpCircle' est déclaré mais sa valeur n'est jamais lue. | 73:3-73:13 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AlertCircle' est déclaré mais sa valeur n'est jamais lue. | 76:3-76:14 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Zap' est déclaré mais sa valeur n'est jamais lue. | 79:3-79:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'products' est déclaré mais sa valeur n'est jamais lue. | 92:1-92:46 | DIAGNOSTIC_SEVERITY_HINT |
+| 'totalRaised' est déclaré mais sa valeur n'est jamais lue. | 103:10-103:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'loading' est déclaré mais sa valeur n'est jamais lue. | 105:10-105:17 | DIAGNOSTIC_SEVERITY_HINT |
+| 'lastUpdated' est déclaré mais sa valeur n'est jamais lue. | 107:10-107:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setSearchTerm' est déclaré mais sa valeur n'est jamais lue. | 109:22-109:35 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setFilterStatus' est déclaré mais sa valeur n'est jamais lue. | 110:24-110:39 | DIAGNOSTIC_SEVERITY_HINT |
+| 'result' est déclaré mais sa valeur n'est jamais lue. | 273:15-273:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'filteredParticipants' est déclaré mais sa valeur n'est jamais lue. | 308:9-308:29 | DIAGNOSTIC_SEVERITY_HINT |
+| 'entry' est déclaré mais sa valeur n'est jamais lue. | 1575:39-1575:44 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+git add .
+```
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+git commit -m "feat: Add profit split configuration during registration and editable school info
+
+- Add profit split configuration to InscriptionManagerForm with validation
+- Show pending campaign with ability to edit profit split in dashboard
+- Add modals for editing school information and profit split
+- Update inscription-manager API to handle profit split data
+- Set initial campaign status to 'pending_approval' instead of 'approved'
+- Enhance dashboard with pending campaign alert and edit capabilities"
+```
+
+```
+[feature/new-development a92bdc7] feat: Add profit split configuration during registration and editable school info                                             
+ 25 files changed, 23497 insertions(+), 466 deletions(-)
+ create mode 100644 .cursor/screenshots/page-2025-10-02T01-13-24-812Z.png
+ create mode 100644 .cursor/screenshots/page-2025-10-02T01-19-13-228Z.png
+ create mode 100644 .cursor/screenshots/page-2025-10-02T01-19-28-524Z.png
+ create mode 100644 .cursor/screenshots/page-2025-10-02T01-20-18-849Z.png
+ create mode 100644 .cursor/screenshots/page-2025-10-02T01-24-17-194Z.png
+ create mode 100644 .cursor/screenshots/page-2025-10-02T01-25-04-763Z.png
+ create mode 100644 src/pages/api/campaigns/create.js
+ create mode 100644 src/pages/api/massibec/campaigns.js
+ create mode 100644 src/pages/api/massibec/campaigns/[campaignId]/approve.js
+ create mode 100644 src/pages/api/massibec/campaigns/[campaignId]/reject.js
+ create mode 100644 src/pages/dashboard-massibec/campaigns/index.jsx
+```
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+git push origin feature/new-development
+```
+
+```
+Enumerating objects: 66, done.
+Counting objects: 100% (66/66), done.
+Delta compression using up to 12 threads
+Compressing objects: 100% (37/37), done.
+Writing objects: 100% (43/43), 1.84 MiB | 843.00 KiB/s, done.
+Total 43 (delta 20), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (20/20), completed with 18 local objects.
+remote: 
+remote: GitHub found 22 vulnerabilities on luthor007/massibec_campagne's default branch (3 critical, 8 high, 6 moderate, 5 low). To find out more, visit:       
+remote:      https://github.com/luthor007/massibec_campagne/security/dependabot
+remote: 
+To https://github.com/luthor007/massibec_campagne.git
+   ddf0dab..a92bdc7  feature/new-development -> feature/new-development
+```
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+fly deploy
+```
+
+```
+(base) MacBook-Pro-de-Alexis:massibec-financement alexismassicotte$ fly deploy
+==> Verifying app config
+Validating /Users/alexismassicotte/project/massibec-financement/fly.toml
+✓ Configuration is valid
+--> Verified app config
+==> Building image
+Waiting for depot builder...
+ 🌍
+```
+
 ---
 
 

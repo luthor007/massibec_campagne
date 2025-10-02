@@ -1,5 +1,5 @@
-import dbConnect from '../../../../../lib/mongodb';
-import School from '../../../../../models/School';
+import dbConnect from '../../../../lib/mongodb';
+import School from '../../../../models/School';
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
