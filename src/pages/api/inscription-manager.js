@@ -19,12 +19,23 @@ export default async function handler(req, res) {
 
       // Destructure and sanitize the fields from the request body
       const {
-        name,
+        nomComplet,
         email,
-        password,
-        role,
-        schoolManagerInfo,
-        school
+        motDePasse,
+        telephone,
+        organisme,
+        titreOuFonction,
+        ville,
+        codePostal,
+        emailEcole,
+        telephoneEcole,
+        adresse,
+        objectifFinancier,
+        nombreParticipants,
+        debutCampagne,
+        finCampagne,
+        dateDeLivraison,
+        momentPourJoindre
       } = req.body;
 
 
@@ -32,36 +43,36 @@ export default async function handler(req, res) {
       const verificationToken = crypto.randomBytes(32).toString('hex');
       const verificationTokenExpires = Date.now() + 24 * 60 * 60 * 1000; // Token valid for 24 hours
 
-      const sanitizedName = sanitizeString(name);
+      const sanitizedName = sanitizeString(nomComplet);
       const sanitizedEmail = sanitizeString(email);
       const sanitizedSchoolManagerInfo = {
-        titreOuFonction: sanitizeString(schoolManagerInfo?.titreOuFonction),
-        organisme: schoolManagerInfo?.organisme,
-        ville: sanitizeString(schoolManagerInfo?.ville),
-        objectifFinancier: schoolManagerInfo?.objectifFinancier,
-        nombreParticipants: schoolManagerInfo?.nombreParticipants,
-        telephone: sanitizeString(schoolManagerInfo?.telephone),
-        debutCampagne: schoolManagerInfo?.debutCampagne,
+        titreOuFonction: sanitizeString(titreOuFonction),
+        organisme: organisme,
+        ville: sanitizeString(ville),
+        objectifFinancier: sanitizeString(objectifFinancier),
+        nombreParticipants: nombreParticipants,
+        telephone: sanitizeString(telephone),
+        debutCampagne: debutCampagne,
       };
 
       // Create a new School
       const initialCampaign = {
         campaignNumber: 1,
-        startDate: sanitizeString(school.debutCampagne),
-        endDate: sanitizeString(school.finCampagne),
-        deliveryDate: sanitizeString(school.dateDeLivraison),
+        startDate: sanitizeString(debutCampagne),
+        endDate: sanitizeString(finCampagne),
+        deliveryDate: sanitizeString(dateDeLivraison),
         isActive: true,
       };
 
       const newSchool = new School({
-        name: sanitizeString(school.name),
-        address: sanitizeString(school.address),
-        email: sanitizeString(school.email),
-        telephone: sanitizeString(school.telephone),
-        objectifFinancier: sanitizeString(school.objectifFinancier),
-        debutCampagne: sanitizeString(school.debutCampagne),
-        finCampagne: sanitizeString(school.finCampagne),
-        dateDeLivraison: sanitizeString(school.dateDeLivraison),
+        name: sanitizeString(organisme),
+        address: sanitizeString(adresse),
+        email: sanitizeString(emailEcole),
+        telephone: sanitizeString(telephoneEcole),
+        objectifFinancier: sanitizeString(objectifFinancier),
+        debutCampagne: sanitizeString(debutCampagne),
+        finCampagne: sanitizeString(finCampagne),
+        dateDeLivraison: sanitizeString(dateDeLivraison),
         currentCampaignNumber: 1,
         campaigns: [initialCampaign],
         approved: false
@@ -74,14 +85,14 @@ export default async function handler(req, res) {
       sanitizedSchoolManagerInfo.organisme = newSchool._id;
 
       // Hash the password
-      const hashedPassword = bcrypt.hashSync(password, 10);
+      const hashedPassword = bcrypt.hashSync(motDePasse, 10);
 
       // Create the new user object with sanitized data and associated school
       const newUser = new User({
         email: sanitizedEmail,
         password: hashedPassword,
         name: sanitizedName,
-        role,
+        role: 'schoolManager',
         schoolManagerInfo: sanitizedSchoolManagerInfo,
         verificationToken: verificationToken,
         verificationTokenExpires: verificationTokenExpires,
