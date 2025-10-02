@@ -1,7 +1,7 @@
 import dbConnect from '../../../../lib/mongodb';
 import School from '../../../../models/School';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../../auth/[...nextauth]';
+import { authOptions } from '../../../auth/[...nextauth]';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
