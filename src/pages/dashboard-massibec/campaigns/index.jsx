@@ -367,7 +367,7 @@ export default function MassibecCampaigns() {
                           <TableCell>
                             <div className="flex items-center">
                               <DollarSign className="h-4 w-4 mr-1 text-green-600" />
-                              {campaign.financialGoal.toLocaleString()}$
+                              {campaign.financialGoal?.toLocaleString() || '0'}$
                             </div>
                           </TableCell>
                           <TableCell>
@@ -419,7 +419,7 @@ export default function MassibecCampaigns() {
                                         </div>
                                         <div>
                                           <Label>Objectif financier</Label>
-                                          <p className="font-medium">{selectedCampaign.financialGoal.toLocaleString()}$</p>
+                                          <p className="font-medium">{selectedCampaign.financialGoal?.toLocaleString() || '0'}$</p>
                                         </div>
                                       </div>
                                       <div className="grid grid-cols-3 gap-4">

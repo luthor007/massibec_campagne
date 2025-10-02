@@ -80,7 +80,8 @@ import {
   Heart,
   Sparkles,
   X,
-  Percent
+  Percent,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -114,6 +115,7 @@ export default function DashboardManager() {
   const [showEditCampaignModal, setShowEditCampaignModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingCampaign, setReviewingCampaign] = useState(null);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
 
 
 const handleCopy = (code) => {
@@ -320,6 +322,39 @@ const handleCopy = (code) => {
     } catch (error) {
       console.error('Error approving modifications:', error);
       toast.error('Erreur lors de l\'approbation');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (process.env.NODE_ENV !== 'development') {
+      alert('Cette fonctionnalité n\'est disponible qu\'en mode développement');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Êtes-vous sûr de vouloir supprimer votre compte et toutes les données associées ? Cette action est irréversible.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch('/api/delete-account', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        alert('Compte supprimé avec succès. Vous allez être redirigé.');
+        window.location.href = '/';
+      } else {
+        const error = await response.json();
+        alert(`Erreur: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      alert('Erreur lors de la suppression du compte');
     }
   };
 
@@ -994,15 +1029,28 @@ const handleCopy = (code) => {
                         <Info className="h-3 w-3 mr-1" />
                         Contact
                       </Badge>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setShowEditSchoolModal(true)}
-                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Modifier
-                      </Button>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setShowEditSchoolModal(true)}
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Modifier
+                        </Button>
+                        {process.env.NODE_ENV === 'development' && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setShowDeleteAccountModal(true)}
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Supprimer (DEV)
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -2205,6 +2253,65 @@ const handleCopy = (code) => {
                   onClick={() => handleApproveModifications(reviewingCampaign)}
                 >
                   Approuver les modifications
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Modal */}
+      {showDeleteAccountModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-red-600">Supprimer le compte</h3>
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteAccountModal(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800 font-medium">⚠️ Attention</p>
+                <p className="text-red-700 text-sm mt-1">
+                  Cette action supprimera définitivement votre compte et toutes les données associées :
+                </p>
+                <ul className="text-red-600 text-sm mt-2 list-disc list-inside">
+                  <li>Votre compte utilisateur</li>
+                  <li>Les informations de l'école</li>
+                  <li>Toutes les campagnes</li>
+                  <li>Les données des participants</li>
+                  <li>Les commandes et statistiques</li>
+                </ul>
+              </div>
+
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-800 font-medium">Mode développement uniquement</p>
+                <p className="text-yellow-700 text-sm mt-1">
+                  Cette fonctionnalité n'est disponible qu'en mode développement pour faciliter les tests.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteAccountModal(false)}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  className="bg-red-600 hover:bg-red-700"
+                  onClick={() => {
+                    setShowDeleteAccountModal(false);
+                    handleDeleteAccount();
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer définitivement
                 </Button>
               </div>
             </div>
