@@ -50,7 +50,9 @@ import {
   LogOut,
   Eye,
   Check,
-  X
+  X,
+  Percent,
+  Edit
 } from 'lucide-react';
 
 export default function MassibecCampaigns() {
@@ -62,6 +64,8 @@ export default function MassibecCampaigns() {
   const [isApproving, setIsApproving] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState(null);
 
   // Fetch pending campaigns
   useEffect(() => {
@@ -88,6 +92,47 @@ export default function MassibecCampaigns() {
   const handleLogout = async () => {
     await signOut({ redirect: false });
     router.push('/');
+  };
+
+  // Handle Update Campaign
+  const handleUpdateCampaign = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const updateData = {
+      startDate: formData.get('startDate'),
+      endDate: formData.get('endDate'),
+      deliveryDate: formData.get('deliveryDate'),
+      financialGoal: formData.get('financialGoal'),
+      profitSplitType: formData.get('profitSplitType'),
+      studentBenefit: formData.get('studentBenefit'),
+      organizationBenefit: formData.get('organizationBenefit'),
+      raffleBenefit: formData.get('raffleBenefit'),
+      reason: formData.get('reason')
+    };
+
+    try {
+      const response = await fetch(`/api/massibec/campaigns/${editingCampaign._id}/modify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      if (response.ok) {
+        alert('Modifications proposées avec succès!');
+        setShowEditModal(false);
+        // Refresh campaigns
+        window.location.reload();
+      } else {
+        const error = await response.json();
+        alert(`Erreur: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error updating campaign:', error);
+      alert('Erreur lors de la proposition de modifications');
+    }
   };
 
   // Handle Campaign Approval
@@ -337,6 +382,16 @@ export default function MassibecCampaigns() {
                           </TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => {
+                                  setEditingCampaign(campaign);
+                                  setShowEditModal(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
                               <Dialog>
                                 <DialogTrigger asChild>
                                   <Button 
@@ -457,6 +512,176 @@ export default function MassibecCampaigns() {
           </Card>
         </div>
       </main>
+
+      {/* Edit Campaign Modal */}
+      {showEditModal && editingCampaign && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold">Modifier la Campagne #{editingCampaign.campaignNumber}</h3>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditModal(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdateCampaign(e);
+            }} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="editStartDate">Date de début</Label>
+                  <Input
+                    type="date"
+                    id="editStartDate"
+                    name="startDate"
+                    defaultValue={editingCampaign.startDate}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editEndDate">Date de fin</Label>
+                  <Input
+                    type="date"
+                    id="editEndDate"
+                    name="endDate"
+                    defaultValue={editingCampaign.endDate}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="editDeliveryDate">Date de livraison</Label>
+                <Input
+                  type="date"
+                  id="editDeliveryDate"
+                  name="deliveryDate"
+                  defaultValue={editingCampaign.deliveryDate}
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="editFinancialGoal">Objectif financier ($)</Label>
+                <Input
+                  type="number"
+                  id="editFinancialGoal"
+                  name="financialGoal"
+                  defaultValue={editingCampaign.financialGoal}
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Percent className="h-5 w-5 text-blue-600" />
+                  <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="editProfitSplitType">Type de répartition</Label>
+                    <Select 
+                      defaultValue={editingCampaign.profitSplitType} 
+                      name="profitSplitType"
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Sélectionnez le type de répartition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">
+                          <div className="flex items-center space-x-2">
+                            <Percent className="h-4 w-4" />
+                            <span>Pourcentage par produit</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="absolute">
+                          <div className="flex items-center space-x-2">
+                            <DollarSign className="h-4 w-4" />
+                            <span>Valeur absolue par produit</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
+                      <Input
+                        type="number"
+                        id="editStudentBenefit"
+                        name="studentBenefit"
+                        defaultValue={editingCampaign.profitSplit?.studentBenefit}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
+                      <Input
+                        type="number"
+                        id="editOrganizationBenefit"
+                        name="organizationBenefit"
+                        defaultValue={editingCampaign.profitSplit?.organizationBenefit}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
+                      <Input
+                        type="number"
+                        id="editRaffleBenefit"
+                        name="raffleBenefit"
+                        defaultValue={editingCampaign.profitSplit?.raffleBenefit}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="modificationReason">Raison des modifications</Label>
+                <Textarea
+                  id="modificationReason"
+                  name="reason"
+                  placeholder="Expliquez pourquoi vous modifiez cette campagne..."
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Annuler
+                </Button>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  Proposer les modifications
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

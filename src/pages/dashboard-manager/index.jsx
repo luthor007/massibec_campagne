@@ -111,6 +111,9 @@ export default function DashboardManager() {
   const [showEditSchoolModal, setShowEditSchoolModal] = useState(false);
   const [showEditProfitModal, setShowEditProfitModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
+  const [showEditCampaignModal, setShowEditCampaignModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewingCampaign, setReviewingCampaign] = useState(null);
 
 
 const handleCopy = (code) => {
@@ -284,6 +287,39 @@ const handleCopy = (code) => {
       alert('Une erreur est survenue lors de la création de la campagne');
     } finally {
       setIsCreatingCampaign(false);
+    }
+  };
+
+  const handleEditCampaign = (campaign) => {
+    setEditingCampaign(campaign);
+    setShowEditCampaignModal(true);
+  };
+
+  const handleReviewModifications = (campaign) => {
+    setReviewingCampaign(campaign);
+    setShowReviewModal(true);
+  };
+
+  const handleApproveModifications = async (campaign) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaign._id}/approve-modifications`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        toast.success('Modifications approuvées avec succès!');
+        fetchSchoolData();
+        setShowReviewModal(false);
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Erreur lors de l\'approbation');
+      }
+    } catch (error) {
+      console.error('Error approving modifications:', error);
+      toast.error('Erreur lors de l\'approbation');
     }
   };
 
@@ -1257,9 +1293,34 @@ const handleCopy = (code) => {
                                       Raison du rejet: {campaign.rejectionReason}
                                     </p>
                                   )}
+                                  {campaign.massibecModifications && (
+                                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                                      <p className="text-sm text-blue-800 font-medium">Modifications proposées par Massibec</p>
+                                      <p className="text-xs text-blue-600">Veuillez réviser et approuver ces changements</p>
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="ml-4">
+                                <div className="ml-4 flex flex-col items-end space-y-2">
                                   {getStatusBadge(campaign.status)}
+                                  {campaign.status === 'pending_approval' && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleEditCampaign(campaign)}
+                                    >
+                                      Modifier
+                                    </Button>
+                                  )}
+                                  {campaign.massibecModifications && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                                      onClick={() => handleReviewModifications(campaign)}
+                                    >
+                                      Réviser
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -1865,6 +1926,287 @@ const handleCopy = (code) => {
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Campaign Modal */}
+      {showEditCampaignModal && editingCampaign && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold">Modifier la Campagne #{editingCampaign.campaignNumber}</h3>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditCampaignModal(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              // Handle campaign update
+              setShowEditCampaignModal(false);
+            }} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <Label htmlFor="editStartDate">Date de début</Label>
+                  <Input
+                    type="date"
+                    id="editStartDate"
+                    name="startDate"
+                    defaultValue={editingCampaign.startDate}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editEndDate">Date de fin</Label>
+                  <Input
+                    type="date"
+                    id="editEndDate"
+                    name="endDate"
+                    defaultValue={editingCampaign.endDate}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="editDeliveryDate">Date de livraison</Label>
+                <Input
+                  type="date"
+                  id="editDeliveryDate"
+                  name="deliveryDate"
+                  defaultValue={editingCampaign.deliveryDate}
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="editFinancialGoal">Objectif financier ($)</Label>
+                <Input
+                  type="number"
+                  id="editFinancialGoal"
+                  name="financialGoal"
+                  defaultValue={editingCampaign.financialGoal}
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
+                <div className="flex items-center space-x-2 mb-4">
+                  <Percent className="h-5 w-5 text-blue-600" />
+                  <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="editProfitSplitType">Type de répartition</Label>
+                    <Select 
+                      defaultValue={editingCampaign.profitSplitType} 
+                      name="profitSplitType"
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Sélectionnez le type de répartition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">
+                          <div className="flex items-center space-x-2">
+                            <Percent className="h-4 w-4" />
+                            <span>Pourcentage par produit</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="absolute">
+                          <div className="flex items-center space-x-2">
+                            <DollarSign className="h-4 w-4" />
+                            <span>Valeur absolue par produit</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
+                      <Input
+                        type="number"
+                        id="editStudentBenefit"
+                        name="studentBenefit"
+                        defaultValue={editingCampaign.profitSplit?.studentBenefit}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
+                      <Input
+                        type="number"
+                        id="editOrganizationBenefit"
+                        name="organizationBenefit"
+                        defaultValue={editingCampaign.profitSplit?.organizationBenefit}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
+                      <Input
+                        type="number"
+                        id="editRaffleBenefit"
+                        name="raffleBenefit"
+                        defaultValue={editingCampaign.profitSplit?.raffleBenefit}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEditCampaignModal(false)}
+                >
+                  Annuler
+                </Button>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  Sauvegarder
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modifications Modal */}
+      {showReviewModal && reviewingCampaign && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold">Réviser les Modifications - Campagne #{reviewingCampaign.campaignNumber}</h3>
+              <Button
+                variant="outline"
+                onClick={() => setShowReviewModal(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800 font-medium">Massibec a proposé des modifications à votre campagne</p>
+                <p className="text-blue-600 text-sm mt-1">Veuillez réviser les changements ci-dessous et approuver ou rejeter</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Original Values */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-gray-700">Vos valeurs originales</h4>
+                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <span className="text-sm font-medium">Date de début:</span>
+                      <p className="text-sm">{new Date(reviewingCampaign.startDate).toLocaleDateString('fr-CA')}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Date de fin:</span>
+                      <p className="text-sm">{new Date(reviewingCampaign.endDate).toLocaleDateString('fr-CA')}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Date de livraison:</span>
+                      <p className="text-sm">{new Date(reviewingCampaign.deliveryDate).toLocaleDateString('fr-CA')}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Objectif financier:</span>
+                      <p className="text-sm">{reviewingCampaign.financialGoal?.toLocaleString()}$</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Répartition:</span>
+                      <p className="text-sm">
+                        Étudiant: {reviewingCampaign.profitSplit?.studentBenefit}% | 
+                        Organisation: {reviewingCampaign.profitSplit?.organizationBenefit}% | 
+                        Tirage: {reviewingCampaign.profitSplit?.raffleBenefit}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modified Values */}
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-blue-700">Modifications proposées par Massibec</h4>
+                  <div className="space-y-3 p-4 bg-blue-50 rounded-lg">
+                    <div>
+                      <span className="text-sm font-medium">Date de début:</span>
+                      <p className="text-sm">{new Date(reviewingCampaign.massibecModifications?.startDate).toLocaleDateString('fr-CA')}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Date de fin:</span>
+                      <p className="text-sm">{new Date(reviewingCampaign.massibecModifications?.endDate).toLocaleDateString('fr-CA')}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Date de livraison:</span>
+                      <p className="text-sm">{new Date(reviewingCampaign.massibecModifications?.deliveryDate).toLocaleDateString('fr-CA')}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Objectif financier:</span>
+                      <p className="text-sm">{reviewingCampaign.massibecModifications?.financialGoal?.toLocaleString()}$</p>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium">Répartition:</span>
+                      <p className="text-sm">
+                        Étudiant: {reviewingCampaign.massibecModifications?.profitSplit?.studentBenefit}% | 
+                        Organisation: {reviewingCampaign.massibecModifications?.profitSplit?.organizationBenefit}% | 
+                        Tirage: {reviewingCampaign.massibecModifications?.profitSplit?.raffleBenefit}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {reviewingCampaign.massibecModifications?.reason && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h4 className="font-medium text-yellow-800 mb-2">Raison des modifications</h4>
+                  <p className="text-yellow-700 text-sm">{reviewingCampaign.massibecModifications.reason}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReviewModal(false)}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                  onClick={() => {
+                    // Handle rejection
+                    setShowReviewModal(false);
+                  }}
+                >
+                  Rejeter
+                </Button>
+                <Button
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => handleApproveModifications(reviewingCampaign)}
+                >
+                  Approuver les modifications
+                </Button>
+              </div>
             </div>
           </div>
         </div>

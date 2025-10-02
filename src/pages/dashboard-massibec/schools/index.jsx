@@ -111,6 +111,34 @@ const SchoolsPage = () => {
     return true;
   });
 
+  const handleApproveSchool = async (schoolId) => {
+    try {
+      const response = await fetch(`/api/approve-school`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schoolId }),
+      });
+
+      if (response.ok) {
+        alert('École approuvée avec succès!');
+        fetchAllSchools();
+      } else {
+        const error = await response.json();
+        alert(`Erreur: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('Error approving school:', error);
+      alert('Erreur lors de l\'approbation de l\'école');
+    }
+  };
+
+  const handleManageCampaigns = (schoolId) => {
+    // Navigate to campaigns management page
+    window.location.href = `/dashboard-massibec/campaigns?schoolId=${schoolId}`;
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
@@ -261,8 +289,19 @@ const SchoolsPage = () => {
                                 variant="outline"
                                 size="sm"
                                 className="text-green-600 border-green-300 hover:bg-green-50"
+                                onClick={() => handleApproveSchool(school._id)}
                               >
                                 Approuver
+                              </Button>
+                            )}
+                            {school.campaigns?.some(c => c.status === 'pending_approval') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                                onClick={() => handleManageCampaigns(school._id)}
+                              >
+                                Gérer campagnes
                               </Button>
                             )}
                           </div>
