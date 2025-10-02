@@ -1,7 +1,6 @@
 import dbConnect from '../../../../lib/mongodb';
 import School from '../../../../models/School';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../../auth/[...nextauth]';
+import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,9 +10,9 @@ export default async function handler(req, res) {
   try {
     await dbConnect();
 
-    // Get the session to authenticate the user
-    const session = await getServerSession(req, res, authOptions);
-    if (!session) {
+    // Get the token to authenticate the user
+    const token = await getToken({ req });
+    if (!token) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
 
@@ -39,7 +38,7 @@ export default async function handler(req, res) {
     }
 
     // Check if the user is the school manager
-    if (school._id.toString() !== session.user.schoolManagerInfo?.organisme?.toString()) {
+    if (school._id.toString() !== token.schoolManagerInfo?.organisme?.toString()) {
       return res.status(403).json({ message: 'Accès non autorisé' });
     }
 
