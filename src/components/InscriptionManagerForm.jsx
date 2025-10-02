@@ -57,32 +57,7 @@ export default function InscriptionManagerForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          role: 'school_manager', // Ensure the role is passed correctly
-          email: formData.email,
-          password: formData.motDePasse,
-          name: formData.nomComplet,
-          schoolManagerInfo: {
-            titreOuFonction: formData.titreOuFonction,
-            momentPourJoindre: formData.momentPourJoindre,
-            organisme: formData.organisme,
-            ville: formData.ville,
-            objectifFinancier: formData.objectifFinancier,
-            nombreParticipants: formData.nombreParticipants,
-            telephone: formData.telephoneEcole,
-            debutCampagne: formData.debutCampagne,
-          },
-          school: {
-            name: formData.organisme,
-            address: formData.adresse,
-            email: formData.emailEcole,
-            telephone: formData.telephoneEcole,
-            objectifFinancier: formData.objectifFinancier,
-            debutCampagne: formData.debutCampagne,
-            finCampagne: formData.finCampagne,
-            dateDeLivraison: formData.dateDeLivraison
-          }
-        }),
+        body: JSON.stringify(formData),
       });
 
       if (response.ok) {
