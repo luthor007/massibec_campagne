@@ -8,8 +8,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const approvedSchools = await School.find({ approved: true });
-      res.status(200).json(approvedSchools);
+      const allSchools = await School.find({}).populate('campaigns');
+      res.status(200).json(allSchools);
     } catch (error) {
       console.error('Erreur lors de la récupération des écoles:', error);
       res.status(500).json({ message: 'Erreur serveur.' });

@@ -33,7 +33,8 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 
 const SchoolsPage = () => {
@@ -149,6 +150,14 @@ const SchoolsPage = () => {
             <p className="text-gray-600 mt-1">Gérez toutes les écoles et leurs campagnes</p>
           </div>
           <div className="flex items-center space-x-4">
+            <Button
+              variant="outline"
+              onClick={fetchAllSchools}
+              className="flex items-center"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualiser
+            </Button>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
