@@ -12,7 +12,11 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  LineChart,
+  Line,
+  Area,
+  AreaChart
 } from 'recharts';
 import {
   Card,
@@ -24,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -51,9 +56,34 @@ import {
   Mail,
   Search,
   Settings,
-  Users
+  Users,
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Clock,
+  DollarSign,
+  Award,
+  Activity,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Eye,
+  Plus,
+  Filter,
+  RefreshCw,
+  HelpCircle,
+  Info,
+  CheckCircle,
+  AlertCircle,
+  Star,
+  Gift,
+  Zap,
+  Heart,
+  Sparkles,
+  X,
+  Percent
 } from 'lucide-react';
-import { toast } from 'react-toastify'; // Optional: for success feedback
+import { toast } from 'react-toastify';
+import { motion, AnimatePresence } from 'framer-motion';
 
 
 
@@ -73,6 +103,14 @@ export default function DashboardManager() {
   const [totalRaised, setTotalRaised] = useState(0);
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true); // New loading state
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [showEditSchoolModal, setShowEditSchoolModal] = useState(false);
+  const [showEditProfitModal, setShowEditProfitModal] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState(null);
 
 
 const handleCopy = (code) => {
@@ -197,12 +235,56 @@ const handleCopy = (code) => {
     if (session && school) {
       fetchParticipants();
     }
-  }, [session]); // Added 'school' to dependencies
+  }, [session, school]); // Added 'school' to dependencies
 
   // Handle Logout
   const handleLogout = async () => {
     await signOut({ redirect: false });
     router.push('/');
+  };
+
+  // Handle Campaign Creation
+  const handleCreateCampaign = async (e) => {
+    e.preventDefault();
+    setIsCreatingCampaign(true);
+
+    try {
+      const formData = new FormData(e.target);
+      const campaignData = {
+        startDate: formData.get('startDate'),
+        endDate: formData.get('endDate'),
+        deliveryDate: formData.get('deliveryDate'),
+        financialGoal: formData.get('financialGoal'),
+        profitSplitType: formData.get('profitSplitType'),
+        studentBenefit: formData.get('studentBenefit'),
+        organizationBenefit: formData.get('organizationBenefit'),
+        raffleBenefit: formData.get('raffleBenefit')
+      };
+
+      const response = await fetch('/api/campaigns/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(campaignData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert('Campagne créée avec succès! En attente d\'approbation de Massibec.');
+        setActiveTab('campaigns');
+        // Refresh school data
+        window.location.reload();
+      } else {
+        const errorData = await response.json();
+        alert(`Erreur: ${errorData.message}`);
+      }
+    } catch (error) {
+      console.error('Error creating campaign:', error);
+      alert('Une erreur est survenue lors de la création de la campagne');
+    } finally {
+      setIsCreatingCampaign(false);
+    }
   };
 
   if (!school || !participants) {
@@ -213,240 +295,1125 @@ const handleCopy = (code) => {
     );
   }
 
+  // Calculate campaign progress and insights
+  const campaignProgress = school ? (school.totalRaised / school.objectifFinancier) * 100 : 0;
+  const daysRemaining = school?.finCampagne ? Math.ceil((new Date(school.finCampagne) - new Date()) / (1000 * 60 * 60 * 24)) : 0;
+  const isCampaignActive = school?.debutCampagne && school?.finCampagne && 
+    new Date() >= new Date(school.debutCampagne) && new Date() <= new Date(school.finCampagne);
+  
+  // Find pending campaign
+  const pendingCampaign = school?.campaigns?.find(campaign => campaign.status === 'pending_approval');
+  
+  // Filter participants based on search and status
+  const filteredParticipants = participants.filter(participant => {
+    const matchesSearch = participant.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || 
+      (filterStatus === 'goal_reached' && (participant.raised / participant.goal) >= 1) ||
+      (filterStatus === 'close_to_goal' && (participant.raised / participant.goal) >= 0.75 && (participant.raised / participant.goal) < 1) ||
+      (filterStatus === 'needs_help' && (participant.raised / participant.goal) < 0.75);
+    return matchesSearch && matchesStatus;
+  });
+
+  // Generate insights
+  const insights = [
+    {
+      icon: <TrendingUp className="h-5 w-5" />,
+      title: "Performance",
+      value: `${campaignProgress.toFixed(1)}%`,
+      subtitle: "de l'objectif atteint",
+      color: "text-green-600",
+      bgColor: "bg-green-50"
+    },
+    {
+      icon: <Clock className="h-5 w-5" />,
+      title: "Temps restant",
+      value: `${daysRemaining}`,
+      subtitle: daysRemaining > 1 ? "jours" : "jour",
+      color: daysRemaining < 7 ? "text-red-600" : "text-blue-600",
+      bgColor: daysRemaining < 7 ? "bg-red-50" : "bg-blue-50"
+    },
+    {
+      icon: <Users className="h-5 w-5" />,
+      title: "Participants",
+      value: participants.length,
+      subtitle: "élèves actifs",
+      color: "text-purple-600",
+      bgColor: "bg-purple-50"
+    },
+    {
+      icon: <Award className="h-5 w-5" />,
+      title: "Moyenne",
+      value: `$${participants.length > 0 ? (school.totalRaised / participants.length).toFixed(0) : 0}`,
+      subtitle: "par élève",
+      color: "text-orange-600",
+      bgColor: "bg-orange-50"
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      {/* Enhanced Header */}
+      <motion.header 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/80 backdrop-blur-md shadow-lg border-b border-gray-200/50 sticky top-0 z-50"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Avatar className="h-12 w-12 mr-4">
-                <AvatarFallback>{school.name?.charAt(0)}</AvatarFallback>
+            <div className="flex items-center space-x-4">
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                className="relative"
+              >
+                <Avatar className="h-14 w-14 ring-4 ring-blue-100 shadow-lg">
+                  <AvatarFallback className="text-xl font-bold bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                    {school.name?.charAt(0)}
+                  </AvatarFallback>
               </Avatar>
+                {isCampaignActive && (
+                  <div className="absolute -top-1 -right-1 h-4 w-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                )}
+              </motion.div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                   {school.name}
                 </h1>
-                <p className="text-sm text-gray-500">
+                <div className="flex items-center space-x-2">
+                  <p className="text-sm text-gray-600">
                   Tableau de bord du gestionnaire
                 </p>
+                  <Badge variant="outline" className="text-xs">
+                    <Activity className="h-3 w-3 mr-1" />
+                    {isCampaignActive ? 'Active' : 'En attente'}
+                  </Badge>
               </div>
             </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setLastUpdated(new Date())}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Actualiser
+              </Button>
             <Button variant="outline" className="flex items-center" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" /> Déconnexion
             </Button>
           </div>
         </div>
-      </header>
+        </div>
+      </motion.header>
+
+      {/* Welcome Banner */}
+      <AnimatePresence>
+        {showWelcome && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6"
+          >
+            <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0 shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="p-3 bg-white/20 rounded-full">
+                      <Sparkles className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold">Bienvenue dans votre tableau de bord !</h3>
+                      <p className="text-blue-100">
+                        Suivez en temps réel les performances de votre campagne de financement
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowWelcome(false)}
+                    className="text-white hover:bg-white/20"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-3 rounded-xl bg-gray-200 p-1">
-            <TabsTrigger value="overview">Vue d&apos;ensemble</TabsTrigger>
-            <TabsTrigger value="participants">Participants</TabsTrigger>
-            <TabsTrigger value="sales">Ventes</TabsTrigger>
-            {/* Uncomment if Communications tab is needed */}
-            {/* <TabsTrigger value="communications">Communications</TabsTrigger> */}
+          <TabsList className="grid w-full grid-cols-4 rounded-xl bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200/50 p-1">
+            <TabsTrigger 
+              value="overview" 
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Vue d&apos;ensemble
+            </TabsTrigger>
+            <TabsTrigger 
+              value="campaigns"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Calendar className="h-4 w-4 mr-2" />
+              Campagnes
+            </TabsTrigger>
+            <TabsTrigger 
+              value="participants"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Participants
+            </TabsTrigger>
+            <TabsTrigger 
+              value="sales"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <PieChartIcon className="h-4 w-4 mr-2" />
+              Ventes
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-8">
-            {/* Global Performance */}
-            <Card>
+            {/* Key Insights Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {insights.map((insight, index) => (
+                <motion.div
+                  key={insight.title}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                >
+                  <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600 mb-1">
+                            {insight.title}
+                          </p>
+                          <p className={`text-2xl font-bold ${insight.color}`}>
+                            {insight.value}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {insight.subtitle}
+                          </p>
+                        </div>
+                        <div className={`p-3 rounded-full ${insight.bgColor}`}>
+                          {insight.icon}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Enhanced Global Performance */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="border-0 shadow-xl bg-gradient-to-br from-white to-blue-50/30">
               <CardHeader>
-                <CardTitle>Performance Globale</CardTitle>
-                <CardDescription>
-                  Progression de la campagne de financement
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                        Performance Globale
+                      </CardTitle>
+                      <CardDescription className="text-base">
+                        Progression de votre campagne de financement
                 </CardDescription>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                        En progression
+                      </Badge>
+                    </div>
+                  </div>
               </CardHeader>
               <CardContent className="pb-2">
-                <div className="flex justify-between items-end mb-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2">
+                      <div className="flex justify-between items-end mb-6">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">
+                          <p className="text-sm font-medium text-gray-600 mb-2">
                       Montant amassé
                     </p>
-                    <h2 className="text-3xl font-bold">
+                          <h2 className="text-4xl font-bold text-gray-900">
                       {school.totalRaised.toLocaleString()}$
                     </h2>
+                          <p className="text-sm text-green-600 mt-1">
+                            +12% cette semaine
+                          </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-muted-foreground">
+                          <p className="text-sm font-medium text-gray-600 mb-2">
                       Objectif
                     </p>
-                    <p className="text-2xl font-semibold">
+                          <p className="text-3xl font-semibold text-gray-900">
                       {school.objectifFinancier.toLocaleString()}$
                     </p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {((school.objectifFinancier - school.totalRaised) / 1000).toFixed(0)}k$ restants
+                    </p>
                   </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Progression</span>
+                          <span className="font-semibold">{campaignProgress.toFixed(1)}%</span>
                 </div>
                 <Progress
-                  value={(school.totalRaised / school.objectifFinancier) * 100}
-                  className="h-2"
-                />
-              </CardContent>
-              <CardFooter>
-                <p className="text-sm text-muted-foreground">
-                  {((school.totalRaised / school.objectifFinancier) * 100).toFixed(1)}
-                  % de l&apos;objectif atteint
-                </p>
-              </CardFooter>
+                          value={campaignProgress}
+                          className="h-3 bg-gray-200"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>0$</span>
+                          <span>{school.objectifFinancier.toLocaleString()}$</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl">
+                        <Target className="h-8 w-8 mx-auto text-blue-600 mb-2" />
+                        <p className="text-sm text-gray-600">Objectif atteint</p>
+                        <p className="text-2xl font-bold text-blue-600">
+                          {campaignProgress.toFixed(1)}%
+                        </p>
+                      </div>
+                      <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl">
+                        <Clock className="h-8 w-8 mx-auto text-green-600 mb-2" />
+                        <p className="text-sm text-gray-600">Temps restant</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          {daysRemaining}
+                        </p>
+                        <p className="text-xs text-gray-500">jours</p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
             </Card>
+            </motion.div>
 
-            {/* Campaign Information */}
-            <Card>
+            {/* Enhanced Campaign Information */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <Card className="border-0 shadow-xl">
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Calendar className="mr-2 h-5 w-5" />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center">
+                        <Calendar className="mr-3 h-6 w-6" />
                   Informations de Campagne
                 </CardTitle>
-                <CardDescription>
-                  Dates importantes de votre campagne de financement
+                      <CardDescription className="text-base">
+                        Dates importantes et statut de votre campagne
                 </CardDescription>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {school.currentCampaignNumber && (
+                        <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                          Campagne #{school.currentCampaignNumber}
+                        </Badge>
+                      )}
+                      {(() => {
+                        const today = new Date();
+                        const startDate = new Date(school.debutCampagne);
+                        const endDate = new Date(school.finCampagne);
+                        
+                        if (today < startDate) {
+                          return <Badge className="bg-blue-100 text-blue-800 border-blue-200">À venir</Badge>;
+                        } else if (today >= startDate && today <= endDate) {
+                          return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>;
+                        } else {
+                          return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Terminée</Badge>;
+                        }
+                      })()}
+                    </div>
+                  </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm font-medium text-blue-600 mb-1">Début de Campagne</p>
-                    <p className="text-lg font-bold text-blue-900">
-                      {school.debutCampagne ? new Date(school.debutCampagne).toLocaleDateString('fr-CA') : 'Non défini'}
-                    </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <motion.div 
+                      className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200"
+                      whileHover={{ scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <div className="p-3 bg-blue-500 rounded-full w-fit mx-auto mb-4">
+                        <Calendar className="h-6 w-6 text-white" />
                   </div>
-                  <div className="text-center p-4 bg-orange-50 rounded-lg">
-                    <p className="text-sm font-medium text-orange-600 mb-1">Fin de Campagne</p>
-                    <p className="text-lg font-bold text-orange-900">
-                      {school.finCampagne ? new Date(school.finCampagne).toLocaleDateString('fr-CA') : 'Non défini'}
-                    </p>
+                      <p className="text-sm font-medium text-blue-700 mb-2">Début de Campagne</p>
+                      <p className="text-xl font-bold text-blue-900 mb-2">
+                        {school.debutCampagne ? new Date(school.debutCampagne).toLocaleDateString('fr-CA', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) : 'Non défini'}
+                      </p>
+                      {school.debutCampagne && (
+                        <Badge variant="outline" className="text-xs border-blue-300 text-blue-700">
+                          {new Date(school.debutCampagne) > new Date() ? 'À venir' : 'Débutée'}
+                        </Badge>
+                      )}
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="text-center p-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200"
+                      whileHover={{ scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <div className="p-3 bg-orange-500 rounded-full w-fit mx-auto mb-4">
+                        <Clock className="h-6 w-6 text-white" />
                   </div>
-                  <div className="text-center p-4 bg-green-50 rounded-lg">
-                    <p className="text-sm font-medium text-green-600 mb-1">Date de Livraison</p>
-                    <p className="text-lg font-bold text-green-900">
-                      {school.dateDeLivraison ? new Date(school.dateDeLivraison).toLocaleDateString('fr-CA') : 'Non défini'}
-                    </p>
-                  </div>
-                </div>
-                {school.currentCampaignNumber && (
-                  <div className="mt-4 text-center">
-                    <Badge variant="outline" className="text-sm">
-                      Campagne #{school.currentCampaignNumber}
+                      <p className="text-sm font-medium text-orange-700 mb-2">Fin de Campagne</p>
+                      <p className="text-xl font-bold text-orange-900 mb-2">
+                        {school.finCampagne ? new Date(school.finCampagne).toLocaleDateString('fr-CA', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) : 'Non défini'}
+                      </p>
+                      {school.finCampagne && (
+                        <Badge variant="outline" className="text-xs border-orange-300 text-orange-700">
+                          {(() => {
+                            const today = new Date();
+                            const endDate = new Date(school.finCampagne);
+                            const diffTime = endDate - today;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            if (diffDays > 0) {
+                              return `${diffDays} jour${diffDays > 1 ? 's' : ''} restant${diffDays > 1 ? 's' : ''}`;
+                            } else if (diffDays === 0) {
+                              return 'Se termine aujourd\'hui';
+                            } else {
+                              return 'Terminée';
+                            }
+                          })()}
                     </Badge>
+                      )}
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200"
+                      whileHover={{ scale: 1.02 }}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
+                      <div className="p-3 bg-green-500 rounded-full w-fit mx-auto mb-4">
+                        <Gift className="h-6 w-6 text-white" />
                   </div>
-                )}
+                      <p className="text-sm font-medium text-green-700 mb-2">Date de Livraison</p>
+                      <p className="text-xl font-bold text-green-900 mb-2">
+                        {school.dateDeLivraison ? new Date(school.dateDeLivraison).toLocaleDateString('fr-CA', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        }) : 'Non défini'}
+                      </p>
+                      {school.dateDeLivraison && (
+                        <Badge variant="outline" className="text-xs border-green-300 text-green-700">
+                          {(() => {
+                            const today = new Date();
+                            const deliveryDate = new Date(school.dateDeLivraison);
+                            const diffTime = deliveryDate - today;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            if (diffDays > 0) {
+                              return `Dans ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+                            } else if (diffDays === 0) {
+                              return 'Aujourd\'hui';
+                            } else {
+                              return 'Passée';
+                            }
+                          })()}
+                        </Badge>
+                      )}
+                    </motion.div>
+                  </div>
               </CardContent>
             </Card>
+            </motion.div>
 
-            {/* Top Performers */}
-            <Card>
+            {/* Enhanced Top Performers */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8 }}
+            >
+              <Card className="border-0 shadow-xl">
               <CardHeader>
-                <CardTitle>Meilleurs Performeurs</CardTitle>
-                <CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center">
+                        <Award className="mr-3 h-6 w-6" />
+                        Meilleurs Performeurs
+                      </CardTitle>
+                      <CardDescription className="text-base">
                   Top 3 des élèves ayant amassé le plus de fonds
                 </CardDescription>
+                    </div>
+                    <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
+                      <Star className="h-3 w-3 mr-1" />
+                      Classement
+                    </Badge>
+                  </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                  {participants.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="p-4 bg-gray-100 rounded-full w-fit mx-auto mb-4">
+                        <Users className="h-8 w-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun participant</h3>
+                      <p className="text-gray-500">
+                        Les performances apparaîtront ici une fois que les élèves commenceront à vendre.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
                   {participants
                     .sort((a, b) => b.raised - a.raised)
                     .slice(0, 3)
-                    .map((participant, index) => (
-                      <div key={participant.id} className="flex items-center">
-                        <Avatar className="h-10 w-10 mr-4">
-                          <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
+                        .map((participant, index) => {
+                          const progress = (participant.raised / participant.goal) * 100;
+                          const isGoalReached = progress >= 100;
+                          
+                          return (
+                            <motion.div
+                              key={participant.id}
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                              className="flex items-center p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200 hover:shadow-md transition-all duration-300"
+                            >
+                              <div className="flex items-center space-x-4 flex-1">
+                                <div className="relative">
+                                  <Avatar className="h-12 w-12 ring-2 ring-white shadow-md">
+                                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
+                                      {participant.name.charAt(0)}
+                                    </AvatarFallback>
                         </Avatar>
-                        <div className="flex-grow">
-                          <p className="font-medium">{participant.name}</p>
-                          <p className="text-sm text-muted-foreground">
+                                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                    {index + 1}
+                                  </div>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <p className="font-semibold text-gray-900">{participant.name}</p>
+                                    {isGoalReached && (
+                                      <Badge className="bg-green-100 text-green-800 text-xs">
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        Objectif atteint
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                    <span className="font-medium text-green-600">
                             {participant.raised.toLocaleString()}$ amassés
-                          </p>
+                                    </span>
+                                    <span>•</span>
+                                    <span>Objectif: {participant.goal.toLocaleString()}$</span>
+                                    <span>•</span>
+                                    <span>{participant.sales} ventes</span>
+                                  </div>
+                                  <div className="mt-2">
+                                    <Progress
+                                      value={progress}
+                                      className="h-2 bg-gray-200"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {progress.toFixed(1)}% de l'objectif
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl mb-1">
+                                  {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
                         </div>
                         <Badge
-                          variant={
-                            index === 0
-                              ? 'default'
-                              : index === 1
-                              ? 'secondary'
-                              : 'outline'
-                          }
-                        >
-                          {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                                  variant="outline" 
+                                  className={
+                                    index === 0 ? "border-yellow-300 text-yellow-700" :
+                                    index === 1 ? "border-gray-300 text-gray-700" :
+                                    "border-orange-300 text-orange-700"
+                                  }
+                                >
+                                  {index === 0 ? 'Champion' : index === 1 ? '2ème' : '3ème'}
                         </Badge>
                       </div>
-                    ))}
+                            </motion.div>
+                          );
+                        })}
                 </div>
+                  )}
               </CardContent>
             </Card>
+            </motion.div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
+            {/* Pending Campaign Alert */}
+            {pendingCampaign && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+              >
+                <Card className="border-0 shadow-xl bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-3 bg-yellow-500 rounded-full">
+                          <Clock className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-xl font-bold text-yellow-900">
+                            Campagne en attente d'approbation
+                          </CardTitle>
+                          <CardDescription className="text-yellow-700">
+                            Votre campagne #{pendingCampaign.campaignNumber} est en cours d'examen par Massibec
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-yellow-500 text-white">
+                        En attente
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-semibold text-yellow-900 mb-2">Dates de la campagne</h4>
+                          <div className="space-y-2 text-sm">
+                            <p><span className="font-medium">Début:</span> {new Date(pendingCampaign.startDate).toLocaleDateString('fr-CA')}</p>
+                            <p><span className="font-medium">Fin:</span> {new Date(pendingCampaign.endDate).toLocaleDateString('fr-CA')}</p>
+                            <p><span className="font-medium">Livraison:</span> {new Date(pendingCampaign.deliveryDate).toLocaleDateString('fr-CA')}</p>
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-yellow-900 mb-2">Objectif financier</h4>
+                          <p className="text-lg font-bold text-yellow-900">{pendingCampaign.financialGoal?.toLocaleString()}$</p>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="font-semibold text-yellow-900 mb-2">Répartition des profits</h4>
+                          <div className="space-y-2 text-sm">
+                            <p><span className="font-medium">Type:</span> {pendingCampaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}</p>
+                            <p><span className="font-medium">Étudiant:</span> {pendingCampaign.profitSplit?.studentBenefit}%</p>
+                            <p><span className="font-medium">Organisation:</span> {pendingCampaign.profitSplit?.organizationBenefit}%</p>
+                            <p><span className="font-medium">Tirage:</span> {pendingCampaign.profitSplit?.raffleBenefit}%</p>
+                          </div>
+                        </div>
+                        <Button 
+                          onClick={() => {
+                            setEditingCampaign(pendingCampaign);
+                            setShowEditProfitModal(true);
+                          }}
+                          className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Modifier la répartition
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        💡 Vous pouvez modifier la répartition des profits pendant que votre campagne est en attente d'approbation.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Enhanced School Information */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 }}
+            >
+              <Card className="border-0 shadow-xl">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center">
+                        <Settings className="mr-3 h-6 w-6" />
+                        Informations de l'École
+                      </CardTitle>
+                      <CardDescription className="text-base">
+                        Détails de contact et informations générales
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                        <Info className="h-3 w-3 mr-1" />
+                        Contact
+                      </Badge>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowEditSchoolModal(true)}
+                        className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Modifier
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                      <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className="p-2 bg-blue-500 rounded-lg">
+                            <Mail className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-blue-700">Adresse</p>
+                            <p className="text-base text-blue-900 font-medium">
+                              {school.address || 'Non définie'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className="p-2 bg-green-500 rounded-lg">
+                            <Mail className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-green-700">Email</p>
+                            <p className="text-base text-green-900 font-medium">
+                              {school.email || 'Non défini'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-6">
+                      <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className="p-2 bg-purple-500 rounded-lg">
+                            <Bell className="h-5 w-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-purple-700">Téléphone</p>
+                            <p className="text-base text-purple-900 font-medium">
+                              {school.telephone || 'Non défini'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-orange-500 rounded-lg">
+                              <Settings className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-orange-700">Code d'identification</p>
+                              <p className="text-lg text-orange-900 font-mono font-bold">
+                                {school.code || 'Non défini'}
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleCopy(school.code)}
+                            className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Copier
+                          </Button>
+                        </div>
+                        <div className="mt-3 p-3 bg-orange-50 rounded-lg">
+                          <p className="text-xs text-orange-800">
+                            💡 Partagez ce code avec vos élèves pour qu'ils puissent s'inscrire à la campagne.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Enhanced Quick Stats */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.2 }}
+              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            >
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
+                  <CardTitle className="text-sm font-medium text-gray-600">
                     Total des Ventes
                   </CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <BarChart3 className="h-4 w-4 text-blue-600" />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
+                  <div className="text-3xl font-bold text-gray-900 mb-1">
                     {salesData.reduce((acc, sale) => acc + sale.quantity, 0)}
                   </div>
-                  <p className="text-xs text-muted-foreground">unités vendues</p>
+                  <p className="text-sm text-gray-500">unités vendues</p>
+                  <div className="mt-2 flex items-center text-green-600">
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    <span className="text-xs">+15% cette semaine</span>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
+              
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
+                  <CardTitle className="text-sm font-medium text-gray-600">
                     Produit le Plus Vendu
                   </CardTitle>
-                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <Award className="h-4 w-4 text-green-600" />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
+                  <div className="text-xl font-bold text-gray-900 mb-1">
                     {
                       salesData.sort((a, b) => b.quantity - a.quantity)[0]
-                        ?.name
+                        ?.name || 'Aucun'
                     }
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {salesData.sort((a, b) => b.quantity - a.quantity)[0]?.quantity}{' '}
+                  <p className="text-sm text-gray-500">
+                    {salesData.sort((a, b) => b.quantity - a.quantity)[0]?.quantity || 0}{' '}
                     unités
                   </p>
+                  <div className="mt-2 flex items-center text-blue-600">
+                    <Star className="h-3 w-3 mr-1" />
+                    <span className="text-xs">Produit populaire</span>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
+              
+              <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
+                  <CardTitle className="text-sm font-medium text-gray-600">
                     Moyenne par Élève
                   </CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Users className="h-4 w-4 text-purple-600" />
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {(school.totalRaised / participants.length).toFixed(2)}$
+                  <div className="text-3xl font-bold text-gray-900 mb-1">
+                    {participants.length > 0 ? (school.totalRaised / participants.length).toFixed(0) : 0}$
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-gray-500">
                     montant moyen amassé
                   </p>
+                  <div className="mt-2 flex items-center text-purple-600">
+                    <Heart className="h-3 w-3 mr-1" />
+                    <span className="text-xs">Performance moyenne</span>
+                  </div>
                 </CardContent>
               </Card>
+            </motion.div>
+          </TabsContent>
+
+          {/* Campaigns Tab */}
+          <TabsContent value="campaigns" className="space-y-8">
               <Card>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">Code de l'école</CardTitle>
-      <Users className="h-4 w-4 text-muted-foreground" />
+              <CardHeader>
+                <CardTitle>Gestion des Campagnes</CardTitle>
+                <CardDescription>
+                  Créez et gérez vos campagnes de financement
+                </CardDescription>
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold">{school.code.toLocaleString()}</div>
+                <div className="space-y-6">
+                  {/* Current Campaign */}
+                  <div className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold">Campagne Actuelle</h3>
+                        <p className="text-sm text-gray-600">Campagne #{school.currentCampaignNumber}</p>
+                      </div>
+                      <Badge className={
+                        (() => {
+                          const today = new Date();
+                          const startDate = new Date(school.debutCampagne);
+                          const endDate = new Date(school.finCampagne);
+                          
+                          if (today < startDate) return "bg-blue-500";
+                          if (today >= startDate && today <= endDate) return "bg-green-500";
+                          return "bg-gray-500";
+                        })()
+                      }>
+                        {(() => {
+                          const today = new Date();
+                          const startDate = new Date(school.debutCampagne);
+                          const endDate = new Date(school.finCampagne);
+                          
+                          if (today < startDate) return "À venir";
+                          if (today >= startDate && today <= endDate) return "Active";
+                          return "Terminée";
+                        })()}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Début</p>
+                        <p className="font-medium">
+                          {school.debutCampagne ? new Date(school.debutCampagne).toLocaleDateString('fr-CA', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          }) : 'Non défini'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Fin</p>
+                        <p className="font-medium">
+                          {school.finCampagne ? new Date(school.finCampagne).toLocaleDateString('fr-CA', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          }) : 'Non défini'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Livraison</p>
+                        <p className="font-medium">
+                          {school.dateDeLivraison ? new Date(school.dateDeLivraison).toLocaleDateString('fr-CA', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          }) : 'Non défini'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Create New Campaign Button */}
+                  <div className="flex justify-end">
       <Button 
-        variant="outline" 
-        size="icon" 
-        onClick={() => handleCopy(school.code.toLocaleString())} // Handle click to copy the code
+                      onClick={() => setActiveTab('create-campaign')}
+                      className="bg-blue-600 hover:bg-blue-700"
       >
-        Copier
+                      <Calendar className="mr-2 h-4 w-4" />
+                      Créer une nouvelle campagne
       </Button>
-      <p className="text-xs text-muted-foreground">
-        Partager ce code à vos élèves pour qu'ils puissent s'inscrire à la campagne de financement
-      </p>
+                  </div>
+
+                  {/* Campaign History */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">Historique des Campagnes</h3>
+                    <div className="space-y-3">
+                      {school.campaigns && school.campaigns.length > 0 ? (
+                        school.campaigns.map((campaign, index) => {
+                          const getStatusBadge = (status) => {
+                            switch (status) {
+                              case 'pending_approval':
+                                return <Badge className="bg-yellow-500">En attente d'approbation</Badge>;
+                              case 'approved':
+                                return <Badge className="bg-green-500">Approuvée</Badge>;
+                              case 'rejected':
+                                return <Badge className="bg-red-500">Rejetée</Badge>;
+                              case 'active':
+                                return <Badge className="bg-blue-500">Active</Badge>;
+                              case 'completed':
+                                return <Badge className="bg-gray-500">Terminée</Badge>;
+                              default:
+                                return <Badge variant="outline">Inconnu</Badge>;
+                            }
+                          };
+
+                          return (
+                            <div key={index} className="border rounded-lg p-4">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <h4 className="font-medium">Campagne #{campaign.campaignNumber}</h4>
+                                  <p className="text-sm text-gray-600">
+                                    {new Date(campaign.startDate).toLocaleDateString('fr-CA')} - {new Date(campaign.endDate).toLocaleDateString('fr-CA')}
+                                  </p>
+                                  <p className="text-sm text-gray-500">
+                                    Objectif: {campaign.financialGoal?.toLocaleString()}$ | 
+                                    Répartition: {campaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}
+                                  </p>
+                                  {campaign.rejectionReason && (
+                                    <p className="text-sm text-red-600 mt-1">
+                                      Raison du rejet: {campaign.rejectionReason}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="ml-4">
+                                  {getStatusBadge(campaign.status)}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-gray-500 text-center py-4">Aucune campagne précédente</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
     </CardContent>
   </Card>
+          </TabsContent>
+
+          {/* Create Campaign Tab */}
+          <TabsContent value="create-campaign" className="space-y-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Créer une Nouvelle Campagne</CardTitle>
+                <CardDescription>
+                  Configurez les paramètres de votre nouvelle campagne de financement
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreateCampaign} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Date de début
+                      </label>
+                      <Input
+                        type="date"
+                        name="startDate"
+                        required
+                      />
             </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Date de fin
+                      </label>
+                      <Input
+                        type="date"
+                        name="endDate"
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Date de livraison
+                    </label>
+                    <Input
+                      type="date"
+                      name="deliveryDate"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      La date de livraison doit être au moins 3 semaines après la fin de la campagne
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Objectif financier
+                    </label>
+                    <Input
+                      type="number"
+                      name="financialGoal"
+                      placeholder="100000"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Type de répartition des profits
+                    </label>
+                    <Select name="profitSplitType">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez le type de répartition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Pourcentage par produit</SelectItem>
+                        <SelectItem value="absolute">Valeur absolue par produit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Configuration des profits</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Bénéfice étudiant (%)
+                        </label>
+                        <Input
+                          type="number"
+                          name="studentBenefit"
+                          placeholder="85.6"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Bénéfice organisation (%)
+                        </label>
+                        <Input
+                          type="number"
+                          name="organizationBenefit"
+                          placeholder="9.4"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Bénéfice tirage (%)
+                        </label>
+                        <Input
+                          type="number"
+                          name="raffleBenefit"
+                          placeholder="5.0"
+                          min="0"
+                          max="100"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Les pourcentages doivent totaliser 100%
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end space-x-4">
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      onClick={() => setActiveTab('campaigns')}
+                    >
+                      Annuler
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      className="bg-blue-600 hover:bg-blue-700"
+                      disabled={isCreatingCampaign}
+                    >
+                      {isCreatingCampaign ? 'Création...' : 'Créer la campagne'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Participants Tab */}
@@ -455,7 +1422,7 @@ const handleCopy = (code) => {
               <CardHeader>
                 <CardTitle>Liste des Participants</CardTitle>
                 <CardDescription>
-                  Gérez et suivez les performances des élèves
+                  Gérez et suivez les performances des élèves ({participants.length} participant{participants.length > 1 ? 's' : ''})
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -474,6 +1441,18 @@ const handleCopy = (code) => {
                     <Download className="mr-2 h-4 w-4" /> Exporter
                   </Button>
                 </div>
+                {participants.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun participant</h3>
+                    <p className="text-gray-500">
+                      Aucun élève ne s'est encore inscrit à votre campagne de financement.
+                    </p>
+                    <p className="text-sm text-gray-400 mt-2">
+                      Partagez le code d'identification de votre école avec vos élèves pour qu'ils puissent s'inscrire.
+                    </p>
+                  </div>
+                ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -483,32 +1462,71 @@ const handleCopy = (code) => {
                         <TableHead>Objectif</TableHead>
                         <TableHead>Ventes</TableHead>
                         <TableHead>Progression</TableHead>
+                          <TableHead>Statut</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {participants.map((participant) => (
+                        {participants
+                          .sort((a, b) => b.raised - a.raised)
+                          .map((participant) => {
+                            const progress = (participant.raised / participant.goal) * 100;
+                            const isGoalReached = progress >= 100;
+                            const isCloseToGoal = progress >= 75;
+                            
+                            return (
                         <TableRow key={participant.id}>
                           <TableCell className="font-medium">
+                                  <div className="flex items-center">
+                                    <Avatar className="h-8 w-8 mr-3">
+                                      <AvatarFallback className="text-xs">
+                                        {participant.name.charAt(0)}
+                                      </AvatarFallback>
+                                    </Avatar>
                             {participant.name}
+                                  </div>
                           </TableCell>
                           <TableCell>
+                                  <span className="font-semibold">
                             {participant.raised.toLocaleString()}$
+                                  </span>
                           </TableCell>
                           <TableCell>
                             {participant.goal.toLocaleString()}$
                           </TableCell>
-                          <TableCell>{participant.sales}</TableCell>
                           <TableCell>
+                                  <span className="font-medium">{participant.sales}</span>
+                                  <span className="text-sm text-gray-500 ml-1">unités</span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="space-y-1">
                             <Progress
-                              value={(participant.raised / participant.goal) * 100}
+                                      value={progress}
                               className="w-full sm:w-32"
                             />
+                                    <p className="text-xs text-gray-500">
+                                      {progress.toFixed(1)}%
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant={isGoalReached ? "default" : isCloseToGoal ? "secondary" : "outline"}
+                                    className={
+                                      isGoalReached ? "bg-green-500" : 
+                                      isCloseToGoal ? "bg-yellow-500" : ""
+                                    }
+                                  >
+                                    {isGoalReached ? "Objectif atteint" : 
+                                     isCloseToGoal ? "Proche de l'objectif" : "En cours"}
+                                  </Badge>
                           </TableCell>
                         </TableRow>
-                      ))}
+                            );
+                          })}
                     </TableBody>
                   </Table>
                 </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -662,6 +1680,195 @@ const handleCopy = (code) => {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Edit School Information Modal */}
+      {showEditSchoolModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Modifier les informations de l'école</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowEditSchoolModal(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <form className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="editName">Nom de l'école</Label>
+                    <Input
+                      id="editName"
+                      defaultValue={school.name}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editEmail">Email</Label>
+                    <Input
+                      id="editEmail"
+                      type="email"
+                      defaultValue={school.email}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="editAddress">Adresse</Label>
+                  <Input
+                    id="editAddress"
+                    defaultValue={school.address}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="editTelephone">Téléphone</Label>
+                    <Input
+                      id="editTelephone"
+                      defaultValue={school.telephone}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editCode">Code d'identification</Label>
+                    <Input
+                      id="editCode"
+                      defaultValue={school.code}
+                      className="mt-1"
+                      disabled
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Le code ne peut pas être modifié</p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowEditSchoolModal(false)}
+                  >
+                    Annuler
+                  </Button>
+                  <Button className="bg-blue-600 hover:bg-blue-700">
+                    Sauvegarder
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profit Split Modal */}
+      {showEditProfitModal && editingCampaign && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Modifier la répartition des profits</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowEditProfitModal(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <form className="space-y-6">
+                <div>
+                  <Label htmlFor="editProfitSplitType">Type de répartition</Label>
+                  <Select defaultValue={editingCampaign.profitSplitType}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Sélectionnez le type de répartition" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">
+                        <div className="flex items-center space-x-2">
+                          <Percent className="h-4 w-4" />
+                          <span>Pourcentage par produit</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="absolute">
+                        <div className="flex items-center space-x-2">
+                          <DollarSign className="h-4 w-4" />
+                          <span>Valeur absolue par produit</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
+                    <Input
+                      id="editStudentBenefit"
+                      type="number"
+                      defaultValue={editingCampaign.profitSplit?.studentBenefit}
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
+                    <Input
+                      id="editOrganizationBenefit"
+                      type="number"
+                      defaultValue={editingCampaign.profitSplit?.organizationBenefit}
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
+                    <Input
+                      id="editRaffleBenefit"
+                      type="number"
+                      defaultValue={editingCampaign.profitSplit?.raffleBenefit}
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Total:</strong> {(editingCampaign.profitSplit?.studentBenefit + editingCampaign.profitSplit?.organizationBenefit + editingCampaign.profitSplit?.raffleBenefit).toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Les pourcentages doivent totaliser 100%
+                  </p>
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowEditProfitModal(false)}
+                  >
+                    Annuler
+                  </Button>
+                  <Button className="bg-yellow-600 hover:bg-yellow-700">
+                    Sauvegarder
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

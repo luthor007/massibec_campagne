@@ -37,7 +37,14 @@ export default async function handler(req, res) {
         name: school.name,
         objectifFinancier: school.objectifFinancier,
         totalRaised: school.totalRaised || 0,  // Ensure totalRaised exists
-        code: school.code
+        code: school.code,
+        debutCampagne: school.debutCampagne,
+        finCampagne: school.finCampagne,
+        dateDeLivraison: school.dateDeLivraison,
+        currentCampaignNumber: school.currentCampaignNumber,
+        address: school.address,
+        email: school.email,
+        telephone: school.telephone
         // Add other relevant fields
       };
 

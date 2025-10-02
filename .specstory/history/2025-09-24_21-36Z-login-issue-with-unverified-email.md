@@ -155,6 +155,22 @@ Tool use: **codebase_search**
 
 Tool use: **grep**
 
+<details>
+<summary>Grep for "verification.*token|token.*verification" • 4 matches</summary>
+
+Output mode: files_with_matches
+
+
+| File |
+|------|
+| `./src/pages/api/inscription-manager.js` |
+| `./src/pages/api/verify-email.js` |
+| `./src/pages/api/inscription.js` |
+| `./src/pages/api/resend-verification.js` |
+
+
+</details>
+
 ---
 
 Now I can see the issue! There's a **field name mismatch** between the User model and the API endpoints. Let me examine the User model more closely:
@@ -512,6 +528,327 @@ Tool use: **codebase_search**
 
 Tool use: **grep**
 
+<details>
+<summary>Grep for "split|profit|benefit|sharing" • 309 matches</summary>
+
+Output mode: content
+
+
+| Content | Line |
+|------|------|
+| `firstName: user.name.split(' ')[0],` | L45 |
+| `\{ key: 'studentBenefit', label: 'Student Benefit ($)' \},` | L54 |
+| `\{ key: 'organizationBenefit', label: 'Organization Benefit ($)' \},` | L55 |
+| `\{ key: 'raffleBenefit', label: 'Raffle Benefit ($)' \},` | L56 |
+| `? new Date(endDateCandidate).toISOString().split('T')[0]` | L125 |
+| `case 'studentBenefit':` | L204 |
+| `case 'organizationBenefit':` | L205 |
+| `case 'raffleBenefit':` | L206 |
+| `const timestamp = new Date().toISOString().split('T')[0];` | L248 |
+| `existing.profit += product.profit;` | L309 |
+| `existing.studentBenefit += product.studentBenefit;` | L310 |
+| `existing.organizationBenefit += product.organizationBenefit;` | L311 |
+| `existing.raffleBenefit += product.raffleBenefit;` | L312 |
+| `const timestamp = new Date().toISOString().split('T')[0];` | L600 |
+| `profit: 0,` | L648 |
+| `studentBenefit: 0,` | L649 |
+| `organizationBenefit: 0,` | L650 |
+| `raffleBenefit: 0` | L651 |
+| `<TableHead>Profit ($)</TableHead>` | L821 |
+| `<TableHead>Student Benefit ($)</TableHead>` | L822 |
+| `<TableHead>Organization Benefit ($)</TableHead>` | L823 |
+| `<TableHead>Raffle Benefit ($)</TableHead>` | L824 |
+| `<TableCell>\{product.profit.toFixed(2)\}</TableCell>` | L834 |
+| `<TableCell>\{product.studentBenefit.toFixed(2)\}</TableCell>` | L835 |
+| `<TableCell>\{product.organizationBenefit.toFixed(2)\}</TableCell>` | L836 |
+| `<TableCell>\{product.raffleBenefit.toFixed(2)\}</TableCell>` | L837 |
+| `// Récupérer l'école pour obtenir les splits` | L260 |
+| `const \{ studentBenefit, organizationBenefit, raffleBenefit \} = schoolData.split;` | L267 |
+| `let totalStudentBenefit = 0;` | L270 |
+| `let totalOrganizationBenefit = 0;` | L271 |
+| `let totalRaffleBenefit = 0;` | L272 |
+| `const profit = (product.price - product.cost) * product.quantity;` | L275 |
+| `const studentB = profit * (studentBenefit / 100);` | L277 |
+| `const organizationB = profit * (organizationBenefit / 100);` | L278 |
+| `const raffleB = profit * (raffleBenefit / 100);` | L279 |
+| `totalStudentBenefit += studentB;` | L281 |
+| `totalOrganizationBenefit += organizationB;` | L282 |
+| `totalRaffleBenefit += raffleB;` | L283 |
+| `profit,` | L290 |
+| `studentBenefit: studentB,` | L291 |
+| `organizationBenefit: organizationB,` | L292 |
+| `raffleBenefit: raffleB,` | L293 |
+| `setPriceToPay(studentTotalAmount - totalStudentBenefit);` | L297 |
+| `totalAmount: studentTotalAmount - totalStudentBenefit,` | L307 |
+| `studentBenefit: totalStudentBenefit,` | L309 |
+| `organizationBenefit: totalOrganizationBenefit,` | L310 |
+| `raffleBenefit: totalRaffleBenefit,` | L311 |
+| `// Function to calculate the total profit for an order` | L359 |
+| `const calculateProfit = (products) => \{` | L360 |
+| `.reduce((acc, profit) => acc + profit, 0);` | L363 |
+| `<TableHead>Profit en $</TableHead>` | L454 |
+| `<TableCell>\{calculateProfit(order.products).toFixed(2) + order.tip\}$</TableCell>` | L476 |
+| `return date.toISOString().split('T')[0];` | L17 |
+| `const profit = (productItem.productPrice - productItem.productCost) * quantity;` | L109 |
+| `studentData.beneficesEstimes += profit;` | L114 |
+| `'Bénéfice pour l\'élève': orderStudent.studentBenefit.toFixed(2),` | L157 |
+| `'Bénéfice pour le tirage': orderStudent.raffleBenefit.toFixed(2),` | L158 |
+| `'Bénéfice pour l\'organisation': orderStudent.organizationBenefit.toFixed(2),` | L159 |
+| `? new Date(school.dateDeLivraison).toISOString().split('T')[0]` | L56 |
+| `totalStudentBenefit: \{ $sum: '$studentBenefit' \},` | L49 |
+| `totalOrganizationBenefit: \{ $sum: '$organizationBenefit' \},` | L50 |
+| `totalRaffleBenefit: \{ $sum: '$raffleBenefit' \}` | L51 |
+| `totalStudentBenefit: 0,` | L67 |
+| `totalOrganizationBenefit: 0,` | L68 |
+| `totalRaffleBenefit: 0` | L69 |
+| `// Récupérer l'école pour obtenir les splits` | L107 |
+| `const \{ studentBenefit, organizationBenefit, raffleBenefit \} = school.split;` | L117 |
+| `// Calculer le profit par produit et les bénéfices` | L119 |
+| `let totalStudentBenefit = 0;` | L120 |
+| `let totalOrganizationBenefit = 0;` | L121 |
+| `let totalRaffleBenefit = 0;` | L122 |
+| `existing.profit = (price - cost) * existing.quantity;` | L133 |
+| `existing.studentBenefit = existing.profit * (studentBenefit / 100);` | L134 |
+| `existing.organizationBenefit = existing.profit * (organizationBenefit / 100);` | L135 |
+| `existing.raffleBenefit = existing.profit * (raffleBenefit / 100);` | L136 |
+| `const profit = (price - cost) * quantity;` | L139 |
+| `profit,` | L145 |
+| `studentBenefit: profit * (studentBenefit / 100),` | L146 |
+| `organizationBenefit: profit * (organizationBenefit / 100),` | L147 |
+| `raffleBenefit: profit * (raffleBenefit / 100),` | L148 |
+| `studentBenefit: totalStudentBenefit,` | L174 |
+| `organizationBenefit: totalOrganizationBenefit,` | L175 |
+| `raffleBenefit: totalRaffleBenefit,` | L176 |
+| `studentPercentage: studentBenefit,` | L195 |
+| `profit: \{ type: Number, required: true \}, // Profit unitaire` | L18 |
+| `studentBenefit: \{ type: Number, required: true \}, // Bénéfice pour l'élève` | L19 |
+| `organizationBenefit: \{ type: Number, required: true \}, // Bénéfice pour l'organisation` | L20 |
+| `raffleBenefit: \{ type: Number, required: true \}, // Bénéfice pour le tirage` | L21 |
+| `studentBenefit: \{ type: Number, required: true \}, // Bénéfice pour l'élève` | L28 |
+| `raffleBenefit: \{ type: Number, required: true \}, // Bénéfice pour le tirage` | L29 |
+| `organizationBenefit: \{ type: Number, required: true \}, // Bénéfice pour l'organisation` | L30 |
+| `firstName: sanitizedName.split(' ')[0], // Assuming first name is the first word` | L114 |
+| `return date.toISOString().split('T')[0];` | L18 |
+| `split: school.split \|\| \{ studentBenefit: 85.6, organizationBenefit: 9.4, raffleBenefit: 5.0 \},` | L113 |
+| `split: currentSchool.split \|\| \{ studentBenefit: 85.6, organizationBenefit: 9.4, raffleBenefit: 5.0 \},` | L127 |
+| `if (name in formData.split) \{` | L162 |
+| `split: \{` | L165 |
+| `...prev.split,` | L166 |
+| `<h4 className="font-semibold">Split Configuration (%)</h4>` | L552 |
+| `<Label htmlFor="studentBenefit">Student Benefit</Label>` | L555 |
+| `id="studentBenefit"` | L557 |
+| `name="studentBenefit"` | L558 |
+| `value=\{formData.split.studentBenefit\}` | L560 |
+| `<Label htmlFor="organizationBenefit">Organization Benefit</Label>` | L568 |
+| `id="organizationBenefit"` | L570 |
+| `name="organizationBenefit"` | L571 |
+| `value=\{formData.split.organizationBenefit\}` | L573 |
+| `<Label htmlFor="raffleBenefit">Raffle Benefit</Label>` | L581 |
+| `id="raffleBenefit"` | L583 |
+| `name="raffleBenefit"` | L584 |
+| `value=\{formData.split.raffleBenefit\}` | L586 |
+| `<h4 className="font-semibold">Split Configuration (%)</h4>` | L674 |
+| `<p><strong>Student:</strong> \{currentSchool.split?.studentBenefit ?? 'N/A'\}%</p>` | L675 |
+| `<p><strong>Organization:</strong> \{currentSchool.split?.organizationBenefit ?? 'N/A'\}%</p>` | L676 |
+| `<p><strong>Raffle:</strong> \{currentSchool.split?.raffleBenefit ?? 'N/A'\}%</p>` | L677 |
+| `split,` | L53 |
+| `if (!name \|\| !address \|\| !split) \{` | L64 |
+| `school.split = \{` | L70 |
+| `studentBenefit: Number(split.studentBenefit),` | L71 |
+| `organizationBenefit: Number(split.organizationBenefit),` | L72 |
+| `raffleBenefit: Number(split.raffleBenefit),` | L73 |
+| `split: \{` | L33 |
+| `studentBenefit: \{ type: Number, default: 85.6 \}, // Pourcentage de bénéfice pour l'étudiant` | L34 |
+| `organizationBenefit: \{ type: Number, default: 9.4 \}, // Pourcentage de bénéfice pour l'organisation` | L35 |
+| `raffleBenefit: \{ type: Number, default: 5.0 \}, // Pourcentage de bénéfice pour le tirage` | L36 |
+| `const studentBenefit = products.reduce((sum, product) => sum + product.studentBenefit, 0);` | L40 |
+| `const organizationBenefit = products.reduce((sum, product) => sum + product.organizationBenefit, 0);` | L41 |
+| `const raffleBenefit = products.reduce((sum, product) => sum + product.raffleBenefit, 0);` | L42 |
+| `studentBenefit,` | L50 |
+| `organizationBenefit,` | L51 |
+| `raffleBenefit,` | L52 |
+| `<button className="font-bold" onClick=\{() => handleSort('profit')\}>` | L264 |
+| `Profit \{sortConfig.key === 'profit' && (sortConfig.direction === 'ascending' ? '↑' : '↓')\}` | L265 |
+| `const profitPerUnit = product.price - product.cost` | L280 |
+| `<span className=\{`font-mono $\{profitPerUnit > 0 ? 'text-green-600' : 'text-red-600'\}`\}>` | L348 |
+| `\{profitPerUnit.toFixed(2)\} $` | L349 |
+| `parser = argparse.ArgumentParser(description='Convert CSV file with benefit percentage')` | L6 |
+| `parser.add_argument('--benefit', type=float, required=True, help='Benefit percentage (e.g. 40.0 for 40%)')` | L9 |
+| `def calculate_price(cost, benefit_percentage):` | L32 |
+| `student_benefit = 3 * (benefit_percentage / 100)  # Profit de l'élève en $` | L34 |
+| `return selling_price - student_benefit` | L35 |
+| `def convert_csv(input_file, output_file, benefit, school_name, school_id):` | L37 |
+| `price = calculate_price(product_info["cost"], benefit)` | L74 |
+| `convert_csv(args.input_file, args.output_file, args.benefit, args.school_name, args.school_id)` | L97 |
+| `const timestamp = new Date().toISOString().split('T')[0];` | L77 |
+| `const profitRewards = \{` | L59 |
+| `description: "Tes profits augmentent, tu progresses bien !",` | L70 |
+| `description: "Tes compétences en ventes se confirment avec de beaux profits.",` | L82 |
+| `badge: "Pro des profits 🏆",` | L87 |
+| `badge: "Champion des profits 💎",` | L93 |
+| `description: "Tu es une star de la vente. Tes profits parlent pour toi.",` | L94 |
+| `badge: "Maître des profits 🏅",` | L99 |
+| `description: "Tu as atteint un niveau de profit exceptionnel.",` | L100 |
+| `badge: "Légende des profits 🔥",` | L105 |
+| `description: "Tu fais partie des meilleurs. Les profits ne cessent de croître.",` | L106 |
+| `badge: "Titan des profits 🌟",` | L111 |
+| `badge: "Empereur des profits 👑",` | L117 |
+| `// Calculate profit before tips` | L185 |
+| `const profitBeforeTips = order.totalAmount - totalCost;` | L186 |
+| `const studentEarnings = (profitBeforeTips * (school.split.studentBenefit / 100)) + tip;` | L189 |
+| `// Function to accumulate rewards based on total profit` | L456 |
+| `const getAccumulatedRewards = (totalProfit) => \{` | L457 |
+| `for (const level in profitRewards) \{` | L459 |
+| `if (totalProfit >= profitRewards[level].minimum) \{` | L460 |
+| `accumulatedRewards.push(profitRewards[level])` | L461 |
+| `// Function to calculate the next profit reward` | L467 |
+| `const getNextReward = (totalProfit) => \{` | L468 |
+| `for (const level in profitRewards) \{` | L470 |
+| `if (totalProfit < profitRewards[level].minimum) \{` | L471 |
+| `nextReward.name = profitRewards[level].badge` | L472 |
+| `nextReward.productsAway = profitRewards[level].minimum - totalProfit` | L473 |
+| `const accumulatedProfitRewards = getAccumulatedRewards(totalStudentEarning)` | L481 |
+| `const nextProfitReward = getNextReward(totalStudentEarning)` | L482 |
+| `<AchievementsCard totalProfit=\{totalStudentEarning\} />` | L521 |
+| `milestones=\{profitRewards\}` | L545 |
+| `<RewardsCard totalProfit=\{totalStudentEarning\} />` | L577 |
+| `function AchievementsCard(\{ totalProfit \}) \{` | L679 |
+| `// Function to accumulate rewards based on total profit` | L680 |
+| `const getAccumulatedRewards = (totalProfit) => \{` | L681 |
+| `for (const level in profitRewards) \{` | L683 |
+| `if (totalProfit >= profitRewards[level].minimum) \{` | L684 |
+| `accumulatedRewards.push(profitRewards[level])` | L685 |
+| `// Function to calculate the next profit reward` | L691 |
+| `const getNextReward = (totalProfit) => \{` | L692 |
+| `for (const level in profitRewards) \{` | L694 |
+| `if (totalProfit < profitRewards[level].minimum) \{` | L695 |
+| `nextReward.name = profitRewards[level].badge` | L696 |
+| `nextReward.productsAway = profitRewards[level].minimum - totalProfit` | L697 |
+| `const accumulatedProfitRewards = getAccumulatedRewards(totalProfit)` | L704 |
+| `const nextProfitReward = getNextReward(totalProfit)` | L705 |
+| `Récompenses Gagnées (Profits)` | L712 |
+| `<h3 className="font-semibold">Profits Actuels</h3>` | L717 |
+| `<Badge variant="outline" className="ml-2 text-yellow-500">Profits: \{totalProfit\}$</Badge>` | L718 |
+| `\{accumulatedProfitRewards.map((reward, index) => (` | L721 |
+| `<p><strong>Prochaine Récompense:</strong> \{nextProfitReward.name\} (à \{nextProfitReward.productsAway\} profits près)</p>` | L737 |
+| `function RewardsCard(\{ totalProfit \}) \{` | L1025 |
+| `// Function to accumulate rewards based on total profit` | L1026 |
+| `const getAccumulatedRewards = (totalProfit) => \{` | L1027 |
+| `for (const level in profitRewards) \{` | L1029 |
+| `if (totalProfit >= profitRewards[level].minimum) \{` | L1030 |
+| `accumulatedRewards.push(profitRewards[level])` | L1031 |
+| `// Function to calculate the next profit reward` | L1037 |
+| `const getNextReward = (totalProfit) => \{` | L1038 |
+| `for (const level in profitRewards) \{` | L1040 |
+| `if (totalProfit < profitRewards[level].minimum) \{` | L1041 |
+| `nextReward.name = profitRewards[level].badge` | L1042 |
+| `nextReward.productsAway = profitRewards[level].minimum - totalProfit` | L1043 |
+| `const accumulatedRewards = getAccumulatedRewards(totalProfit)` | L1050 |
+| `const nextReward = getNextReward(totalProfit)` | L1051 |
+| `<p><strong>Prochaine Récompense:</strong> \{nextReward.name\} (à \{nextReward.productsAway\} profits près)</p>` | L1073 |
+| `<StatCard icon=\{DollarSign\} label="Profits Totales" value=\{`$\{(totalEarnings - totalTip).toFixed(2)\}$`\} />` | L1182 |
+| `<StatCard icon=\{DollarSign\} label="Profits + Pourboires" value=\{`$\{totalEarnings.toFixed(2)\}$`\} />` | L1184 |
+| `description: `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu’un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Profitez de 5 % de rabais dès 6 produits et 10 % dès 12. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le $\{dateDeLivraison\}. 🙏 Merci pour votre soutien et bon appétit !`,` | L70 |
+| `const profitRewards = \{` | L6 |
+| `description: "Tes profits augmentent, tu progresses bien !",` | L19 |
+| `description: "Tes compétences en ventes se confirment avec de beaux profits.",` | L33 |
+| `badge: "Pro des profits 🏆",` | L38 |
+| `badge: "Champion des profits 💎",` | L45 |
+| `description: "Tu es une star de la vente. Tes profits parlent pour toi.",` | L47 |
+| `badge: "Maître des profits 🏅",` | L52 |
+| `description: "Tu as atteint un niveau de profit exceptionnel.",` | L54 |
+| `badge: "Légende des profits 🔥",` | L59 |
+| `description: "Tu fais partie des meilleurs. Les profits ne cessent de croître.",` | L61 |
+| `badge: "Titan des profits 🌟",` | L66 |
+| `badge: "Empereur des profits 👑",` | L73 |
+| `const profitBeforeTips = order.totalAmount - totalCost;` | L85 |
+| `const studentEarnings = (profitBeforeTips * (school.split.studentBenefit / 100)) + (tip \|\| 0);` | L86 |
+| `for (const level in profitRewards) \{` | L95 |
+| `const reward = profitRewards[level];` | L96 |
+| `description: \{ type: String, default: "🎉 Profitez des pâtés exclusifs de Massibec (viande et poulet) ainsi que d’un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits et 10 % de rabais dès 12 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !" \},` | L9 |
+| `firstName: sanitizedName.split(' ')[0], // Assuming first name is the first word` | L64 |
+| `// Fonction pour calculer le total profit par produit` | L127 |
+| `const calculateProfit = (product) => \{` | L128 |
+| `const profit = product.price - product.cost;` | L129 |
+| `const studentProfit = (profit * (schoolData.split.studentBenefit / 100)).toFixed(2);` | L130 |
+| `const raffleProfitPerUnit = (profit * (schoolData.split.raffleBenefit / 100)).toFixed(2); // Assurez-vous que `quantity` existe ou ajustez` | L131 |
+| `const orgProfit = (profit - studentProfit - raffleProfitPerUnit).toFixed(2);` | L132 |
+| `profit: profit.toFixed(2),` | L135 |
+| `studentProfit,` | L136 |
+| `raffleProfitPerUnit,` | L137 |
+| `orgProfit,` | L138 |
+| `<p className="text-xl">Découvrez les détails de notre campagne et maximisez vos profits!</p>` | L160 |
+| `\{/* Section: Nos Produits et Profits */\}` | L165 |
+| `<h2 className="text-3xl font-semibold mb-6">Nos Produits et Profits</h2>` | L168 |
+| `<TableHead>Profit</TableHead>` | L177 |
+| `\{session.user.role === "school_manager" ? <TableHead>Profit élève</TableHead> : <></>\}` | L178 |
+| `\{session.user.role === "school_manager" ? <TableHead>Profit tirage</TableHead> : <></>\}` | L179 |
+| `\{session.user.role === "school_manager" ? <TableHead>Profit organisation</TableHead> : <></>\}` | L180 |
+| `const profitData = calculateProfit(product);` | L185 |
+| `<TableCell>\{session.user.role === "school_manager" ? product.cost.toFixed(2) : (product.price - profitData.studentProfit).toFixed(2)\}$</TableCell>` | L190 |
+| `<TableCell>\{session.user.role === "school_manager" ? profitData.profit : profitData.studentProfit\}$</TableCell>` | L192 |
+| `\{session.user.role === "school_manager" ? <TableCell>\{profitData.studentProfit\}$</TableCell> : <></>\}` | L193 |
+| `\{session.user.role === "school_manager" ? <TableCell>\{profitData.raffleProfitPerUnit\}$</TableCell> : <></>\}` | L194 |
+| `\{session.user.role === "school_manager" ? <TableCell>\{profitData.orgProfit\}$</TableCell> : <></>\}` | L195 |
+| `\{/* Section: Répartition des Profits */\}` | L205 |
+| `Répartition des Profits` | L213 |
+| `<span>Profit élève</span>` | L220 |
+| `<span>\{schoolData.split.studentBenefit\}%</span>` | L221 |
+| `<Progress value=\{schoolData.split.studentBenefit\} className="h-2" />` | L223 |
+| `<span>Profit tirage</span>` | L227 |
+| `<span>\{schoolData.split.raffleBenefit\}%</span>` | L228 |
+| `<Progress value=\{schoolData.split.raffleBenefit\} className="h-2" />` | L230 |
+| `<span>Profit organisation</span>` | L234 |
+| `<span>\{schoolData.split.organizationBenefit\}%</span>` | L235 |
+| `<Progress value=\{schoolData.split.organizationBenefit\} className="h-2" />` | L237 |
+| `const calculateOrderProfit = (order, school) => \{` | L9 |
+| `const totalprofit = products.reduce((acc, product) => acc + ((product.productPrice * product.quantity) - (product.productCost * product.quantity) * (school.split.studentBenefit / 100)), 0);` | L13 |
+| `// Profit is total amount minus the cost of the products` | L15 |
+| `const profit = totalprofit - tip;` | L16 |
+| `return profit;` | L18 |
+| `// Helper function to split a date range into weekly intervals` | L21 |
+| `// Split the fundraising period into weekly intervals` | L66 |
+| `const profit = calculateOrderProfit(order, school);` | L86 |
+| `return total + profit;` | L87 |
+| `const calculateOrderProfit = (order) => \{` | L8 |
+| `// Profit is total amount minus the cost of the products` | L14 |
+| `const profit = totalAmount - totalCost;` | L15 |
+| `return profit;` | L17 |
+| `// Fetch the school to get the raffleBenefit percentage` | L38 |
+| `const raffleBenefitPercentage = school.split.raffleBenefit; // e.g., 5%` | L44 |
+| `// Calculate the total raffle benefit by summing up the raffle benefit for each order's profit` | L53 |
+| `const orderProfit = calculateOrderProfit(order);` | L55 |
+| `const raffleBenefit = (orderProfit * raffleBenefitPercentage) / 100;` | L56 |
+| `return total + raffleBenefit;` | L57 |
+| `studentBenefit: number;` | L18 |
+| `organizationBenefit: number;` | L20 |
+| `const profitData = [` | L10 |
+| `// ... data for profit breakdown` | L11 |
+| `<CardTitle>Profit Breakdown</CardTitle>` | L36 |
+| `<BarChart data=\{profitData\}>` | L40 |
+| `// components/Dashboard/ProfitAllocation/ProfitSettings.jsx` | L1 |
+| `const ProfitSettings = () => \{` | L5 |
+| `studentProfit: 3.00,` | L7 |
+| `raffleProfitPerUnit: 0.18,` | L8 |
+| `const orgProfit = (price, cost) => \{` | L19 |
+| `return price - cost - settings.studentProfit - settings.raffleProfitPerUnit;` | L20 |
+| `<h2 className="text-xl font-bold mb-4">Profit Allocation Settings</h2>` | L25 |
+| `label="Student Profit per Unit"` | L28 |
+| `name="studentProfit"` | L29 |
+| `value=\{settings.studentProfit\}` | L31 |
+| `label="Raffle Profit per Unit"` | L36 |
+| `name="raffleProfitPerUnit"` | L37 |
+| `value=\{settings.raffleProfitPerUnit\}` | L39 |
+| `<h3 className="text-lg font-semibold">Profit Distribution Example</h3>` | L47 |
+| `<p>Organization Profit: $\{orgProfit(10.00, 6.50).toFixed(2)\} (Based on a product sold at $10.00 with a cost of $6.50)</p>` | L48 |
+| `export default ProfitSettings;` | L54 |
+| `<th>Profit Per Unit</th>` | L27 |
+| `const profitPerUnit = product.price - product.cost;` | L33 |
+| `<td>$\{profitPerUnit.toFixed(2)\}</td>` | L39 |
+
+
+</details>
+
 ---
 
 Perfect! I can see that there is indeed a comprehensive profit sharing functionality already implemented. Let me examine the School model more closely to understand the current structure:
@@ -667,6 +1004,96 @@ Tool use: **codebase_search**
 
 Tool use: **grep**
 
+<details>
+<summary>Grep for "raffle|tirage" • 78 matches</summary>
+
+Output mode: content
+
+
+| Content | Line |
+|------|------|
+| `\{ key: 'raffleBenefit', label: 'Raffle Benefit ($)' \},` | L56 |
+| `case 'raffleBenefit':` | L206 |
+| `existing.raffleBenefit += product.raffleBenefit;` | L312 |
+| `raffleBenefit: 0` | L651 |
+| `<TableHead>Raffle Benefit ($)</TableHead>` | L824 |
+| `<TableCell>\{product.raffleBenefit.toFixed(2)\}</TableCell>` | L837 |
+| `const \{ studentBenefit, organizationBenefit, raffleBenefit \} = schoolData.split;` | L267 |
+| `let totalRaffleBenefit = 0;` | L272 |
+| `const raffleB = profit * (raffleBenefit / 100);` | L279 |
+| `totalRaffleBenefit += raffleB;` | L283 |
+| `raffleBenefit: raffleB,` | L293 |
+| `raffleBenefit: totalRaffleBenefit,` | L311 |
+| `'Bénéfice pour le tirage': orderStudent.raffleBenefit.toFixed(2),` | L158 |
+| `'Bénéfice pour le tirage',` | L184 |
+| `totalRaffleBenefit: \{ $sum: '$raffleBenefit' \}` | L51 |
+| `totalRaffleBenefit: 0` | L69 |
+| `const \{ studentBenefit, organizationBenefit, raffleBenefit \} = school.split;` | L117 |
+| `let totalRaffleBenefit = 0;` | L122 |
+| `existing.raffleBenefit = existing.profit * (raffleBenefit / 100);` | L136 |
+| `raffleBenefit: profit * (raffleBenefit / 100),` | L148 |
+| `raffleBenefit: totalRaffleBenefit,` | L176 |
+| `raffleBenefit: \{ type: Number, required: true \}, // Bénéfice pour le tirage` | L21 |
+| `raffleBenefit: \{ type: Number, required: true \}, // Bénéfice pour le tirage` | L29 |
+| `split: school.split \|\| \{ studentBenefit: 85.6, organizationBenefit: 9.4, raffleBenefit: 5.0 \},` | L113 |
+| `split: currentSchool.split \|\| \{ studentBenefit: 85.6, organizationBenefit: 9.4, raffleBenefit: 5.0 \},` | L127 |
+| `<Label htmlFor="raffleBenefit">Raffle Benefit</Label>` | L581 |
+| `id="raffleBenefit"` | L583 |
+| `name="raffleBenefit"` | L584 |
+| `value=\{formData.split.raffleBenefit\}` | L586 |
+| `<p><strong>Raffle:</strong> \{currentSchool.split?.raffleBenefit ?? 'N/A'\}%</p>` | L677 |
+| `raffleBenefit: Number(split.raffleBenefit),` | L73 |
+| `raffleBenefit: \{ type: Number, default: 5.0 \}, // Pourcentage de bénéfice pour le tirage` | L36 |
+| `const raffleBenefit = products.reduce((sum, product) => sum + product.raffleBenefit, 0);` | L42 |
+| `raffleBenefit,` | L52 |
+| `const [totalRaffle, setTotalRaffle] = useState(0)` | L146 |
+| `// Fetch School Raffle` | L319 |
+| `const fetchSchoolRaffle = useCallback(async (schoolId) => \{` | L320 |
+| `const response = await fetch(`/api/schools/$\{schoolId\}/raffle`)` | L322 |
+| `throw new Error('Failed to fetch school raffle')` | L324 |
+| `setTotalRaffle(data.totalRaffle)` | L327 |
+| `// useEffect to fetch school data, top sellers, raffle, and weekly earnings when user and schoolId are available` | L396 |
+| `fetchSchoolRaffle(schoolId)` | L401 |
+| `\}, [user, schoolId, fetchSchoolData, fetchTopSellers, fetchSchoolRaffle, fetchWeeklyEarnings, userId])` | L404 |
+| `const raffleInfo = \{` | L448 |
+| `totalAmount: totalRaffle,` | L449 |
+| `\{/* Recommendations and Raffle Info */\}` | L580 |
+| `<RaffleInfoCard raffleInfo=\{raffleInfo\} />` | L582 |
+| `// Raffle Info Card Component` | L1207 |
+| `function RaffleInfoCard(\{ raffleInfo \}) \{` | L1208 |
+| `<CardTitle>Information sur le Tirage au Sort</CardTitle>` | L1212 |
+| `<p><strong>Montant Total du Tirage:</strong> \{raffleInfo.totalAmount\}$</p>` | L1215 |
+| `<p><strong>Vos Chances:</strong> \{raffleInfo.chances\} tickets</p>` | L1216 |
+| `<p>Vendez \{raffleInfo.nextChanceProducts\} produits de plus pour gagner une chance supplémentaire!</p>` | L1218 |
+| `Voir le Classement du Tirage` | L1224 |
+| `const raffleProfitPerUnit = (profit * (schoolData.split.raffleBenefit / 100)).toFixed(2); // Assurez-vous que `quantity` existe ou ajustez` | L131 |
+| `const orgProfit = (profit - studentProfit - raffleProfitPerUnit).toFixed(2);` | L132 |
+| `raffleProfitPerUnit,` | L137 |
+| `\{session.user.role === "school_manager" ? <TableHead>Profit tirage</TableHead> : <></>\}` | L179 |
+| `\{session.user.role === "school_manager" ? <TableCell>\{profitData.raffleProfitPerUnit\}$</TableCell> : <></>\}` | L194 |
+| `<span>Profit tirage</span>` | L227 |
+| `<span>\{schoolData.split.raffleBenefit\}%</span>` | L228 |
+| `<Progress value=\{schoolData.split.raffleBenefit\} className="h-2" />` | L230 |
+| `// /pages/api/schools/[schoolId]/raffle.js` | L1 |
+| `// Fetch the school to get the raffleBenefit percentage` | L38 |
+| `const raffleBenefitPercentage = school.split.raffleBenefit; // e.g., 5%` | L44 |
+| `// Calculate the total raffle benefit by summing up the raffle benefit for each order's profit` | L53 |
+| `const totalRaffle = orders.reduce((total, order) => \{` | L54 |
+| `const raffleBenefit = (orderProfit * raffleBenefitPercentage) / 100;` | L56 |
+| `return total + raffleBenefit;` | L57 |
+| `// Return the total raffle amount` | L60 |
+| `totalRaffle: totalRaffle.toFixed(2), // Fixed to two decimal places` | L62 |
+| `console.error('Erreur dans l\'API raffle:', error);` | L67 |
+| `raffleAmount?: number;` | L19 |
+| `raffleProfitPerUnit: 0.18,` | L8 |
+| `return price - cost - settings.studentProfit - settings.raffleProfitPerUnit;` | L20 |
+| `label="Raffle Profit per Unit"` | L36 |
+| `name="raffleProfitPerUnit"` | L37 |
+| `value=\{settings.raffleProfitPerUnit\}` | L39 |
+
+
+</details>
+
 ---
 
 Now let me look at the raffle information card to understand how it's displayed to users:
@@ -697,6 +1124,24 @@ Let me find where the chances and nextChanceProducts are calculated:
 ---
 
 Tool use: **grep**
+
+<details>
+<summary>Grep for "chances|nextChanceProducts" in "/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard/statistiques.jsx" • 6 matches</summary>
+
+Output mode: content
+
+
+| Content | Line |
+|------|------|
+| `const chances = Math.floor(totalProductsSold / 6)` | L438 |
+| `const nextChanceProducts = 6 - (totalProductsSold % 6)` | L439 |
+| `chances: chances,` | L450 |
+| `nextChanceProducts: nextChanceProducts,` | L451 |
+| `<p><strong>Vos Chances:</strong> \{raffleInfo.chances\} tickets</p>` | L1216 |
+| `<p>Vendez \{raffleInfo.nextChanceProducts\} produits de plus pour gagner une chance supplémentaire!</p>` | L1218 |
+
+
+</details>
 
 ---
 
@@ -934,6 +1379,29 @@ Tool use: **codebase_search**
 ---
 
 Tool use: **grep**
+
+<details>
+<summary>Grep for "price|payment|pay|cost|amount" in "/Users/alexismassicotte/project/massibec-financement/src/pages/api/orderStudent.js" • 11 matches</summary>
+
+Output mode: content
+
+
+| Content | Line |
+|------|------|
+| `amountPaid,` | L85 |
+| `typeof amountPaid === 'undefined'` | L99 |
+| `const \{ productName, quantity, price, cost \} = product;` | L127 |
+| `existing.profit = (price - cost) * existing.quantity;` | L133 |
+| `const profit = (price - cost) * quantity;` | L139 |
+| `price,` | L143 |
+| `cost,` | L144 |
+| `amountPaid,` | L171 |
+| `const paymentInstructions = `` | L183 |
+| `amountPaid,` | L204 |
+| `paymentInstructions,` | L205 |
+
+
+</details>
 
 ---
 

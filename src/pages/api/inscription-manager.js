@@ -18,25 +18,29 @@ export default async function handler(req, res) {
       await dbConnect();
 
       // Destructure and sanitize the fields from the request body
-      const {
-        nomComplet,
-        email,
-        motDePasse,
-        telephone,
-        organisme,
-        titreOuFonction,
-        ville,
-        codePostal,
-        emailEcole,
-        telephoneEcole,
-        adresse,
-        objectifFinancier,
-        nombreParticipants,
-        debutCampagne,
-        finCampagne,
-        dateDeLivraison,
-        momentPourJoindre
-      } = req.body;
+          const {
+            nomComplet,
+            email,
+            motDePasse,
+            telephone,
+            organisme,
+            titreOuFonction,
+            ville,
+            codePostal,
+            emailEcole,
+            telephoneEcole,
+            adresse,
+            objectifFinancier,
+            nombreParticipants,
+            debutCampagne,
+            finCampagne,
+            dateDeLivraison,
+            momentPourJoindre,
+            profitSplitType,
+            studentBenefit,
+            organizationBenefit,
+            raffleBenefit
+          } = req.body;
 
 
       // Generate a verification token
@@ -62,6 +66,14 @@ export default async function handler(req, res) {
         endDate: sanitizeString(finCampagne),
         deliveryDate: sanitizeString(dateDeLivraison),
         isActive: true,
+        status: 'pending_approval', // Changed to pending approval
+        financialGoal: objectifFinancier,
+        profitSplitType: profitSplitType || 'percentage',
+        profitSplit: {
+          studentBenefit: parseFloat(studentBenefit) || 85.6,
+          organizationBenefit: parseFloat(organizationBenefit) || 9.4,
+          raffleBenefit: parseFloat(raffleBenefit) || 5.0
+        }
       };
 
       const newSchool = new School({
@@ -92,7 +104,7 @@ export default async function handler(req, res) {
         email: sanitizedEmail,
         password: hashedPassword,
         name: sanitizedName,
-        role: 'schoolManager',
+        role: 'school_manager',
         schoolManagerInfo: sanitizedSchoolManagerInfo,
         verificationToken: verificationToken,
         verificationTokenExpires: verificationTokenExpires,

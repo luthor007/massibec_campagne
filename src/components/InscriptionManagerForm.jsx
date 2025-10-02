@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion'
 
-import { LogIn } from 'lucide-react'
+import { LogIn, Percent, DollarSign, Info } from 'lucide-react'
 
 export default function InscriptionManagerForm() {
   const [isHovered, setIsHovered] = useState(false)
@@ -26,7 +27,12 @@ export default function InscriptionManagerForm() {
     dateDeLivraison: '',
     adresse: '',
     emailEcole: '', // Email for the school
-    telephoneEcole: '' // Telephone for the school
+    telephoneEcole: '', // Telephone for the school
+    // Profit split configuration
+    profitSplitType: 'percentage',
+    studentBenefit: '85.6',
+    organizationBenefit: '9.4',
+    raffleBenefit: '5.0'
   });
 
   const router = useRouter();
@@ -230,6 +236,110 @@ export default function InscriptionManagerForm() {
           onChange={handleChange}
           required
         />
+      </div>
+
+      {/* Configuration de la répartition des profits */}
+      <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
+        <div className="flex items-center space-x-2 mb-4">
+          <Percent className="h-5 w-5 text-blue-600" />
+          <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
+          <div className="group relative">
+            <Info className="h-4 w-4 text-blue-500 cursor-help" />
+            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+              Ces paramètres peuvent être modifiés plus tard dans votre tableau de bord
+            </div>
+          </div>
+        </div>
+        
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="profitSplitType" className="text-sm font-medium text-gray-700">
+              Type de répartition
+            </Label>
+            <Select 
+              value={formData.profitSplitType} 
+              onValueChange={(value) => setFormData({ ...formData, profitSplitType: value })}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Sélectionnez le type de répartition" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">
+                  <div className="flex items-center space-x-2">
+                    <Percent className="h-4 w-4" />
+                    <span>Pourcentage par produit</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="absolute">
+                  <div className="flex items-center space-x-2">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Valeur absolue par produit</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="studentBenefit" className="text-sm font-medium text-gray-700">
+                Bénéfice étudiant (%)
+              </Label>
+              <Input
+                type="number"
+                id="studentBenefit"
+                name="studentBenefit"
+                value={formData.studentBenefit}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                step="0.1"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="organizationBenefit" className="text-sm font-medium text-gray-700">
+                Bénéfice organisation (%)
+              </Label>
+              <Input
+                type="number"
+                id="organizationBenefit"
+                name="organizationBenefit"
+                value={formData.organizationBenefit}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                step="0.1"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="raffleBenefit" className="text-sm font-medium text-gray-700">
+                Bénéfice tirage (%)
+              </Label>
+              <Input
+                type="number"
+                id="raffleBenefit"
+                name="raffleBenefit"
+                value={formData.raffleBenefit}
+                onChange={handleChange}
+                min="0"
+                max="100"
+                step="0.1"
+                className="mt-1"
+              />
+            </div>
+          </div>
+          
+          <div className="p-3 bg-blue-100 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Total:</strong> {(parseFloat(formData.studentBenefit) + parseFloat(formData.organizationBenefit) + parseFloat(formData.raffleBenefit)).toFixed(1)}%
+              {Math.abs((parseFloat(formData.studentBenefit) + parseFloat(formData.organizationBenefit) + parseFloat(formData.raffleBenefit)) - 100) > 0.1 && (
+                <span className="text-red-600 ml-2">⚠️ Les pourcentages doivent totaliser 100%</span>
+              )}
+            </p>
+          </div>
+        </div>
       </div>
       {/* Bouton de Soumission */}
       <motion.div

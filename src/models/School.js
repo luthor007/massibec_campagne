@@ -13,6 +13,25 @@ const CampaignSchema = new mongoose.Schema({
   deliveryDate: { type: Date },
   isActive: { type: Boolean, default: false },
   notes: { type: String },
+  status: { 
+    type: String, 
+    enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed'],
+    default: 'pending_approval'
+  },
+  profitSplitType: {
+    type: String,
+    enum: ['percentage', 'absolute'],
+    default: 'percentage'
+  },
+  profitSplit: {
+    studentBenefit: { type: Number, default: 85.6 },
+    organizationBenefit: { type: Number, default: 9.4 },
+    raffleBenefit: { type: Number, default: 5.0 }
+  },
+  financialGoal: { type: Number, required: true },
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  approvedAt: { type: Date },
+  rejectionReason: { type: String }
 }, { timestamps: true });
 
 const SchoolSchema = new mongoose.Schema({

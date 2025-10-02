@@ -230,7 +230,7 @@ export default function MultiStepInscriptionForm() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse e-mail
+                  Adresse e-mail du parent(pour réception transfert interact et communication)
                 </Label>
                 <div className="relative">
                   <Input
@@ -267,7 +267,7 @@ export default function MultiStepInscriptionForm() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="prenom" className="block text-sm font-medium text-gray-700 mb-1">
-                    Prénom
+                    Prénom de l'élève
                   </Label>
                   <Input
                     type="text"
@@ -282,7 +282,7 @@ export default function MultiStepInscriptionForm() {
                 </div>
                 <div>
                   <Label htmlFor="nom" className="block text-sm font-medium text-gray-700 mb-1">
-                    Nom
+                    Nom de l'élève
                   </Label>
                   <Input
                     type="text"

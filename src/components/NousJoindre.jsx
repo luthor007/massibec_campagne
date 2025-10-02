@@ -29,10 +29,6 @@ export default function NousJoindre() {
         <div>
           <p className="font-semibold">Courriel:</p>
           <p>
-            <a href="mailto:mamontmagny@massibec.com" className="text-blue-600 hover:underline">
-              andre@massibec.com
-            </a>{" "}
-            ou{" "}
             <a href="mailto:louis@massibec.com" className="text-blue-600 hover:underline">
               louis@massibec.com
             </a>
