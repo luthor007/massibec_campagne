@@ -15,7 +15,7 @@ const CampaignSchema = new mongoose.Schema({
   notes: { type: String },
   status: { 
     type: String, 
-    enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed'],
+    enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed', 'pending_school_approval'],
     default: 'pending_approval'
   },
   profitSplitType: {

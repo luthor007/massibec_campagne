@@ -38,6 +38,11 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
+    // Check if campaign is waiting for school approval
+    if (campaign.status !== 'pending_school_approval') {
+      return res.status(400).json({ message: 'Cette campagne n\'attend pas l\'approbation de l\'école' });
+    }
+
     // Check if there are modifications to approve
     if (!campaign.massibecModifications) {
       return res.status(400).json({ message: 'Aucune modification à approuver' });

@@ -214,6 +214,8 @@ export default function MassibecCampaigns() {
         return <Badge className="bg-blue-500">Active</Badge>;
       case 'completed':
         return <Badge className="bg-gray-500">Terminée</Badge>;
+      case 'pending_school_approval':
+        return <Badge className="bg-orange-500">En attente école</Badge>;
       default:
         return <Badge variant="outline">Inconnu</Badge>;
     }

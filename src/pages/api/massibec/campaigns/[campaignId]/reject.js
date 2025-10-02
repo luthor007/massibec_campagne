@@ -45,6 +45,9 @@ export default async function handler(req, res) {
       campaign.rejectionReason = reason.trim();
       campaign.approvedBy = token.sub;
       campaign.approvedAt = new Date();
+      
+      // Clear any Massibec modifications when rejected
+      campaign.massibecModifications = undefined;
 
       await school.save();
 

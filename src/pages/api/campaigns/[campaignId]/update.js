@@ -48,9 +48,9 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    // Only allow editing if campaign is pending approval
-    if (campaign.status !== 'pending_approval') {
-      return res.status(400).json({ message: 'Seules les campagnes en attente peuvent être modifiées' });
+    // Only allow editing if campaign is not active
+    if (campaign.status === 'active') {
+      return res.status(400).json({ message: 'Les campagnes actives ne peuvent pas être modifiées' });
     }
 
     // Update campaign details
@@ -64,6 +64,14 @@ export default async function handler(req, res) {
       organizationBenefit: parseFloat(organizationBenefit),
       raffleBenefit: parseFloat(raffleBenefit)
     };
+
+    // Reset status to pending_approval when school modifies campaign
+    if (campaign.status === 'approved') {
+      campaign.status = 'pending_approval';
+    }
+
+    // Clear any Massibec modifications when school updates
+    campaign.massibecModifications = undefined;
 
     await school.save();
 

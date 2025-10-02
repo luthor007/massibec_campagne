@@ -40,6 +40,9 @@ export default async function handler(req, res) {
       campaign.approvedBy = token.sub;
       campaign.approvedAt = new Date();
       campaign.isActive = true;
+      
+      // Clear any Massibec modifications when approved
+      campaign.massibecModifications = undefined;
 
       // Update school's main campaign dates and info
       school.debutCampagne = campaign.startDate;

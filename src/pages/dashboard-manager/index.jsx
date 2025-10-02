@@ -325,6 +325,44 @@ const handleCopy = (code) => {
     }
   };
 
+  const handleUpdateCampaign = async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const updateData = {
+      startDate: formData.get('startDate'),
+      endDate: formData.get('endDate'),
+      deliveryDate: formData.get('deliveryDate'),
+      financialGoal: formData.get('financialGoal'),
+      profitSplitType: formData.get('profitSplitType'),
+      studentBenefit: formData.get('studentBenefit'),
+      organizationBenefit: formData.get('organizationBenefit'),
+      raffleBenefit: formData.get('raffleBenefit')
+    };
+
+    try {
+      const response = await fetch(`/api/campaigns/${editingCampaign._id}/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      if (response.ok) {
+        toast.success('Campagne mise à jour avec succès!');
+        fetchSchoolData();
+        setShowEditCampaignModal(false);
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Erreur lors de la mise à jour');
+      }
+    } catch (error) {
+      console.error('Error updating campaign:', error);
+      toast.error('Erreur lors de la mise à jour de la campagne');
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (process.env.NODE_ENV !== 'development') {
       alert('Cette fonctionnalité n\'est disponible qu\'en mode développement');
@@ -1319,6 +1357,8 @@ const handleCopy = (code) => {
                                 return <Badge className="bg-blue-500">Active</Badge>;
                               case 'completed':
                                 return <Badge className="bg-gray-500">Terminée</Badge>;
+                              case 'pending_school_approval':
+                                return <Badge className="bg-orange-500">Modifications proposées</Badge>;
                               default:
                                 return <Badge variant="outline">Inconnu</Badge>;
                             }
@@ -1350,7 +1390,7 @@ const handleCopy = (code) => {
                                 </div>
                                 <div className="ml-4 flex flex-col items-end space-y-2">
                                   {getStatusBadge(campaign.status)}
-                                  {campaign.status === 'pending_approval' && (
+                                  {campaign.status !== 'active' && campaign.status !== 'completed' && (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -1359,14 +1399,14 @@ const handleCopy = (code) => {
                                       Modifier
                                     </Button>
                                   )}
-                                  {campaign.massibecModifications && (
+                                  {campaign.status === 'pending_school_approval' && (
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                                      className="text-orange-600 border-orange-300 hover:bg-orange-50"
                                       onClick={() => handleReviewModifications(campaign)}
                                     >
-                                      Réviser
+                                      Réviser modifications
                                     </Button>
                                   )}
                                 </div>
@@ -1995,8 +2035,7 @@ const handleCopy = (code) => {
 
             <form onSubmit={(e) => {
               e.preventDefault();
-              // Handle campaign update
-              setShowEditCampaignModal(false);
+              handleUpdateCampaign(e);
             }} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>

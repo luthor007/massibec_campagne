@@ -1,5 +1,7 @@
 // pages/dashboard-massibec/schools/index.jsx
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import DashboardLayout from '../../../components/Dashboard/DashboardLayout';
 import SchoolSelector from '../../../components/Dashboard/SchoolManagement/SchoolSelector';
 import SchoolInfo from '../../../components/Dashboard/SchoolManagement/SchoolInfo';
@@ -38,6 +40,8 @@ import {
 } from 'lucide-react';
 
 const SchoolsPage = () => {
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [selectedSchoolId, setSelectedSchoolId] = useState(null);
   const [schoolData, setSchoolData] = useState(null);
   const [loadingSchool, setLoadingSchool] = useState(false);
@@ -45,10 +49,24 @@ const SchoolsPage = () => {
   const [allSchools, setAllSchools] = useState([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
   useEffect(() => {
+    if (status === 'loading') return;
+    
+    if (!session) {
+      router.push('/connexion');
+      return;
+    }
+    
+    // Vérifier si l'utilisateur a le rôle fournisseur
+    if (session.user.role !== 'fournisseur') {
+      router.push('/dashboard');
+      return;
+    }
+    
     fetchAllSchools();
-  }, []);
+  }, [session, status, router]);
 
   useEffect(() => {
     if (selectedSchoolId) {
@@ -112,6 +130,13 @@ const SchoolsPage = () => {
     return true;
   });
 
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: '' });
+    }, 3000);
+  };
+
   const handleApproveSchool = async (schoolId) => {
     try {
       const response = await fetch(`/api/approve-school`, {
@@ -123,25 +148,53 @@ const SchoolsPage = () => {
       });
 
       if (response.ok) {
-        alert('École approuvée avec succès!');
+        showNotification('École approuvée avec succès!', 'success');
         fetchAllSchools();
       } else {
         const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        showNotification(`Erreur: ${error.message}`, 'error');
       }
     } catch (error) {
       console.error('Error approving school:', error);
-      alert('Erreur lors de l\'approbation de l\'école');
+      showNotification('Erreur lors de l\'approbation de l\'école', 'error');
     }
   };
 
   const handleManageCampaigns = (schoolId) => {
-    // Navigate to campaigns management page
-    window.location.href = `/dashboard-massibec/campaigns?schoolId=${schoolId}`;
+    // Navigate to campaigns management page using Next.js router
+    router.push(`/dashboard-massibec/campaigns?schoolId=${schoolId}`);
   };
+
+  // Show loading state while checking authentication
+  if (status === 'loading') {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <p className="ml-2 text-gray-600">Chargement...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Don't render if not authenticated or wrong role
+  if (!session || session.user.role !== 'fournisseur') {
+    return null;
+  }
 
   return (
     <DashboardLayout>
+      {/* Notification */}
+      {notification.show && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+          notification.type === 'success' 
+            ? 'bg-green-100 text-green-800 border border-green-200' 
+            : 'bg-red-100 text-red-800 border border-red-200'
+        }`}>
+          {notification.message}
+        </div>
+      )}
+      
       <div className="space-y-8">
         {/* Header */}
         <div className="flex justify-between items-center">

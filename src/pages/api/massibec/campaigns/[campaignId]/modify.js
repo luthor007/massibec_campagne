@@ -65,6 +65,9 @@ export default async function handler(req, res) {
       modifiedAt: new Date()
     };
 
+    // Update status to indicate Massibec has proposed modifications
+    campaign.status = 'pending_school_approval';
+
     await school.save();
 
     res.status(200).json({ message: 'Modifications proposées avec succès' });
