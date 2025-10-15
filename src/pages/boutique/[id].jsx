@@ -96,16 +96,16 @@ export default function Boutique() {
     }
   }
 
-  const content =       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  const content =       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 pb-safe">
   {isOwner && (
-    <div className="sticky top-0">
+    <div className="sticky top-0 z-10 bg-white pt-2 pb-4">
       <Link href="/dashboard" passHref>
         <motion.div
-          className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 cursor-pointer"
+          className="inline-flex items-center text-blue-600 hover:text-blue-800 cursor-pointer text-sm sm:text-base"
           whileHover={{ x: -5 }}
           transition={{ type: "spring", stiffness: 400, damping: 10 }}
         >
-          <ArrowLeft className="mr-2 h-5 w-5" />
+          <ArrowLeft className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Retour au tableau de bord
         </motion.div>
       </Link>
@@ -116,9 +116,10 @@ export default function Boutique() {
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.5 }}
+    className="mb-4 sm:mb-6 lg:mb-8"
   >
-    <h1 className="text-4xl font-extrabold text-gray-900 mb-2">{storeName}</h1>
-    <p className="text-xl text-gray-600 mb-8">{storeDescription}</p>
+    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-gray-900 mb-2">{storeName}</h1>
+    <p className="text-base sm:text-lg lg:text-xl text-gray-600">{storeDescription}</p>
   </motion.div>
 
 {/* 
@@ -146,19 +147,18 @@ export default function Boutique() {
   </div>
   */}
 
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-    <div className="lg:col-span-2">
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+    <div className="lg:col-span-2 order-2 lg:order-1">
       {schoolId ? (
-        <div className="h-106 overflow-y-auto">
+        <div className="overflow-y-auto">
         <ProductList schoolId={schoolId} />
         </div>
       ) : (
-        <p className="text-gray-600">Chargement des produits...</p>
+        <p className="text-gray-600 text-center py-8">Chargement des produits...</p>
       )}
     </div>
-    <div className="lg:col-span-1 space-y-8">
+    <div className="lg:col-span-1 space-y-4 sm:space-y-6 lg:space-y-8 order-1 lg:order-2">
       <Cart id={id} />
-
       
       <StoreInfoCard
         orderDeadline={orderDeadline}

@@ -38,6 +38,8 @@ import {
   AlertCircle,
   RefreshCw
 } from 'lucide-react';
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 const SchoolsPage = () => {
   const router = useRouter();
@@ -50,6 +52,10 @@ const SchoolsPage = () => {
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [selectedSchoolForAction, setSelectedSchoolForAction] = useState(null);
+  const [actionReason, setActionReason] = useState('');
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -93,6 +99,7 @@ const SchoolsPage = () => {
   const fetchSchoolData = async (schoolId) => {
     setLoadingSchool(true);
     setErrorSchool(null);
+    setSchoolData(null); // Clear previous school data immediately
     try {
       const response = await fetch(`/api/schools/${schoolId}`);
       if (!response.ok) {
@@ -102,31 +109,54 @@ const SchoolsPage = () => {
       setSchoolData(data);
     } catch (error) {
       setErrorSchool(error.message);
+      setSchoolData(null); // Clear data on error
     } finally {
       setLoadingSchool(false);
     }
   };
 
   const getStatusBadge = (school) => {
-    if (school.approved) {
-      return <Badge className="bg-green-100 text-green-800 border-green-200">Approuvée</Badge>;
-    } else {
-      return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">En attente</Badge>;
+    const status = school.status || (school.approved ? 'approved' : 'pending');
+    
+    switch (status) {
+      case 'approved':
+        return <Badge className="bg-green-100 text-green-800 border-green-200">Approuvée</Badge>;
+      case 'pending':
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">En attente</Badge>;
+      case 'rejected':
+        return <Badge className="bg-red-100 text-red-800 border-red-200">Rejetée</Badge>;
+      case 'deactivated':
+        return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Désactivée</Badge>;
+      default:
+        return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">En attente</Badge>;
     }
   };
 
   const getStatusIcon = (school) => {
-    if (school.approved) {
-      return <CheckCircle className="h-4 w-4 text-green-600" />;
-    } else {
-      return <Clock className="h-4 w-4 text-yellow-600" />;
+    const status = school.status || (school.approved ? 'approved' : 'pending');
+    
+    switch (status) {
+      case 'approved':
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'pending':
+        return <Clock className="h-4 w-4 text-yellow-600" />;
+      case 'rejected':
+        return <XCircle className="h-4 w-4 text-red-600" />;
+      case 'deactivated':
+        return <AlertCircle className="h-4 w-4 text-gray-600" />;
+      default:
+        return <Clock className="h-4 w-4 text-yellow-600" />;
     }
   };
 
   const filteredSchools = allSchools.filter(school => {
+    const status = school.status || (school.approved ? 'approved' : 'pending');
+    
     if (filterStatus === 'all') return true;
-    if (filterStatus === 'approved') return school.approved;
-    if (filterStatus === 'pending') return !school.approved;
+    if (filterStatus === 'approved') return status === 'approved';
+    if (filterStatus === 'pending') return status === 'pending';
+    if (filterStatus === 'rejected') return status === 'rejected';
+    if (filterStatus === 'deactivated') return status === 'deactivated';
     return true;
   });
 
@@ -163,6 +193,91 @@ const SchoolsPage = () => {
   const handleManageCampaigns = (schoolId) => {
     // Navigate to campaigns management page using Next.js router
     router.push(`/dashboard-massibec/campaigns?schoolId=${schoolId}`);
+  };
+
+  const handleRejectSchool = async () => {
+    if (!selectedSchoolForAction) return;
+    
+    try {
+      const response = await fetch(`/api/reject-school`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          schoolId: selectedSchoolForAction._id,
+          reason: actionReason 
+        }),
+      });
+
+      if (response.ok) {
+        showNotification('École rejetée avec succès!', 'success');
+        fetchAllSchools();
+        setShowRejectModal(false);
+        setSelectedSchoolForAction(null);
+        setActionReason('');
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error rejecting school:', error);
+      showNotification('Erreur lors du rejet de l\'école', 'error');
+    }
+  };
+
+  const handleDeactivateSchool = async () => {
+    if (!selectedSchoolForAction) return;
+    
+    try {
+      const response = await fetch(`/api/deactivate-school`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          schoolId: selectedSchoolForAction._id,
+          reason: actionReason 
+        }),
+      });
+
+      if (response.ok) {
+        showNotification('École désactivée avec succès!', 'success');
+        fetchAllSchools();
+        setShowDeactivateModal(false);
+        setSelectedSchoolForAction(null);
+        setActionReason('');
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error deactivating school:', error);
+      showNotification('Erreur lors de la désactivation de l\'école', 'error');
+    }
+  };
+
+  const handleReactivateSchool = async (schoolId) => {
+    try {
+      const response = await fetch(`/api/reactivate-school`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ schoolId }),
+      });
+
+      if (response.ok) {
+        showNotification('École réactivée avec succès!', 'success');
+        fetchAllSchools();
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error reactivating school:', error);
+      showNotification('Erreur lors de la réactivation de l\'école', 'error');
+    }
   };
 
   // Show loading state while checking authentication
@@ -219,12 +334,14 @@ const SchoolsPage = () => {
               <option value="all">Toutes les écoles</option>
               <option value="approved">Approuvées</option>
               <option value="pending">En attente</option>
+              <option value="rejected">Rejetées</option>
+              <option value="deactivated">Désactivées</option>
             </select>
           </div>
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Écoles</CardTitle>
@@ -252,7 +369,29 @@ const SchoolsPage = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600">
-                {allSchools.filter(s => !s.approved).length}
+                {allSchools.filter(s => (s.status || (s.approved ? 'approved' : 'pending')) === 'pending').length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Rejetées</CardTitle>
+              <XCircle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">
+                {allSchools.filter(s => s.status === 'rejected').length}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Désactivées</CardTitle>
+              <AlertCircle className="h-4 w-4 text-gray-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-gray-600">
+                {allSchools.filter(s => s.status === 'deactivated').length}
               </div>
             </CardContent>
           </Card>
@@ -338,7 +477,7 @@ const SchoolsPage = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex space-x-2">
+                          <div className="flex space-x-2 flex-wrap">
                             <Button
                               variant="outline"
                               size="sm"
@@ -346,26 +485,81 @@ const SchoolsPage = () => {
                             >
                               Voir détails
                             </Button>
-                            {!school.approved && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-green-600 border-green-300 hover:bg-green-50"
-                                onClick={() => handleApproveSchool(school._id)}
-                              >
-                                Approuver
-                              </Button>
-                            )}
-                            {school.campaigns?.some(c => c.status === 'pending_approval') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                                onClick={() => handleManageCampaigns(school._id)}
-                              >
-                                Gérer campagnes
-                              </Button>
-                            )}
+                            
+                            {/* Actions basées sur le statut */}
+                            {(() => {
+                              const status = school.status || (school.approved ? 'approved' : 'pending');
+                              
+                              switch (status) {
+                                case 'pending':
+                                  return (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-green-600 border-green-300 hover:bg-green-50"
+                                        onClick={() => handleApproveSchool(school._id)}
+                                      >
+                                        Approuver
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-red-600 border-red-300 hover:bg-red-50"
+                                        onClick={() => {
+                                          setSelectedSchoolForAction(school);
+                                          setShowRejectModal(true);
+                                        }}
+                                      >
+                                        Rejeter
+                                      </Button>
+                                    </>
+                                  );
+                                
+                                case 'approved':
+                                  return (
+                                    <>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-gray-600 border-gray-300 hover:bg-gray-50"
+                                        onClick={() => {
+                                          setSelectedSchoolForAction(school);
+                                          setShowDeactivateModal(true);
+                                        }}
+                                      >
+                                        Désactiver
+                                      </Button>
+                                      {school.campaigns?.some(c => c.status === 'pending_approval') && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                                          onClick={() => handleManageCampaigns(school._id)}
+                                        >
+                                          Gérer campagnes
+                                        </Button>
+                                      )}
+                                    </>
+                                  );
+                                
+                                case 'rejected':
+                                case 'deactivated':
+                                  return (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-green-600 border-green-300 hover:bg-green-50"
+                                      onClick={() => handleReactivateSchool(school._id)}
+                                    >
+                                      Réactiver
+                                    </Button>
+                                  );
+                                
+                                default:
+                                  return null;
+                              }
+                            })()}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -384,22 +578,124 @@ const SchoolsPage = () => {
               <h3 className="text-2xl font-bold">Détails de l'École</h3>
               <Button
                 variant="outline"
-                onClick={() => setSelectedSchoolId(null)}
+                onClick={() => {
+                  setSelectedSchoolId(null);
+                  setSchoolData(null);
+                  setErrorSchool(null);
+                }}
               >
                 Fermer
               </Button>
             </div>
 
-            {loadingSchool && <p>Chargement des détails...</p>}
-            {errorSchool && <p className="text-red-500">Erreur: {errorSchool}</p>}
+            {loadingSchool && (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Chargement des détails de l'école...</p>
+              </div>
+            )}
+            
+            {errorSchool && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-600">Erreur: {errorSchool}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => fetchSchoolData(selectedSchoolId)}
+                >
+                  Réessayer
+                </Button>
+              </div>
+            )}
 
-            {schoolData && (
+            {schoolData && !loadingSchool && !errorSchool && (
               <div className="space-y-8">
                 <SchoolInfo school={schoolData} />
                 <SchoolOrders schoolId={selectedSchoolId} school={schoolData} />
                 <SchoolSalesData schoolId={selectedSchoolId} />
               </div>
             )}
+          </div>
+        )}
+
+        {/* Reject School Modal */}
+        {showRejectModal && selectedSchoolForAction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-4">Rejeter l'école</h3>
+              <p className="text-gray-600 mb-4">
+                Êtes-vous sûr de vouloir rejeter l'école <strong>{selectedSchoolForAction.name}</strong> ?
+              </p>
+              <div className="mb-4">
+                <Label htmlFor="rejectReason">Raison du rejet (optionnel)</Label>
+                <Textarea
+                  id="rejectReason"
+                  value={actionReason}
+                  onChange={(e) => setActionReason(e.target.value)}
+                  placeholder="Expliquez pourquoi cette école est rejetée..."
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setSelectedSchoolForAction(null);
+                    setActionReason('');
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleRejectSchool}
+                >
+                  Rejeter
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Deactivate School Modal */}
+        {showDeactivateModal && selectedSchoolForAction && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-4">Désactiver l'école</h3>
+              <p className="text-gray-600 mb-4">
+                Êtes-vous sûr de vouloir désactiver l'école <strong>{selectedSchoolForAction.name}</strong> ?
+              </p>
+              <div className="mb-4">
+                <Label htmlFor="deactivateReason">Raison de la désactivation (optionnel)</Label>
+                <Textarea
+                  id="deactivateReason"
+                  value={actionReason}
+                  onChange={(e) => setActionReason(e.target.value)}
+                  placeholder="Expliquez pourquoi cette école est désactivée..."
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDeactivateModal(false);
+                    setSelectedSchoolForAction(null);
+                    setActionReason('');
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeactivateSchool}
+                >
+                  Désactiver
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>

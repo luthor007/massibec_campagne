@@ -49,6 +49,16 @@ const SchoolSchema = new mongoose.Schema({
   telephone: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   approved: { type: Boolean, required: true, default: false },
+  status: { 
+    type: String, 
+    enum: ['pending', 'approved', 'rejected', 'deactivated'],
+    default: 'pending'
+  },
+  rejectionReason: { type: String },
+  rejectedAt: { type: Date },
+  deactivationReason: { type: String },
+  deactivatedAt: { type: Date },
+  reactivatedAt: { type: Date },
   split: {
     studentBenefit: { type: Number, default: 85.6 }, // Pourcentage de bénéfice pour l'étudiant
     organizationBenefit: { type: Number, default: 9.4 }, // Pourcentage de bénéfice pour l'organisation

@@ -81,7 +81,9 @@ import {
   Sparkles,
   X,
   Percent,
-  Trash2
+  Trash2,
+  Copy,
+  Check
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -113,6 +115,7 @@ export default function DashboardManager() {
   const [showEditProfitModal, setShowEditProfitModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [showEditCampaignModal, setShowEditCampaignModal] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewingCampaign, setReviewingCampaign] = useState(null);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
@@ -487,14 +490,28 @@ const handleCopy = (code) => {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                   {school.name}
                 </h1>
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm text-gray-600">
-                  Tableau de bord du gestionnaire
-                </p>
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="secondary" className="text-sm font-mono bg-blue-100 text-blue-800 border-blue-200">
+                      Code: {school.code}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopy(school.code)}
+                      className="h-6 w-6 p-0 hover:bg-blue-100"
+                    >
+                      <Copy className="h-3 w-3 text-blue-600" />
+                    </Button>
+                  </div>
                   <Badge variant="outline" className="text-xs">
                     <Activity className="h-3 w-3 mr-1" />
                     {isCampaignActive ? 'Active' : 'En attente'}
                   </Badge>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Partager ce code avec vos étudiants pour l'inscription
+                </p>
               </div>
             </div>
             </div>
@@ -512,7 +529,6 @@ const handleCopy = (code) => {
               <LogOut className="mr-2 h-4 w-4" /> Déconnexion
             </Button>
           </div>
-        </div>
         </div>
       </motion.header>
 

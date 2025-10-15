@@ -15,10 +15,16 @@ export const authOptions = {
       async authorize(credentials) {
         await dbConnect();
         const user = await User.findOne({ email: credentials.email });
-        if (user && bcrypt.compareSync(credentials.password, user.password)) {
-          return { id: user._id, email: user.email, school: user.school, name: user.name, role: user.role, telephone: user.parentInfo.telephone, schoolManagerInfo: user.schoolManagerInfo, emailVerified: user.emailVerified }; // Role included
+        
+        if (!user) {
+          throw new Error('EMAIL_NOT_FOUND');
         }
-        return null;
+        
+        if (!bcrypt.compareSync(credentials.password, user.password)) {
+          throw new Error('INVALID_PASSWORD');
+        }
+        
+        return { id: user._id, email: user.email, school: user.school, name: user.name, role: user.role, telephone: user.parentInfo.telephone, schoolManagerInfo: user.schoolManagerInfo, emailVerified: user.emailVerified }; // Role included
       }
     })
   ],

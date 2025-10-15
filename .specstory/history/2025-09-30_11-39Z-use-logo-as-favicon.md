@@ -29284,3 +29284,575 @@ Lines added: 8, lines removed: undefined
 
 ---
 
+Mise à jour de l’API d’approbation des campagnes pour gérer correctement les statuts.
+
+
+---
+
+Model supplied an ambiguous edit
+
+---
+
+Could not find file '/Users/alexismassicotte/project/massibec-financement/src/pages/api/campaigns/[campaignId]/approve.js' in the workspace.
+
+---
+
+Tool use: **glob_file_search**
+
+<details>
+<summary>Searched codebase "**/approve.js" • **1** result in **1** directory</summary>
+
+Directory: **/Users/alexismassicotte/project/massibec-financement** (1 file)
+
+| File |
+|------|
+| `src/pages/api/massibec/campaigns/[campaignId]/approve.js` |
+
+</details>
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/approve.js
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/approve.js</summary>
+
+**Chunk 1**
+Lines added: 4, lines removed: 1
+
+```diff
+@@ -41,5 +41,8 @@
+        campaign.approvedAt = new Date();
+        campaign.isActive = true;
+- 
++       
++       // Clear any Massibec modifications when approved
++       campaign.massibecModifications = undefined;
++ 
+        // Update school's main campaign dates and info
+        school.debutCampagne = campaign.startDate;
+```
+
+</details>
+
+---
+
+Mise à jour de l’API de rejet des campagnes.
+
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/reject.js
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/reject.js</summary>
+
+**Chunk 1**
+Lines added: 4, lines removed: 1
+
+```diff
+@@ -46,5 +46,8 @@
+        campaign.approvedBy = token.sub;
+        campaign.approvedAt = new Date();
+- 
++       
++       // Clear any Massibec modifications when rejected
++       campaign.massibecModifications = undefined;
++ 
+        await school.save();
+  
+```
+
+</details>
+
+---
+
+Mise à jour de l’API de modification des campagnes par Massibec pour gérer correctement les statuts.
+
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/modify.js
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/modify.js</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: undefined
+
+```diff
+@@ -65,4 +65,7 @@
+        modifiedAt: new Date()
+      };
++ 
++     // Update status to indicate Massibec has proposed modifications
++     campaign.status = 'pending_school_approval';
+  
+      await school.save();
+```
+
+</details>
+
+---
+
+Ajout du statut `pending_school_approval` au modèle School.
+
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/models/School.js</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -16,5 +16,5 @@
+    status: { 
+      type: String, 
+-     enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed'],
++     enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed', 'pending_school_approval'],
+      default: 'pending_approval'
+    },
+```
+
+</details>
+
+---
+
+Mise à jour de l’API d’approbation des modifications par l’école.
+
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/campaigns/[campaignId]/approve-modifications.js
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/api/campaigns/[campaignId]/approve-modifications.js</summary>
+
+**Chunk 1**
+Lines added: 5, lines removed: undefined
+
+```diff
+@@ -38,4 +38,9 @@
+        return res.status(404).json({ message: 'Campagne non trouvée' });
+      }
++ 
++     // Check if campaign is waiting for school approval
++     if (campaign.status !== 'pending_school_approval') {
++       return res.status(400).json({ message: 'Cette campagne n\'attend pas l\'approbation de l\'école' });
++     }
+  
+      // Check if there are modifications to approve
+```
+
+</details>
+
+---
+
+Mise à jour de l’interface du dashboard école pour afficher les statuts des campagnes.
+
+
+---
+
+The string to replace was not found in the file.
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: undefined
+
+```diff
+@@ -1358,4 +1358,6 @@
+                                case 'completed':
+                                  return <Badge className="bg-gray-500">Terminée</Badge>;
++                               case 'pending_school_approval':
++                                 return <Badge className="bg-orange-500">Modifications proposées</Badge>;
+                                default:
+                                  return <Badge variant="outline">Inconnu</Badge>;
+```
+
+</details>
+
+---
+
+Ajout d’un bouton pour modifier les campagnes non actives.
+
+
+---
+
+The string to replace was not found in the file.
+
+---
+
+Tool use: **grep**
+
+<details>
+<summary>Grep for "Modifier" in "/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx" • 6 matches</summary>
+
+Output mode: content
+
+
+| Content | Line |
+|------|------|
+| `Modifier la répartition` | L1033 |
+| `Modifier` | L1078 |
+| `Modifier` | L1399 |
+| `<h2 className="text-2xl font-bold text-gray-900">Modifier les informations de l'école</h2>` | L1839 |
+| `<h2 className="text-2xl font-bold text-gray-900">Modifier la répartition des profits</h2>` | L1923 |
+| `<h3 className="text-xl font-semibold">Modifier la Campagne #\{editingCampaign.campaignNumber\}</h3>` | L2027 |
+
+
+</details>
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 1, lines removed: 1
+
+```diff
+@@ -1391,5 +1391,5 @@
+                                  <div className="ml-4 flex flex-col items-end space-y-2">
+                                    {getStatusBadge(campaign.status)}
+-                                   {campaign.status === 'pending_approval' && (
++                                   {campaign.status !== 'active' && campaign.status !== 'completed' && (
+                                      <Button
+                                        variant="outline"
+```
+
+</details>
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 3, lines removed: 3
+
+```diff
+@@ -1400,12 +1400,12 @@
+                                      </Button>
+                                    )}
+-                                   {campaign.massibecModifications && (
++                                   {campaign.status === 'pending_school_approval' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+-                                       className="text-blue-600 border-blue-300 hover:bg-blue-50"
++                                       className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                        onClick={() => handleReviewModifications(campaign)}
+                                      >
+-                                       Réviser
++                                       Réviser modifications
+                                      </Button>
+                                    )}
+```
+
+</details>
+
+---
+
+Mise à jour du dashboard Massibec pour afficher le nouveau statut.
+
+
+---
+
+Tool use: **read_file**
+
+Read file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-massibec/campaigns/index.jsx
+
+---
+
+Tool use: **search_replace**
+
+
+<details><summary>Edit file: /Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-massibec/campaigns/index.jsx</summary>
+
+**Chunk 1**
+Lines added: 2, lines removed: undefined
+
+```diff
+@@ -215,4 +215,6 @@
+        case 'completed':
+          return <Badge className="bg-gray-500">Terminée</Badge>;
++       case 'pending_school_approval':
++         return <Badge className="bg-orange-500">En attente école</Badge>;
+        default:
+          return <Badge variant="outline">Inconnu</Badge>;
+```
+
+</details>
+
+---
+
+Tool use: **read_lints**
+
+<details>
+          <summary>Read lints for 8 files</summary>
+      
+Lint paths:
+
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-manager/index.jsx`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/api/campaigns/[campaignId]/update.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/approve.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/reject.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/api/massibec/campaigns/[campaignId]/modify.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/api/campaigns/[campaignId]/approve-modifications.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/models/School.js`
+- `/Users/alexismassicotte/project/massibec-financement/src/pages/dashboard-massibec/campaigns/index.jsx`
+
+Lint results
+
+Lint errors for `src/pages/dashboard-massibec/campaigns/index.jsx`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'AvatarImage' est déclaré mais sa valeur n'est jamais lue. | 14:34-14:45 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Users' est déclaré mais sa valeur n'est jamais lue. | 48:3-48:8 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Building' est déclaré mais sa valeur n'est jamais lue. | 49:3-49:11 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Check' est déclaré mais sa valeur n'est jamais lue. | 52:3-52:8 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+Lint errors for `src/pages/dashboard-manager/index.jsx`
+
+
+| Message | Range | Severity |
+|-------|-------|----------|
+| 'LineChart' est déclaré mais sa valeur n'est jamais lue. | 16:3-16:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Line' est déclaré mais sa valeur n'est jamais lue. | 17:3-17:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Area' est déclaré mais sa valeur n'est jamais lue. | 18:3-18:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AreaChart' est déclaré mais sa valeur n'est jamais lue. | 19:3-19:12 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AvatarImage' est déclaré mais sa valeur n'est jamais lue. | 33:34-33:45 | DIAGNOSTIC_SEVERITY_HINT |
+| 'TrendingDown' est déclaré mais sa valeur n'est jamais lue. | 61:3-61:15 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Eye' est déclaré mais sa valeur n'est jamais lue. | 69:3-69:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Plus' est déclaré mais sa valeur n'est jamais lue. | 70:3-70:7 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Filter' est déclaré mais sa valeur n'est jamais lue. | 71:3-71:9 | DIAGNOSTIC_SEVERITY_HINT |
+| 'HelpCircle' est déclaré mais sa valeur n'est jamais lue. | 73:3-73:13 | DIAGNOSTIC_SEVERITY_HINT |
+| 'AlertCircle' est déclaré mais sa valeur n'est jamais lue. | 76:3-76:14 | DIAGNOSTIC_SEVERITY_HINT |
+| 'Zap' est déclaré mais sa valeur n'est jamais lue. | 79:3-79:6 | DIAGNOSTIC_SEVERITY_HINT |
+| 'products' est déclaré mais sa valeur n'est jamais lue. | 93:1-93:46 | DIAGNOSTIC_SEVERITY_HINT |
+| 'totalRaised' est déclaré mais sa valeur n'est jamais lue. | 104:10-104:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'loading' est déclaré mais sa valeur n'est jamais lue. | 106:10-106:17 | DIAGNOSTIC_SEVERITY_HINT |
+| 'lastUpdated' est déclaré mais sa valeur n'est jamais lue. | 108:10-108:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setSearchTerm' est déclaré mais sa valeur n'est jamais lue. | 110:22-110:35 | DIAGNOSTIC_SEVERITY_HINT |
+| 'setFilterStatus' est déclaré mais sa valeur n'est jamais lue. | 111:24-111:39 | DIAGNOSTIC_SEVERITY_HINT |
+| 'result' est déclaré mais sa valeur n'est jamais lue. | 278:15-278:21 | DIAGNOSTIC_SEVERITY_HINT |
+| 'filteredParticipants' est déclaré mais sa valeur n'est jamais lue. | 417:9-417:29 | DIAGNOSTIC_SEVERITY_HINT |
+| 'entry' est déclaré mais sa valeur n'est jamais lue. | 1724:39-1724:44 | DIAGNOSTIC_SEVERITY_HINT |
+
+
+</details>
+
+---
+
+Tool use: **todo_write**
+
+## Todo List
+
+- [x] Permettre à l'école de modifier ses campagnes non actives
+- [x] Corriger la logique des statuts de campagnes (approuvées, modifiées, rejetées)
+- [x] Ajouter l'interface pour modifier les campagnes dans le dashboard école
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+git add . && git commit -m "feat: Add campaign editing for schools and improve status logic
+
+- Allow schools to edit campaigns that are not active
+- Add new status 'pending_school_approval' for Massibec modifications
+- Update campaign status logic throughout the system
+- Add proper status badges and UI controls
+- Reset status to pending_approval when school modifies approved campaign
+- Clear Massibec modifications when school updates campaign
+- Update both school and Massibec dashboards with new status
+- Improve campaign modification workflow" && git push origin feature/new-development
+```
+
+```
+[feature/new-development 9873b88] feat: Add campaign editing for schools and improve status logic
+ 10 files changed, 1338 insertions(+), 16 deletions(-)
+Enumerating objects: 51, done.
+Counting objects: 100% (51/51), done.
+Delta compression using up to 12 threads
+Compressing objects: 100% (23/23), done.
+Writing objects: 100% (27/27), 10.48 KiB | 487.00 KiB/s, done.
+Total 27 (delta 17), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (17/17), completed with 17 local objects.
+remote: 
+remote: GitHub found 22 vulnerabilities on luthor007/massibec_campagne's default branch (3 critical, 8 high, 6 moderate, 5 low). To find out more, visit:                                                                         
+remote:      https://github.com/luthor007/massibec_campagne/security/dependabot
+remote: 
+To https://github.com/luthor007/massibec_campagne.git
+   2a71081..9873b88  feature/new-development -> feature/new-development
+```
+
+---
+
+Tool use: **run_terminal_cmd**
+
+```bash
+fly deploy
+```
+
+```
+==> Verifying app config
+Validating /Users/alexismassicotte/project/massibec-financement/fly.toml
+✓ Configuration is valid
+--> Verified app config
+==> Building image
+==> Building image with Depot
+--> build:  (​)
+[+] Building 140.8s (17/17) FINISHED                                                                             
+ => [internal] load build definition from Dockerfile                                                        0.1s
+ => => transferring dockerfile: 976B                                                                        0.1s
+ => resolve image config for docker-image://docker.io/docker/dockerfile:1                                   0.3s
+ => CACHED docker-image://docker.io/docker/dockerfile:1@sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b  0.0s
+ => => resolve docker.io/docker/dockerfile:1@sha256:dabfc0969b935b2080555ace70ee69a5261af8a8f1b4df97b9e7fb  0.0s
+ => [internal] load build definition from Dockerfile                                                        0.0s
+ => => Deduplicating step ID [internal] load build definition from Dockerfile, another build is calculatin  0.0s
+ => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 5)                              0.0s
+ => WARN: FromAsCasing: 'as' and 'FROM' keywords' casing do not match (line 17)                             0.0s
+ => [internal] load metadata for docker.io/library/node:22.7.0-slim                                         0.2s
+ => [internal] load .dockerignore                                                                           0.1s
+ => => transferring context: 433B                                                                           0.1s
+ => [internal] load build context                                                                           2.1s
+ => => transferring context: 4.10MB                                                                         2.1s
+ => [base 1/2] FROM docker.io/library/node:22.7.0-slim@sha256:1289f8e0bf3a182990d1d046f8ab2a5d45814f8b40b4  0.0s
+ => => resolve docker.io/library/node:22.7.0-slim@sha256:1289f8e0bf3a182990d1d046f8ab2a5d45814f8b40b419636  0.0s
+ => CACHED [base 2/2] WORKDIR /app                                                                          0.0s
+ => CACHED [build 1/6] RUN apt-get update -qq &&     apt-get install --no-install-recommends -y build-esse  0.0s
+ => CACHED [build 2/6] COPY package-lock.json package.json ./                                               0.0s
+ => CACHED [build 3/6] RUN npm ci --include=dev                                                             0.0s
+ => [build 4/6] COPY . .                                                                                    0.7s
+ => [build 5/6] RUN npm run build                                                                          74.1s
+ => [build 6/6] RUN npm prune --omit=dev                                                                    4.2s 
+ => [stage-2 1/1] COPY --from=build /app /app                                                              17.4s 
+ => exporting to image                                                                                     31.1s 
+ => => exporting layers                                                                                    20.9s 
+ => => exporting manifest sha256:c9abb465f1e242988b0bb1b9eedd44cfcbb8b9ea34221db544b7fbc38f3a62f1           0.0s 
+ => => exporting config sha256:35d74d03deb4204734c1bfb2274e0cde3c14791eebf06c3f62c337788b157ee0             0.0s 
+ => => pushing layers for registry.fly.io/massibec-financement:deployment-01K6HBQ8Y8PN74H24FH4ZXFX6X@sha25  9.5s
+ => => pushing layer sha256:35d74d03deb4204734c1bfb2274e0cde3c14791eebf06c3f62c337788b157ee0                3.2s
+ => => pushing layer sha256:8f6d5c6514ae7f47ef357d1e55ca8bc9e046b721228ad3294123c7fc2d9e29fd                9.5s
+ => => pushing layer sha256:19eac963e531362101087d2b50813d5bc39233def5f1e15ffd1f27f15e7f4195                0.5s
+ => => pushing layer sha256:8493335b664fe1a2943c3278fef54f01212dd898578df875bcd6fd8b06ff63bd                0.4s
+ => => pushing layer sha256:fe2c08ab6b2801d405acf47e6bcb653f94435850b78edc9631f9c5c061d6dea8                0.4s
+ => => pushing layer sha256:24d4277883a1cf449baf9a1d6d84b80dd2531e8944e8fc6a89593b57ffc9e091                0.5s
+ => => pushing layer sha256:45c85beae22219536cd533c534b4945d82175c68e16ce6dfa9bce429b2e82515                0.5s
+ => => pushing layer sha256:4b2e1ed2d486d8fe5dbd0623764f2f3c3ab519015f4ad9c130348d1224ad7703                0.2s
+ => => pushing manifest for registry.fly.io/massibec-financement:deployment-01K6HBQ8Y8PN74H24FH4ZXFX6X@sha  0.8s
+--> Build Summary:  (​)
+--> Building image done
+image: registry.fly.io/massibec-financement:deployment-01K6HBQ8Y8PN74H24FH4ZXFX6X
+image size: 212 MB
+
+Watch your deployment at https://fly.io/apps/massibec-financement/monitoring
+
+-------
+Updating existing machines in 'massibec-financement' with rolling strategy
+
+-------
+ ✔ [1/2] Cleared lease for 78119d3c93e298
+ ✔ [2/2] Cleared lease for 080e0d0a609668
+-------
+Checking DNS configuration for massibec-financement.fly.dev
+
+Visit your newly deployed app at https://massibec-financement.fly.dev/
+```
+
+---
+
+## Fonctionnalités implémentées
+
+### 1. Modification des campagnes par l'école
+- Les écoles peuvent modifier les campagnes non actives (`pending_approval`, `approved`, `rejected`)
+- Les campagnes actives (`active`) et terminées (`completed`) ne sont pas modifiables
+- Bouton "Modifier" affiché selon le statut
+
+### 2. Logique des statuts
+- `pending_approval` : en attente d'approbation Massibec
+- `approved` : approuvée par Massibec
+- `rejected` : rejetée par Massibec
+- `active` : campagne en cours
+- `completed` : campagne terminée
+- `pending_school_approval` : modifications proposées par Massibec, en attente de l'école
+
+### 3. Workflow
+1. École crée une campagne → `pending_approval`
+2. Massibec approuve → `approved`
+3. Massibec propose des modifications → `pending_school_approval`
+4. École approuve les modifications → `approved`
+5. École modifie une campagne approuvée → retour à `pending_approval`
+
+### 4. Interface
+- Badges de statut avec couleurs
+- Boutons contextuels selon le statut
+- Modales pour modifier et réviser
+- Validation des modifications
+
+### 5. APIs
+- `/api/campaigns/[campaignId]/update` : modification par l'école
+- `/api/massibec/campaigns/[campaignId]/approve` : approbation Massibec
+- `/api/massibec/campaigns/[campaignId]/reject` : rejet Massibec
+- `/api/massibec/campaigns/[campaignId]/modify` : modifications proposées par Massibec
+- `/api/campaigns/[campaignId]/approve-modifications` : approbation des modifications par l'école
+
+### 6. Sécurité
+- Vérification des permissions
+- Validation des statuts avant modification
+- Nettoyage des modifications lors des changements de statut
+
+Application déployée : https://massibec-financement.fly.dev/
+
+Les écoles peuvent modifier leurs campagnes non actives, et les statuts reflètent l'état du workflow d'approbation.
+
+---
+

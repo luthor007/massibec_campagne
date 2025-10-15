@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const { code } = req.query;
-      const school = await School.findOne({ approved: true, code: code });
+      const school = await School.findOne({ status: 'approved', code: code });
       
       if (!school) {
         return res.status(404).json({ message: 'École non trouvée avec ce code.' });

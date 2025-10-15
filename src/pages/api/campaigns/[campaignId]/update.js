@@ -53,6 +53,27 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Les campagnes actives ne peuvent pas être modifiées' });
     }
 
+    // Validate profit split values
+    if (profitSplitType === 'percentage') {
+      const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
+      if (Math.abs(total - 100) > 0.01) {
+        return res.status(400).json({ message: `Les pourcentages doivent totaliser 100%. Total actuel: ${total.toFixed(1)}%` });
+      }
+    } else {
+      // For absolute values, check that all values are positive
+      if (studentBenefit < 0 || organizationBenefit < 0 || raffleBenefit < 0) {
+        return res.status(400).json({ message: 'Les valeurs absolues doivent être positives' });
+      }
+      
+      // Check that total doesn't exceed $3.00 per product
+      const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
+      if (total > 3.00) {
+        return res.status(400).json({ 
+          message: `Le total ne peut pas dépasser 3.00$ par produit. Total actuel: ${total.toFixed(2)}$` 
+        });
+      }
+    }
+
     // Update campaign details
     campaign.startDate = startDate;
     campaign.endDate = endDate;

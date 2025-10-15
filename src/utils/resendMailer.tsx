@@ -1,20 +1,27 @@
-// src/utils/gmailMailer.tsx
-// This file now acts as a router between Gmail/Nodemailer and Resend
-// Set EMAIL_PROVIDER=resend in your .env to use Resend, otherwise it defaults to Gmail
+// src/utils/resendMailer.tsx
 
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import ReactDOMServer from 'react-dom/server';
-import EmailVerificationTemplate from '../components/EmailVerificationTemplate'; // Import the new template
-import EmailTemplate from '../components/EmailTemplate'; // Existing templates
+import EmailVerificationTemplate from '../components/EmailVerificationTemplate';
+import EmailTemplate from '../components/EmailTemplate';
 import EmailDeletionTemplate from '../components/EmailDeletionTemplate';
 import StudentOrderEmailTemplate from '../components/StudentOrderEmailTemplate';
 import PasswordResetEmailTemplate from '../components/PasswordResetEmailTemplate';
-import EmailTemplateStudent from '../components/EmailTemplateStudent'; // Import the new email template
+import EmailTemplateStudent from '../components/EmailTemplateStudent';
 
-// Import Resend implementations
-import * as ResendMailer from './resendMailer';
+// Initialize Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Interfaces (existing)
+// Get from email address
+const getFromEmail = () => {
+  return process.env.RESEND_FROM_EMAIL || process.env.GMAIL_USER || 'onboarding@resend.dev';
+};
+
+const getFromName = () => {
+  return process.env.GMAIL_FROM_NAME || 'Massibec Financement';
+};
+
+// Interfaces (matching gmailMailer interfaces)
 interface ProductItem {
   productId: string;
   productName: string;
@@ -38,7 +45,7 @@ interface SendDeletionEmailParams {
 interface SendSaleNotificationEmailParams {
   to: string;
   studentName: string;
-  firstName: string; // Customer's first name
+  firstName: string;
   customerEmail: string;
   customerPhone: string;
   products: {
@@ -104,20 +111,11 @@ interface SendVerificationEmailParams {
   verificationUrl: string;
 }
 
-// Création du transporteur SMTP avec Nodemailer
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER, // Votre adresse e-mail Gmail
-    pass: process.env.GMAIL_PASS, // Votre mot de passe d'application Gmail
-  },
-});
-
 /**
- * Envoie un e-mail de vérification via Gmail SMTP avec un contenu HTML généré par un composant React.
+ * Envoie un e-mail de vérification via Resend avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail de vérification.
  */
-const sendVerificationEmailViaGmail = async (params: SendVerificationEmailParams) => {
+const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
   const { to, subject, firstName, verificationUrl } = params;
 
   try {
@@ -129,18 +127,21 @@ const sendVerificationEmailViaGmail = async (params: SendVerificationEmailParams
       />
     );
 
-    // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+    // Envoyer l'e-mail via Resend
+    const { data, error } = await resend.emails.send({
+      from: `${getFromName()} <${getFromEmail()}>`,
       to,
       subject,
       html: htmlContent,
-    };
+    });
 
-    // Envoyer l'e-mail
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`E-mail de vérification envoyé à ${to} avec le statut: ${info.response}`);
-    return info;
+    if (error) {
+      console.error('Erreur Resend lors de l\'envoi de l\'e-mail de vérification:', error);
+      throw error;
+    }
+
+    console.log(`E-mail de vérification envoyé à ${to} via Resend avec ID: ${data?.id}`);
+    return { response: `Resend ID: ${data?.id}` };
   } catch (error: any) {
     console.error('Erreur lors de l\'envoi de l\'e-mail de vérification:', error);
     throw error;
@@ -148,10 +149,10 @@ const sendVerificationEmailViaGmail = async (params: SendVerificationEmailParams
 };
 
 /**
- * Envoie un e-mail de réinitialisation de mot de passe via Gmail SMTP avec un contenu HTML généré par un composant React.
+ * Envoie un e-mail de réinitialisation de mot de passe via Resend avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail de réinitialisation.
  */
-const sendPasswordResetEmailViaGmail = async (params: SendPasswordResetEmailParams) => {
+const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
   const { to, subject, resetLink } = params;
 
   try {
@@ -162,18 +163,21 @@ const sendPasswordResetEmailViaGmail = async (params: SendPasswordResetEmailPara
       />
     );
 
-    // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+    // Envoyer l'e-mail via Resend
+    const { data, error } = await resend.emails.send({
+      from: `${getFromName()} <${getFromEmail()}>`,
       to,
       subject,
       html: htmlContent,
-    };
+    });
 
-    // Envoyer l'e-mail
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`E-mail de réinitialisation envoyé à ${to} avec le statut: ${info.response}`);
-    return info;
+    if (error) {
+      console.error('Erreur Resend lors de l\'envoi de l\'e-mail de réinitialisation:', error);
+      throw error;
+    }
+
+    console.log(`E-mail de réinitialisation envoyé à ${to} via Resend avec ID: ${data?.id}`);
+    return { response: `Resend ID: ${data?.id}` };
   } catch (error: any) {
     console.error('Erreur lors de l\'envoi de l\'e-mail de réinitialisation:', error);
     throw error;
@@ -181,10 +185,10 @@ const sendPasswordResetEmailViaGmail = async (params: SendPasswordResetEmailPara
 };
 
 /**
- * Envoie un e-mail via Gmail SMTP avec un contenu HTML généré par un composant React.
+ * Envoie un e-mail via Resend avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail.
  */
-const sendEmailViaGmail = async (params: SendEmailParams) => {
+const sendEmail = async (params: SendEmailParams) => {
   const {
     to,
     subject,
@@ -231,18 +235,21 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
       />
     );
 
-    // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+    // Envoyer l'e-mail via Resend
+    const { data, error } = await resend.emails.send({
+      from: `${getFromName()} <${getFromEmail()}>`,
       to,
       subject,
       html: htmlContent,
-    };
+    });
 
-    // Envoyer l'e-mail
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`E-mail envoyé à ${to} avec le statut: ${info.response}`);
-    return info;
+    if (error) {
+      console.error('Erreur Resend lors de l\'envoi de l\'e-mail:', error);
+      throw error;
+    }
+
+    console.log(`E-mail envoyé à ${to} via Resend avec ID: ${data?.id}`);
+    return { response: `Resend ID: ${data?.id}` };
   } catch (error: any) {
     console.error('Erreur lors de l\'envoi de l\'e-mail:', error);
     throw error;
@@ -250,10 +257,10 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
 };
 
 /**
- * Envoie un e-mail de suppression de commande via Gmail SMTP avec un contenu HTML généré par un composant React.
+ * Envoie un e-mail de suppression de commande via Resend avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail de suppression.
  */
-const sendDeletionEmailViaGmail = async (params: SendDeletionEmailParams) => {
+const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
   const {
     to,
     subject,
@@ -274,25 +281,28 @@ const sendDeletionEmailViaGmail = async (params: SendDeletionEmailParams) => {
         storeName={storeName}
         orderId={orderId}
         deletionDate={deletionDate}
-        reason='non paiement' // Vous pouvez rendre ceci dynamique si nécessaire
+        reason='non paiement'
         sellerName={sellerName}
         sellerPhone={sellerPhone}
         sellerEmail={sellerEmail}
       />
     );
 
-    // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+    // Envoyer l'e-mail via Resend
+    const { data, error } = await resend.emails.send({
+      from: `${getFromName()} <${getFromEmail()}>`,
       to,
       subject,
       html: htmlContent,
-    };
+    });
 
-    // Envoyer l'e-mail
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`E-mail de suppression envoyé à ${to} avec le statut: ${info.response}`);
-    return info;
+    if (error) {
+      console.error('Erreur Resend lors de l\'envoi de l\'e-mail de suppression:', error);
+      throw error;
+    }
+
+    console.log(`E-mail de suppression envoyé à ${to} via Resend avec ID: ${data?.id}`);
+    return { response: `Resend ID: ${data?.id}` };
   } catch (error: any) {
     console.error('Erreur lors de l\'envoi de l\'e-mail de suppression:', error);
     throw error;
@@ -300,10 +310,10 @@ const sendDeletionEmailViaGmail = async (params: SendDeletionEmailParams) => {
 };
 
 /**
- * Envoie un e-mail de confirmation de commande à un étudiant via Gmail SMTP avec un contenu HTML généré par un composant React.
+ * Envoie un e-mail de confirmation de commande à un étudiant via Resend avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail de confirmation étudiant.
  */
-const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams) => {
+const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
   const {
     studentPercentage,
     orderId,
@@ -336,18 +346,21 @@ const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams
       />
     );
 
-    // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
-      to: email, // Envoi à l'adresse e-mail de l'étudiant
+    // Envoyer l'e-mail via Resend
+    const { data, error } = await resend.emails.send({
+      from: `${getFromName()} <${getFromEmail()}>`,
+      to: email,
       subject: `Confirmation de votre commande - Commande #${orderId}`,
       html: htmlContent,
-    };
+    });
 
-    // Envoyer l'e-mail
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`E-mail envoyé à l'étudiant ${email} avec le statut: ${info.response}`);
-    return info;
+    if (error) {
+      console.error('Erreur Resend lors de l\'envoi de l\'e-mail à l\'étudiant:', error);
+      throw error;
+    }
+
+    console.log(`E-mail envoyé à l'étudiant ${email} via Resend avec ID: ${data?.id}`);
+    return { response: `Resend ID: ${data?.id}` };
   } catch (error: any) {
     console.error("Erreur lors de l'envoi de l'e-mail à l'étudiant:", error);
     throw error;
@@ -355,10 +368,10 @@ const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams
 };
 
 /**
- * Envoie un e-mail de notification de vente à l'élève vendeur via Gmail SMTP avec un contenu HTML généré par un composant React.
+ * Envoie un e-mail de notification de vente à l'élève vendeur via Resend avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail de notification de vente.
  */
-const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEmailParams) => {
+const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams) => {
   const {
     to,
     studentName,
@@ -390,105 +403,24 @@ const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEma
       />
     );
 
-    // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
-      to: to, // Send to the student's email
+    // Envoyer l'e-mail via Resend
+    const { data, error } = await resend.emails.send({
+      from: `${getFromName()} <${getFromEmail()}>`,
+      to: to,
       subject: `Nouvelle Vente Reçue - Commande #${orderId}`,
       html: htmlContent,
-    };
+    });
 
-    // Envoyer l'e-mail
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`E-mail de notification de vente envoyé à ${studentName} avec le statut: ${info.response}`);
-    return info;
+    if (error) {
+      console.error('Erreur Resend lors de l\'envoi de l\'e-mail de notification de vente:', error);
+      throw error;
+    }
+
+    console.log(`E-mail de notification de vente envoyé à ${studentName} via Resend avec ID: ${data?.id}`);
+    return { response: `Resend ID: ${data?.id}` };
   } catch (error: any) {
     console.error('Erreur lors de l\'envoi de l\'e-mail de notification de vente:', error);
     throw error;
-  }
-};
-
-// ============================================================================
-// ROUTER FUNCTIONS - Check EMAIL_PROVIDER env variable to route to correct implementation
-// ============================================================================
-
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'gmail';
-
-/**
- * Routes sendVerificationEmail to the appropriate provider
- */
-const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for verification email');
-    return ResendMailer.sendVerificationEmail(params);
-  } else {
-    console.log('📧 Using Gmail for verification email');
-    return sendVerificationEmailViaGmail(params);
-  }
-};
-
-/**
- * Routes sendPasswordResetEmail to the appropriate provider
- */
-const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for password reset email');
-    return ResendMailer.sendPasswordResetEmail(params);
-  } else {
-    console.log('📧 Using Gmail for password reset email');
-    return sendPasswordResetEmailViaGmail(params);
-  }
-};
-
-/**
- * Routes sendEmail to the appropriate provider
- */
-const sendEmail = async (params: SendEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for email');
-    return ResendMailer.sendEmail(params);
-  } else {
-    console.log('📧 Using Gmail for email');
-    return sendEmailViaGmail(params);
-  }
-};
-
-/**
- * Routes sendDeletionEmail to the appropriate provider
- */
-const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for deletion email');
-    return ResendMailer.sendDeletionEmail(params);
-  } else {
-    console.log('📧 Using Gmail for deletion email');
-    return sendDeletionEmailViaGmail(params);
-  }
-};
-
-/**
- * Routes sendStudentOrderEmail to the appropriate provider
- */
-const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for student order email');
-    return ResendMailer.sendStudentOrderEmail(params);
-  } else {
-    console.log('📧 Using Gmail for student order email');
-    return sendStudentOrderEmailViaGmail(params);
-  }
-};
-
-/**
- * Routes sendSaleNotificationEmail to the appropriate provider
- */
-const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for sale notification email');
-    return ResendMailer.sendSaleNotificationEmail(params);
-  } else {
-    console.log('📧 Using Gmail for sale notification email');
-    return sendSaleNotificationEmailViaGmail(params);
   }
 };
 
@@ -501,3 +433,4 @@ export {
   sendVerificationEmail, 
   sendSaleNotificationEmail 
 };
+

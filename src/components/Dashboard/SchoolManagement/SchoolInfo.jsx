@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Copy } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const toDateInputValue = (value) => {
@@ -261,6 +261,22 @@ const SchoolInfo = ({ school }) => {
         customFields: newCustomFields,
       };
     });
+  };
+
+  const handleCopyCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast({
+        title: 'Code copié',
+        description: 'Le code de l\'école a été copié dans le presse-papiers.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de copier le code.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -650,6 +666,18 @@ const SchoolInfo = ({ school }) => {
             <div>
               <h4 className="font-semibold">Basic Information</h4>
               <p><strong>Name:</strong> {currentSchool.name}</p>
+              <div className="flex items-center space-x-2">
+                <p><strong>School Code:</strong></p>
+                <span className="font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">{currentSchool.code}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleCopyCode(currentSchool.code)}
+                  className="h-6 w-6 p-0 hover:bg-blue-100"
+                >
+                  <Copy className="h-3 w-3 text-blue-600" />
+                </Button>
+              </div>
               <p><strong>Email:</strong> {currentSchool.email}</p>
               <p><strong>Telephone:</strong> {currentSchool.telephone}</p>
               <p><strong>Address:</strong> {currentSchool.address}</p>

@@ -23,8 +23,9 @@
            return res.status(404).json({ message: 'École non trouvée.' });
          }
 
-         school.approved = true;
-         await school.save();
+        school.approved = true;
+        school.status = 'approved';
+        await school.save();
 
          res.status(200).json({ message: 'École approuvée avec succès.' });
        } catch (error) {

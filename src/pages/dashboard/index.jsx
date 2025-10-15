@@ -4,7 +4,7 @@ import Layout from '../../components/Layout';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BarChart, Settings, ShoppingBag, Store } from 'lucide-react';
+import { ArrowRight, BarChart, Settings, ShoppingBag, Store, TrendingUp } from 'lucide-react';
 
 export default function Dashboard() {
   const { data: session } = useSession();
@@ -114,6 +114,26 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* New Card for Sales Tools */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <TrendingUp className="h-5 w-5 mr-2 text-primary" />
+              Outils de Vente
+            </CardTitle>
+            <CardDescription>Boostez vos ventes avec nos outils marketing prêts à utiliser.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/vendre" passHref>
+              <Button className="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
+                Voir les outils
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
-  );}
+  );
+}

@@ -23,7 +23,14 @@ module.exports = {
     				border: 'hsl(var(--sidebar-border))',
     				ring: 'hsl(var(--sidebar-ring))'
     			}
-    		}
+    		},
+			// Mobile-friendly spacing with safe areas
+			spacing: {
+				'safe': 'env(safe-area-inset-bottom)',
+				'safe-top': 'env(safe-area-inset-top)',
+				'safe-right': 'env(safe-area-inset-right)',
+				'safe-left': 'env(safe-area-inset-left)',
+			}
     	}
     }, 
 	plugins: [], 

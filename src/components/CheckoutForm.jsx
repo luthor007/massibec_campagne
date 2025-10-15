@@ -149,14 +149,14 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
   return (
     <>
       <Dialog open={!isSuccess} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-auto max-h-screen">
-          <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
-            <DialogTitle className="text-2xl font-bold">Finaliser votre commande</DialogTitle>
-            <DialogDescription className="text-blue-100 mt-2">
+        <DialogContent className="sm:max-w-[500px] p-0 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 sm:p-6 sticky top-0 z-10">
+            <DialogTitle className="text-xl sm:text-2xl font-bold">Finaliser votre commande</DialogTitle>
+            <DialogDescription className="text-blue-100 mt-2 text-sm sm:text-base">
               Nous sommes presque là ! Remplissez vos informations pour compléter votre achat.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-6 p-6 bg-white">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 p-4 sm:p-6 pb-24 sm:pb-6 bg-white">
             <div className="space-y-4">
               {/* Full Name Field */}
               <div className="space-y-2">
@@ -259,15 +259,15 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
               <span className="text-blue-700">{(total + tipAmount).toFixed(2)}$</span>
             </div>
 
-            {/* Form Actions */}
-            <DialogFooter className="flex flex-col sm:flex-row gap-4">
-              <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto py-3 text-base">
+            {/* Form Actions - Fixed for mobile with safe area */}
+            <DialogFooter className="flex flex-col sm:flex-row gap-3 sm:gap-4 sticky bottom-0 bg-white pt-4 pb-safe">
+              <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto py-3 text-base order-2 sm:order-1">
                 Annuler
               </Button>
               <Button 
                 type="submit" 
                 disabled={isSubmitting || !owner || isLoadingOwner}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center py-3 text-base"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center py-3 sm:py-4 text-base font-semibold shadow-lg order-1 sm:order-2"
               >
                 {isSubmitting ? (
                   <>
@@ -290,7 +290,7 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
       <AnimatePresence>
         {isSuccess && (
           <Dialog open={isSuccess} onOpenChange={handleSuccessClose}>
-            <DialogContent className="sm:max-w-[425px] bg-white p-0 overflow-auto max-h-screen">
+            <DialogContent className="sm:max-w-[425px] bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}

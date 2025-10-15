@@ -1,4 +1,4 @@
-// src/pages/api/reject-school.js
+// src/pages/api/deactivate-school.js
 import dbConnect from '../../lib/mongodb';
 import School from '../../models/School';
 import { getToken } from 'next-auth/jwt';
@@ -23,15 +23,14 @@ export default async function handler(req, res) {
         return res.status(404).json({ message: 'École non trouvée.' });
       }
 
-      school.approved = false;
-      school.status = 'rejected';
-      school.rejectionReason = reason || '';
-      school.rejectedAt = new Date();
+      school.status = 'deactivated';
+      school.deactivationReason = reason || '';
+      school.deactivatedAt = new Date();
       await school.save();
 
-      res.status(200).json({ message: 'École rejetée avec succès.' });
+      res.status(200).json({ message: 'École désactivée avec succès.' });
     } catch (error) {
-      console.error('Error rejecting school:', error);
+      console.error('Error deactivating school:', error);
       res.status(500).json({ message: 'Erreur interne du serveur.' });
     }
   } else {
@@ -39,3 +38,12 @@ export default async function handler(req, res) {
     res.status(405).json({ message: `Méthode ${req.method} non autorisée` });
   }
 }
+
+
+
+
+
+
+
+
+

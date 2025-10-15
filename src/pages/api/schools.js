@@ -8,6 +8,24 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
+      // Migration automatique des écoles existantes
+      await School.updateMany(
+        { status: { $exists: false } },
+        [
+          {
+            $set: {
+              status: {
+                $cond: {
+                  if: { $eq: ['$approved', true] },
+                  then: 'approved',
+                  else: 'pending'
+                }
+              }
+            }
+          }
+        ]
+      );
+
       const allSchools = await School.find({}).populate('campaigns');
       res.status(200).json(allSchools);
     } catch (error) {

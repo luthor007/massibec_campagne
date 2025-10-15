@@ -27,8 +27,13 @@ export default function ProductCard({ product }) {
   }
 
   return (
-    <motion.div whileHover={{ scale: 1.05 }} transition={{ type: "spring", stiffness: 300 }}>
-      <Card className="overflow-hidden h-full flex flex-col">
+    <motion.div 
+      whileHover={{ scale: 1.03 }} 
+      whileTap={{ scale: 0.98 }}
+      transition={{ type: "spring", stiffness: 300 }}
+      className="h-full"
+    >
+      <Card className="overflow-hidden h-full flex flex-col shadow-md hover:shadow-xl transition-shadow">
         <CardHeader className="p-0">
           <div className="relative w-full" style={{ paddingTop: '100%' }}>
             <Image
@@ -39,30 +44,31 @@ export default function ProductCard({ product }) {
             />
           </div>
         </CardHeader>
-        <CardContent className="p-4 flex-grow">
-          <CardTitle className="text-lg mb-2">{product.name}</CardTitle>
-          <p className="text-muted-foreground">
+        <CardContent className="p-3 sm:p-4 flex-grow">
+          <CardTitle className="text-base sm:text-lg mb-2 line-clamp-2">{product.name}</CardTitle>
+          <p className="text-sm sm:text-base font-semibold text-blue-600">
             {typeof product.price === 'number' ? `${product.price.toFixed(2)}$` : 'Prix non disponible'}
           </p>
         </CardContent>
-        <CardFooter className="p-4">
-          <Button className="          relative overflow-hidden transition-all duration-300 ease-out
-          transform hover:scale-105 hover:shadow-lg
-          bg-gradient-to-r from-blue-500 to-indigo-600
-          text-white font-semibold py-3 px-6 rounded-full
-          focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
-        w-full" onClick={addToCart} disabled={isAdding}>
+        <CardFooter className="p-3 sm:p-4 pt-0">
+          <Button 
+            className="w-full relative overflow-hidden transition-all duration-300 ease-out transform hover:scale-105 hover:shadow-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 sm:py-3 px-4 sm:px-6 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 text-sm sm:text-base" 
+            onClick={addToCart} 
+            disabled={isAdding}
+          >
             {isAdding ? (
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 0.5, repeat: Infinity, ease: "linear" }}
+                className="inline-block"
               >
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-1 sm:mr-2 h-4 w-4" />
               </motion.div>
             ) : (
-              <ShoppingCart className="mr-2 h-4 w-4" />
+              <ShoppingCart className="mr-1 sm:mr-2 h-4 w-4" />
             )}
-            {isAdding ? 'Ajouté!' : 'Ajouter au panier'}
+            <span className="hidden sm:inline">{isAdding ? 'Ajouté!' : 'Ajouter au panier'}</span>
+            <span className="sm:hidden">{isAdding ? 'Ajouté!' : 'Ajouter'}</span>
           </Button>
         </CardFooter>
       </Card>

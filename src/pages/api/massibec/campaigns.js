@@ -44,7 +44,8 @@ export default async function handler(req, res) {
               name: school.name,
               address: school.address,
               email: school.email,
-              telephone: school.telephone
+              telephone: school.telephone,
+              split: school.split
             }
           });
         });

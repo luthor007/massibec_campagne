@@ -122,33 +122,33 @@ export default function Cart({ id }) {
 
   return (
     <Card className="bg-white shadow-xl rounded-lg overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4">
-        <CardTitle className="text-xl flex items-center">
-          <ShoppingBag className="mr-2 h-5 w-5" />
+      <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 sm:p-4">
+        <CardTitle className="text-lg sm:text-xl flex items-center">
+          <ShoppingBag className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
           Votre Panier
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-4">
+      <CardContent className="p-3 sm:p-4">
 
         {/* New Discount Progress Bar and Info */}
-        <div className={`border-l-4 p-4 mb-8 rounded-r-lg shadow-md ${
+        <div className={`border-l-4 p-3 sm:p-4 mb-4 sm:mb-6 lg:mb-8 rounded-r-lg shadow-md ${
           !discountEnabled 
             ? 'bg-gray-100 border-gray-400' 
             : 'bg-blue-100 border-blue-500'
         }`}>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
             <div className="flex items-center">
-              <ShoppingBag className={`h-6 w-6 mr-2 ${
+              <ShoppingBag className={`h-5 w-5 sm:h-6 sm:w-6 mr-2 flex-shrink-0 ${
                 !discountEnabled ? 'text-gray-500' : 'text-blue-500'
               }`} />
-              <span className={`font-semibold ${
+              <span className={`font-semibold text-sm sm:text-base ${
                 !discountEnabled ? 'text-gray-700' : 'text-blue-800'
               }`}>
-                {cartItemCount} produit{cartItemCount !== 1 ? 's' : ''} dans votre panier
+                {cartItemCount} produit{cartItemCount !== 1 ? 's' : ''}
               </span>
             </div>
             <div className="flex items-center">
-              <span className={`font-semibold ${
+              <span className={`font-semibold text-sm sm:text-base ${
                 !discountEnabled ? 'text-gray-600' : 'text-green-700'
               }`}>
                 {currentDiscount}% de réduction
@@ -156,7 +156,7 @@ export default function Cart({ id }) {
             </div>
           </div>
           <Progress value={discountProgress} className="h-2 mb-2" />
-          <p className={`text-sm ${
+          <p className={`text-xs sm:text-sm ${
             !discountEnabled ? 'text-gray-600' : 'text-blue-700'
           }`}>
             {message}
@@ -174,44 +174,47 @@ export default function Cart({ id }) {
               Votre panier est vide.
             </motion.p>
           ) : (
-            <ul className="space-y-4">
+            <ul className="space-y-3 sm:space-y-4">
               {items.map((item) => (
                 <motion.li
                   key={item.id} // Ensure 'id' is unique
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="flex justify-between items-center bg-gray-50 p-3 rounded-lg"
+                  className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 p-3 rounded-lg gap-3"
                 >
-                  <div>
-                    <p className="font-medium text-gray-800">{item.name}</p>
-                    <p className="text-sm text-gray-600">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-800 text-sm sm:text-base">{item.name}</p>
+                    <p className="text-xs sm:text-sm text-gray-600">
                       {item.quantity} x {item.price ? item.price.toFixed(2) : '0.00'}$
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 self-end sm:self-auto">
                     <Button 
                       variant="outline" 
                       size="icon" 
                       onClick={() => updateQuantity(item.id, -1)}
                       disabled={item.quantity <= 1} // Disable if quantity is 1
+                      className="h-8 w-8 sm:h-10 sm:w-10"
                     >
-                      <Minus className="h-4 w-4" />
+                      <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
                     </Button>
-                    <span className="font-medium">{item.quantity}</span>
+                    <span className="font-medium text-sm sm:text-base min-w-[2rem] text-center">{item.quantity}</span>
                     <Button 
                       variant="outline" 
                       size="icon" 
                       onClick={() => updateQuantity(item.id, 1)}
+                      className="h-8 w-8 sm:h-10 sm:w-10"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                     </Button>
                     <Button 
                       variant="ghost" 
                       size="icon" 
                       onClick={() => removeItem(item.id)}
+                      className="h-8 w-8 sm:h-10 sm:w-10"
                     >
-                      <Trash2 className="h-4 w-4 text-red-500" />
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
                     </Button>
                   </div>
                 </motion.li>
@@ -221,23 +224,23 @@ export default function Cart({ id }) {
         </AnimatePresence>
       </CardContent>
       {items.length > 0 && (
-        <CardFooter className="bg-gray-50 p-4 flex-col space-y-4">
-          <div className="flex justify-between w-full text-lg">
+        <CardFooter className="bg-gray-50 p-3 sm:p-4 flex-col space-y-3 sm:space-y-4">
+          <div className="flex justify-between w-full text-base sm:text-lg">
             <span className="font-medium">Sous-total:</span>
             <span>{total.toFixed(2)}$</span>
           </div>
           {discount > 0 && (
-            <div className="flex justify-between w-full text-green-600">
+            <div className="flex justify-between w-full text-sm sm:text-base text-green-600">
               <span className="font-medium">Réduction ({discount * 100}%):</span>
               <span>-{(total * discount).toFixed(2)}$</span>
             </div>
           )}
-          <div className="flex justify-between w-full font-bold text-xl">
+          <div className="flex justify-between w-full font-bold text-lg sm:text-xl">
             <span>Total:</span>
             <span>{discountedTotal.toFixed(2)}$</span>
           </div>
           <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white" 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg" 
             onClick={handleCheckout}
           >
             Passer la commande

@@ -374,9 +374,9 @@ export default function MassibecCampaigns() {
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              <p>Étudiant: {campaign.profitSplit.studentBenefit}%</p>
-                              <p>Organisation: {campaign.profitSplit.organizationBenefit}%</p>
-                              <p>Tirage: {campaign.profitSplit.raffleBenefit}%</p>
+                              <p>Étudiant: {campaign.profitSplit?.studentBenefit || campaign.school?.split?.studentBenefit || 'N/A'}%</p>
+                              <p>Organisation: {campaign.profitSplit?.organizationBenefit || campaign.school?.split?.organizationBenefit || 'N/A'}%</p>
+                              <p>Tirage: {campaign.profitSplit?.raffleBenefit || campaign.school?.split?.raffleBenefit || 'N/A'}%</p>
                             </div>
                           </TableCell>
                           <TableCell>
