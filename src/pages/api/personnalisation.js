@@ -58,6 +58,7 @@ export default async function handler(req, res) {
           description: store.description,
           colorPalette: store.colorPalette,
           autoDeposit: store.autoDeposit,
+          discountEnabled: store.discountEnabled,
         });
 
       } catch (error) {

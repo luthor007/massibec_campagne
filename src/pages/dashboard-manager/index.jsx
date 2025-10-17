@@ -53,6 +53,7 @@ import {
   Calendar,
   Download,
   LogOut,
+  Lock,
   Mail,
   Search,
   Settings,
@@ -1038,16 +1039,25 @@ const handleCopy = (code) => {
                             <p><span className="font-medium">Tirage:</span> {pendingCampaign.profitSplit?.raffleBenefit}%</p>
                           </div>
                         </div>
-                        <Button 
-                          onClick={() => {
-                            setEditingCampaign(pendingCampaign);
-                            setShowEditProfitModal(true);
-                          }}
-                          className="bg-yellow-600 hover:bg-yellow-700 text-white"
-                        >
-                          <Settings className="h-4 w-4 mr-2" />
-                          Modifier la répartition
-                        </Button>
+                        {pendingCampaign.profitSplitLocked ? (
+                          <div className="p-3 bg-gray-100 rounded-lg border border-gray-300">
+                            <p className="text-sm text-gray-600 flex items-center">
+                              <Lock className="h-4 w-4 mr-2" />
+                              Verrouillé par le fournisseur
+                            </p>
+                          </div>
+                        ) : (
+                          <Button 
+                            onClick={() => {
+                              setEditingCampaign(pendingCampaign);
+                              setShowEditProfitModal(true);
+                            }}
+                            className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                          >
+                            <Settings className="h-4 w-4 mr-2" />
+                            Modifier la répartition
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div className="mt-4 p-3 bg-yellow-100 rounded-lg">
@@ -2053,42 +2063,88 @@ const handleCopy = (code) => {
               e.preventDefault();
               handleUpdateCampaign(e);
             }} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="editStartDate">Date de début</Label>
-                  <Input
-                    type="date"
-                    id="editStartDate"
-                    name="startDate"
-                    defaultValue={editingCampaign.startDate}
-                    required
-                    className="mt-1"
-                  />
+              {editingCampaign.datesLocked ? (
+                <div className="p-4 bg-gray-100 rounded-lg border border-gray-300">
+                  <p className="text-sm text-gray-600 flex items-center mb-3">
+                    <Lock className="h-4 w-4 mr-2" />
+                    Les dates sont verrouillées par le fournisseur
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="editStartDate">Date de début</Label>
+                      <Input
+                        type="date"
+                        id="editStartDate"
+                        name="startDate"
+                        defaultValue={editingCampaign.startDate}
+                        disabled
+                        className="mt-1 bg-gray-50"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="editEndDate">Date de fin</Label>
+                      <Input
+                        type="date"
+                        id="editEndDate"
+                        name="endDate"
+                        defaultValue={editingCampaign.endDate}
+                        disabled
+                        className="mt-1 bg-gray-50"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <Label htmlFor="editDeliveryDate">Date de livraison</Label>
+                    <Input
+                      type="date"
+                      id="editDeliveryDate"
+                      name="deliveryDate"
+                      defaultValue={editingCampaign.deliveryDate}
+                      disabled
+                      className="mt-1 bg-gray-50"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="editEndDate">Date de fin</Label>
-                  <Input
-                    type="date"
-                    id="editEndDate"
-                    name="endDate"
-                    defaultValue={editingCampaign.endDate}
-                    required
-                    className="mt-1"
-                  />
-                </div>
-              </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="editStartDate">Date de début</Label>
+                      <Input
+                        type="date"
+                        id="editStartDate"
+                        name="startDate"
+                        defaultValue={editingCampaign.startDate}
+                        required
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="editEndDate">Date de fin</Label>
+                      <Input
+                        type="date"
+                        id="editEndDate"
+                        name="endDate"
+                        defaultValue={editingCampaign.endDate}
+                        required
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <Label htmlFor="editDeliveryDate">Date de livraison</Label>
-                <Input
-                  type="date"
-                  id="editDeliveryDate"
-                  name="deliveryDate"
-                  defaultValue={editingCampaign.deliveryDate}
-                  required
-                  className="mt-1"
-                />
-              </div>
+                  <div>
+                    <Label htmlFor="editDeliveryDate">Date de livraison</Label>
+                    <Input
+                      type="date"
+                      id="editDeliveryDate"
+                      name="deliveryDate"
+                      defaultValue={editingCampaign.deliveryDate}
+                      required
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <Label htmlFor="editFinancialGoal">Objectif financier ($)</Label>
@@ -2102,13 +2158,27 @@ const handleCopy = (code) => {
                 />
               </div>
 
-              <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Percent className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
+              {editingCampaign.profitSplitLocked ? (
+                <div className="p-4 bg-gray-100 rounded-lg border border-gray-300">
+                  <p className="text-sm text-gray-600 flex items-center mb-3">
+                    <Lock className="h-4 w-4 mr-2" />
+                    La répartition des profits est verrouillée par le fournisseur
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="font-medium">Type:</span> {editingCampaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}</p>
+                    <p><span className="font-medium">Étudiant:</span> {editingCampaign.profitSplit?.studentBenefit}%</p>
+                    <p><span className="font-medium">Organisation:</span> {editingCampaign.profitSplit?.organizationBenefit}%</p>
+                    <p><span className="font-medium">Tirage:</span> {editingCampaign.profitSplit?.raffleBenefit}%</p>
+                  </div>
                 </div>
-                
-                <div className="space-y-4">
+              ) : (
+                <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <Percent className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
                   <div>
                     <Label htmlFor="editProfitSplitType">Type de répartition</Label>
                     <Select 
@@ -2178,6 +2248,7 @@ const handleCopy = (code) => {
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="flex justify-end space-x-3 pt-4">
                 <Button

@@ -33,6 +33,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ 
         owner: exampleOwner, 
         autoDeposit: exampleStore.autoDeposit, 
+        discountEnabled: exampleStore.discountEnabled,
         name: exampleStore.name, 
         description: exampleStore.description, 
         ownerId: exampleStore.user, 
@@ -60,7 +61,7 @@ export default async function handler(req, res) {
 
 
 
-    res.status(200).json({ owner: owner, autoDeposit: store.autoDeposit, name: store.name, description: store.description, ownerId: store.user, ownerEmail: owner.email, ownerName: owner.name, ownerSchool: owner.school });
+    res.status(200).json({ owner: owner, autoDeposit: store.autoDeposit, discountEnabled: store.discountEnabled, name: store.name, description: store.description, ownerId: store.user, ownerEmail: owner.email, ownerName: owner.name, ownerSchool: owner.school });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la récupération de la boutique' });
   }

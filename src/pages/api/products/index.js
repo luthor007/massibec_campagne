@@ -35,21 +35,48 @@ export default async function handler(req, res) {
         .skip((pageNumber - 1) * limitNumber)
         .limit(limitNumber);
 
+      // Get school and active campaign for custom pricing
+      let school = null;
+      let activeCampaign = null;
+      if (schoolId && mongoose.Types.ObjectId.isValid(schoolId)) {
+        school = await School.findById(schoolId);
+        if (school) {
+          activeCampaign = school.campaigns?.find(campaign => campaign.isActive);
+        }
+      }
+
       // Get total number of products for pagination
       const total = await Product.countDocuments(query);
 
-      // Sanitize output
-      const sanitizedProducts = products.map((product) => ({
-        id: product._id.toString(),
-        name: sanitizeHtml(product.name),
-        description: sanitizeHtml(product.description),
-        price: product.price,
-        cost: product.cost,
-        image: sanitizeHtml(product.image),
-        school: product.school,
-        isDefault: product.isDefault,
-        productId: product.productId,
-      }));
+      // Sanitize output and apply custom pricing
+      const sanitizedProducts = products.map((product) => {
+        let finalPrice = product.price;
+        
+        // Check for custom pricing in active campaign
+        if (activeCampaign && activeCampaign.customPrices) {
+          const customPrice = activeCampaign.customPrices.find(
+            cp => cp.productId && cp.productId.toString() === product._id.toString()
+          );
+          if (customPrice) {
+            finalPrice = customPrice.price;
+          }
+        }
+
+        return {
+          id: product._id.toString(),
+          name: sanitizeHtml(product.name),
+          description: sanitizeHtml(product.description),
+          price: finalPrice,
+          originalPrice: product.price, // Keep original for reference
+          cost: product.cost,
+          image: sanitizeHtml(product.image),
+          school: product.school,
+          isDefault: product.isDefault,
+          productId: product.productId,
+          hasCustomPrice: activeCampaign && activeCampaign.customPrices && 
+            activeCampaign.customPrices.some(cp => cp.productId && cp.productId.toString() === product._id.toString())
+        };
+      });
 
       res.status(200).json({
         total,

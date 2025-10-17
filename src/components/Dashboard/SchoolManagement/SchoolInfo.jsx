@@ -24,7 +24,7 @@ const formatDisplayDate = (value) => {
   if (Number.isNaN(date.getTime())) {
     return 'N/A';
   }
-  return date.toLocaleDateString();
+  return date.toLocaleDateString('fr-CA');
 };
 
 const createTempId = () => {
@@ -93,6 +93,11 @@ const applyActiveCampaign = (campaigns, activeId) => campaigns.map((campaign) =>
 const SchoolInfo = ({ school }) => {
   const { toast } = useToast();
   const [currentSchool, setCurrentSchool] = useState(school);
+  
+  // Update currentSchool when school prop changes
+  useEffect(() => {
+    setCurrentSchool(school);
+  }, [school]);
   const initialCampaigns = useMemo(() => normalizeCampaigns(school), [school]);
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [activeCampaignId, setActiveCampaignId] = useState(() => {
@@ -363,9 +368,9 @@ const SchoolInfo = ({ school }) => {
   return (
     <div className="p-6 bg-white shadow rounded-md">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold">School Information</h3>
+        <h3 className="text-xl font-semibold">Informations de l'école</h3>
         <Button variant="outline" onClick={() => setIsEditing((value) => !value)}>
-          {isEditing ? 'Cancel' : 'Edit'}
+          {isEditing ? 'Annuler' : 'Modifier'}
         </Button>
       </div>
 
@@ -373,7 +378,7 @@ const SchoolInfo = ({ school }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="name">School Name</Label>
+              <Label htmlFor="name">Nom de l'école</Label>
               <Input
                 id="name"
                 name="name"
@@ -396,7 +401,7 @@ const SchoolInfo = ({ school }) => {
             </div>
 
             <div>
-              <Label htmlFor="telephone">Telephone</Label>
+              <Label htmlFor="telephone">Téléphone</Label>
               <Input
                 id="telephone"
                 name="telephone"
@@ -407,7 +412,7 @@ const SchoolInfo = ({ school }) => {
             </div>
 
             <div>
-              <Label htmlFor="address">Address</Label>
+              <Label htmlFor="address">Adresse</Label>
               <Textarea
                 id="address"
                 name="address"
@@ -418,7 +423,7 @@ const SchoolInfo = ({ school }) => {
             </div>
 
             <div>
-              <Label htmlFor="objectifFinancier">Financial Objective</Label>
+              <Label htmlFor="objectifFinancier">Objectif financier</Label>
               <Input
                 id="objectifFinancier"
                 name="objectifFinancier"
@@ -429,7 +434,7 @@ const SchoolInfo = ({ school }) => {
             </div>
 
             <div>
-              <Label htmlFor="accumba">Accumba Number</Label>
+              <Label htmlFor="accumba">Numéro Accumba</Label>
               <Input
                 id="accumba"
                 name="accumba"
@@ -439,7 +444,7 @@ const SchoolInfo = ({ school }) => {
             </div>
 
             <div>
-              <Label htmlFor="expNum">Exp Number</Label>
+              <Label htmlFor="expNum">Numéro Exp</Label>
               <Input
                 id="expNum"
                 name="expNum"
@@ -459,12 +464,12 @@ const SchoolInfo = ({ school }) => {
                   }));
                 }}
               />
-              <Label htmlFor="isBonus">Enable Bonus System</Label>
+              <Label htmlFor="isBonus">Activer le système de bonus</Label>
             </div>
           </div>
 
           <div>
-            <h4 className="font-semibold">Campaigns</h4>
+            <h4 className="font-semibold">Campagnes</h4>
             <p className="text-sm text-muted-foreground mb-2">
               Gérez les périodes de campagne de l’école et choisissez laquelle est active.
             </p>
@@ -484,7 +489,7 @@ const SchoolInfo = ({ school }) => {
                           checked={campaign.id === activeCampaignId}
                           onChange={() => handleSetActiveCampaign(campaign.id)}
                         />
-                        <span>Active</span>
+                        <span>Actif</span>
                       </label>
                       <Button
                         type="button"
@@ -500,7 +505,7 @@ const SchoolInfo = ({ school }) => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <Label>Campaign Number</Label>
+                        <Label>Numéro de campagne</Label>
                       <Input
                         type="number"
                         min={1}
@@ -512,7 +517,7 @@ const SchoolInfo = ({ school }) => {
                       />
                     </div>
                     <div>
-                      <Label>Start Date</Label>
+                        <Label>Date de début</Label>
                       <Input
                         type="date"
                         value={campaign.startDate}
@@ -523,7 +528,7 @@ const SchoolInfo = ({ school }) => {
                       />
                     </div>
                     <div>
-                      <Label>End Date</Label>
+                        <Label>Date de fin</Label>
                       <Input
                         type="date"
                         value={campaign.endDate}
@@ -534,7 +539,7 @@ const SchoolInfo = ({ school }) => {
                       />
                     </div>
                     <div>
-                      <Label>Delivery Date</Label>
+                        <Label>Date de livraison</Label>
                       <Input
                         type="date"
                         value={campaign.deliveryDate}
@@ -565,10 +570,10 @@ const SchoolInfo = ({ school }) => {
           </div>
 
           <div>
-            <h4 className="font-semibold">Split Configuration (%)</h4>
+            <h4 className="font-semibold">Configuration de répartition (%)</h4>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
               <div>
-                <Label htmlFor="studentBenefit">Student Benefit</Label>
+                <Label htmlFor="studentBenefit">Bénéfice étudiant</Label>
                 <Input
                   id="studentBenefit"
                   name="studentBenefit"
@@ -581,7 +586,7 @@ const SchoolInfo = ({ school }) => {
                 />
               </div>
               <div>
-                <Label htmlFor="organizationBenefit">Organization Benefit</Label>
+                <Label htmlFor="organizationBenefit">Bénéfice organisation</Label>
                 <Input
                   id="organizationBenefit"
                   name="organizationBenefit"
@@ -594,7 +599,7 @@ const SchoolInfo = ({ school }) => {
                 />
               </div>
               <div>
-                <Label htmlFor="raffleBenefit">Raffle Benefit</Label>
+                <Label htmlFor="raffleBenefit">Bénéfice tirage</Label>
                 <Input
                   id="raffleBenefit"
                   name="raffleBenefit"
@@ -611,10 +616,10 @@ const SchoolInfo = ({ school }) => {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <h4 className="font-semibold">Custom Fields</h4>
+              <h4 className="font-semibold">Champs personnalisés</h4>
               <div className="flex gap-2">
                 <Input
-                  placeholder="New field name"
+                  placeholder="Nom du nouveau champ"
                   value={newFieldName}
                   onChange={(event) => setNewFieldName(event.target.value)}
                   className="w-48"
@@ -658,16 +663,16 @@ const SchoolInfo = ({ school }) => {
             </div>
           </div>
 
-          <Button type="submit">Save Changes</Button>
+          <Button type="submit">Sauvegarder les modifications</Button>
         </form>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h4 className="font-semibold">Basic Information</h4>
-              <p><strong>Name:</strong> {currentSchool.name}</p>
+              <h4 className="font-semibold">Informations de base</h4>
+              <p><strong>Nom:</strong> {currentSchool.name}</p>
               <div className="flex items-center space-x-2">
-                <p><strong>School Code:</strong></p>
+                <p><strong>Code de l'école:</strong></p>
                 <span className="font-mono bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">{currentSchool.code}</span>
                 <Button
                   variant="ghost"
@@ -678,37 +683,37 @@ const SchoolInfo = ({ school }) => {
                   <Copy className="h-3 w-3 text-blue-600" />
                 </Button>
               </div>
-              <p><strong>Email:</strong> {currentSchool.email}</p>
-              <p><strong>Telephone:</strong> {currentSchool.telephone}</p>
-              <p><strong>Address:</strong> {currentSchool.address}</p>
+              <p><strong>Courriel:</strong> {currentSchool.email}</p>
+              <p><strong>Téléphone:</strong> {currentSchool.telephone}</p>
+              <p><strong>Adresse:</strong> {currentSchool.address}</p>
             </div>
 
             <div>
-              <h4 className="font-semibold">Campaign Details</h4>
-              <p><strong>Campaign Number:</strong> {currentSchool.currentCampaignNumber ?? 'N/A'}</p>
-              <p><strong>Campaign Start:</strong> {formatDisplayDate(currentSchool.debutCampagne)}</p>
-              <p><strong>Campaign End:</strong> {formatDisplayDate(currentSchool.finCampagne)}</p>
-              <p><strong>Delivery Date:</strong> {formatDisplayDate(currentSchool.dateDeLivraison)}</p>
+              <h4 className="font-semibold">Détails de la Campagne</h4>
+              <p><strong>Numéro de campagne:</strong> {currentSchool.currentCampaignNumber ?? 'N/A'}</p>
+              <p><strong>Début de campagne:</strong> {formatDisplayDate(currentSchool.debutCampagne)}</p>
+              <p><strong>Fin de campagne:</strong> {formatDisplayDate(currentSchool.finCampagne)}</p>
+              <p><strong>Date de livraison:</strong> {formatDisplayDate(currentSchool.dateDeLivraison)}</p>
             </div>
 
             <div>
-              <h4 className="font-semibold">EDI Information</h4>
-              <p><strong>Accumba Number:</strong> {currentSchool.accumba || 'Not set'}</p>
-              <p><strong>Exp Number:</strong> {currentSchool.expNum || 'Not set'}</p>
-              <p><strong>Bonus System:</strong> {currentSchool.isBonus ? 'Enabled' : 'Disabled'}</p>
+              <h4 className="font-semibold">Informations EDI</h4>
+              <p><strong>Numéro Accumba:</strong> {currentSchool.accumba || 'Non défini'}</p>
+              <p><strong>Numéro Exp:</strong> {currentSchool.expNum || 'Non défini'}</p>
+              <p><strong>Système de bonus:</strong> {currentSchool.isBonus ? 'Activé' : 'Désactivé'}</p>
             </div>
 
             <div>
-              <h4 className="font-semibold">Split Configuration (%)</h4>
-              <p><strong>Student:</strong> {currentSchool.split?.studentBenefit ?? 'N/A'}%</p>
-              <p><strong>Organization:</strong> {currentSchool.split?.organizationBenefit ?? 'N/A'}%</p>
-              <p><strong>Raffle:</strong> {currentSchool.split?.raffleBenefit ?? 'N/A'}%</p>
+              <h4 className="font-semibold">Configuration de répartition (%)</h4>
+              <p><strong>Étudiant:</strong> {currentSchool.split?.studentBenefit ?? 'N/A'}%</p>
+              <p><strong>Organisation:</strong> {currentSchool.split?.organizationBenefit ?? 'N/A'}%</p>
+              <p><strong>Tirage:</strong> {currentSchool.split?.raffleBenefit ?? 'N/A'}%</p>
             </div>
           </div>
 
           {currentSchool.campaigns?.length > 1 && (
             <div>
-              <h4 className="font-semibold">Campaign History</h4>
+              <h4 className="font-semibold">Historique des campagnes</h4>
               <div className="space-y-2">
                 {currentSchool.campaigns
                   .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
@@ -719,7 +724,7 @@ const SchoolInfo = ({ school }) => {
                       <span><strong>Début :</strong> {formatDisplayDate(campaign.startDate)}</span>
                       <span><strong>Fin :</strong> {formatDisplayDate(campaign.endDate)}</span>
                       <span><strong>Livraison :</strong> {formatDisplayDate(campaign.deliveryDate)}</span>
-                      {campaign.isActive && <span className="font-semibold">(Active)</span>}
+                      {campaign.isActive && <span className="font-semibold">(Actif)</span>}
                     </div>
                   ))}
               </div>
@@ -728,7 +733,7 @@ const SchoolInfo = ({ school }) => {
 
           {Object.keys(currentSchool.customFields || {}).length > 0 && (
             <div>
-              <h4 className="font-semibold">Custom Fields</h4>
+              <h4 className="font-semibold">Champs personnalisés</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {Object.entries(currentSchool.customFields).map(([key, value]) => (
                   <div key={key}>

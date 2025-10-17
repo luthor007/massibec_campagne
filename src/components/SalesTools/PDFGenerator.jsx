@@ -13,12 +13,32 @@ export default function PDFGenerator({ storeInfo }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [customMessage, setCustomMessage] = useState('Bonjour! Je participe a une campagne de financement pour soutenir mon projet.\n\nChaque commande compte et fait une vraie difference. Merci de votre soutien et de votre générosité!');
   const [customName, setCustomName] = useState('');
+  const [discountEnabled, setDiscountEnabled] = useState(true);
 
   useEffect(() => {
     if (storeInfo?.name) {
       setCustomName(storeInfo.name);
     }
   }, [storeInfo]);
+
+  // Fetch store data to get discount setting
+  useEffect(() => {
+    const fetchStoreData = async () => {
+      if (storeInfo?.storeId) {
+        try {
+          const response = await fetch(`/api/stores/${storeInfo.storeId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setDiscountEnabled(data.discountEnabled !== false);
+          }
+        } catch (error) {
+          console.error('Error fetching store data for PDF:', error);
+        }
+      }
+    };
+
+    fetchStoreData();
+  }, [storeInfo?.storeId]);
 
   const loadImage = (src) => {
     return new Promise((resolve, reject) => {
@@ -279,7 +299,14 @@ export default function PDFGenerator({ storeInfo }) {
         }
       });
       
-
+      // Add discount message at bottom (only if enabled)
+      if (discountEnabled) {
+        yPos += 20;
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(60, 60, 60);
+        pdf.text('💡 Réduction automatique: 5% dès 6 produits commandés!', pageWidth / 2, yPos, { align: 'center' });
+      }
 
       // Save PDF with mobile-friendly method
       const fileName = `affiche-${storeInfo.name || 'boutique'}.pdf`;

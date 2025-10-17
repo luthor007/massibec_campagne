@@ -76,7 +76,7 @@ export default function PersonnalisationForm() {
     fetchUserAndDate()
   }, [])
 
-  // Update description when delivery date is available
+  // Update description when delivery date is available (only if no custom description exists)
   useEffect(() => {
     if (dateDeLivraison && !formData.description) {
       const formatDate = (dateString) => {
@@ -97,6 +97,14 @@ export default function PersonnalisationForm() {
       }))
     }
   }, [dateDeLivraison, formData.description])
+
+  // Helper function to get discount suggestion
+  const getDiscountSuggestion = () => {
+    if (formData.discountEnabled) {
+      return "💡 Suggestion: Vous pourriez ajouter 'Économisez plus en achetant plus : 5% de rabais dès 6 produits !' à votre description pour informer vos clients de la réduction.";
+    }
+    return "";
+  }
   
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -188,7 +196,7 @@ const EmailExample = () => {
       <h2 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Confirmation de votre commande - Commande #{orderId}</h2>
       
       <p>Merci <strong>{firstName}</strong> pour votre commande.</p>
-      <p>La livraison se fera à l'école le <strong>{deliveryDate}</strong> et les produits vous seront donc acheminés tel que nous avons personnellement convenu.</p>
+      <p>La livraison se fera le <strong>{deliveryDate}</strong> et les produits vous seront donc acheminés tel que nous avons personnellement convenu.</p>
 
       <h3 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Transfert Interac</h3>
       <p>Pour finaliser votre commande, merci d'effectuer le transfert Interac à :</p>
@@ -291,6 +299,11 @@ const EmailExample = () => {
             required
             rows={4}
           />
+          {getDiscountSuggestion() && (
+            <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800">{getDiscountSuggestion()}</p>
+            </div>
+          )}
         </div>
         {/* Tip for Automatic Deposits */}
         <div className="mt-4 p-4 border border-blue-300 rounded-md bg-blue-50">

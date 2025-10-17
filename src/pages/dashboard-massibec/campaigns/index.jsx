@@ -52,7 +52,9 @@ import {
   Check,
   X,
   Percent,
-  Edit
+  Edit,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 export default function MassibecCampaigns() {
@@ -66,6 +68,7 @@ export default function MassibecCampaigns() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
+  const [isTogglingLock, setIsTogglingLock] = useState(false);
 
   // Fetch pending campaigns
   useEffect(() => {
@@ -121,6 +124,30 @@ export default function MassibecCampaigns() {
       });
 
       if (response.ok) {
+        // Handle custom pricing if set
+        const customPriceAll = formData.get('customPriceAll');
+        if (customPriceAll && parseFloat(customPriceAll) > 0) {
+          // Fetch all products for this school to set uniform pricing
+          const productsResponse = await fetch(`/api/products?schoolId=${editingCampaign.school._id}`);
+          if (productsResponse.ok) {
+            const productsData = await productsResponse.json();
+            const products = productsData.products || productsData;
+            
+            const customPrices = products.map(product => ({
+              productId: product.id,
+              price: parseFloat(customPriceAll)
+            }));
+
+            await fetch(`/api/campaigns/${editingCampaign._id}/custom-prices`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ customPrices }),
+            });
+          }
+        }
+
         alert('Modifications proposées avec succès!');
         setShowEditModal(false);
         // Refresh campaigns
@@ -199,6 +226,35 @@ export default function MassibecCampaigns() {
       alert('Une erreur est survenue');
     } finally {
       setIsRejecting(false);
+    }
+  };
+
+  // Handle Lock Toggle
+  const handleToggleLock = async (campaignId, lockType) => {
+    setIsTogglingLock(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/toggle-${lockType}-lock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        // Refresh campaigns list
+        const updatedResponse = await fetch('/api/massibec/campaigns');
+        if (updatedResponse.ok) {
+          const data = await updatedResponse.json();
+          setCampaigns(data);
+        }
+      } else {
+        alert('Erreur lors de la modification du verrouillage');
+      }
+    } catch (error) {
+      console.error('Error toggling lock:', error);
+      alert('Une erreur est survenue');
+    } finally {
+      setIsTogglingLock(false);
     }
   };
 
@@ -331,6 +387,7 @@ export default function MassibecCampaigns() {
                         <TableHead>Dates</TableHead>
                         <TableHead>Objectif</TableHead>
                         <TableHead>Répartition</TableHead>
+                        <TableHead>Verrouillages</TableHead>
                         <TableHead>Statut</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -377,6 +434,30 @@ export default function MassibecCampaigns() {
                               <p>Étudiant: {campaign.profitSplit?.studentBenefit || campaign.school?.split?.studentBenefit || 'N/A'}%</p>
                               <p>Organisation: {campaign.profitSplit?.organizationBenefit || campaign.school?.split?.organizationBenefit || 'N/A'}%</p>
                               <p>Tirage: {campaign.profitSplit?.raffleBenefit || campaign.school?.split?.raffleBenefit || 'N/A'}%</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col space-y-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleLock(campaign._id, 'profit')}
+                                disabled={isTogglingLock}
+                                className={`text-xs ${campaign.profitSplitLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
+                              >
+                                {campaign.profitSplitLocked ? <Lock className="h-3 w-3 mr-1" /> : <Unlock className="h-3 w-3 mr-1" />}
+                                Profits
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleToggleLock(campaign._id, 'dates')}
+                                disabled={isTogglingLock}
+                                className={`text-xs ${campaign.datesLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
+                              >
+                                {campaign.datesLocked ? <Lock className="h-3 w-3 mr-1" /> : <Unlock className="h-3 w-3 mr-1" />}
+                                Dates
+                              </Button>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -655,6 +736,33 @@ export default function MassibecCampaigns() {
                         className="mt-1"
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 p-6 bg-gradient-to-br from-green-50 to-blue-50 rounded-xl border border-green-200">
+                <div className="flex items-center space-x-2 mb-4">
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                  <h3 className="text-lg font-semibold text-green-900">Prix personnalisés</h3>
+                </div>
+                
+                <div className="text-sm text-green-700 mb-4">
+                  <p>Définissez des prix spécifiques pour cette campagne (ex: 10$ pour tous les produits).</p>
+                  <p>Laissez vide pour utiliser les prix par défaut.</p>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <Label htmlFor="customPriceAll">Prix uniforme pour tous les produits ($)</Label>
+                    <Input
+                      type="number"
+                      id="customPriceAll"
+                      name="customPriceAll"
+                      placeholder="Ex: 10.00"
+                      min="0"
+                      step="0.01"
+                      className="mt-1"
+                    />
                   </div>
                 </div>
               </div>

@@ -7,6 +7,7 @@ import SchoolSelector from '../../../components/Dashboard/SchoolManagement/Schoo
 import SchoolInfo from '../../../components/Dashboard/SchoolManagement/SchoolInfo';
 import SchoolOrders from '../../../components/Dashboard/SchoolManagement/SchoolOrders';
 import SchoolSalesData from '../../../components/Dashboard/SchoolManagement/SchoolSalesData';
+import CampaignManagement from '../../../components/Dashboard/SchoolManagement/CampaignManagement';
 import {
   Card,
   CardContent,
@@ -44,10 +45,6 @@ import { Label } from "@/components/ui/label";
 const SchoolsPage = () => {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const [selectedSchoolId, setSelectedSchoolId] = useState(null);
-  const [schoolData, setSchoolData] = useState(null);
-  const [loadingSchool, setLoadingSchool] = useState(false);
-  const [errorSchool, setErrorSchool] = useState(null);
   const [allSchools, setAllSchools] = useState([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -56,6 +53,8 @@ const SchoolsPage = () => {
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [selectedSchoolForAction, setSelectedSchoolForAction] = useState(null);
   const [actionReason, setActionReason] = useState('');
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [expandedSchoolData, setExpandedSchoolData] = useState({});
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -74,11 +73,6 @@ const SchoolsPage = () => {
     fetchAllSchools();
   }, [session, status, router]);
 
-  useEffect(() => {
-    if (selectedSchoolId) {
-      fetchSchoolData(selectedSchoolId);
-    }
-  }, [selectedSchoolId]);
 
   const fetchAllSchools = async () => {
     setLoadingSchools(true);
@@ -96,24 +90,6 @@ const SchoolsPage = () => {
     }
   };
 
-  const fetchSchoolData = async (schoolId) => {
-    setLoadingSchool(true);
-    setErrorSchool(null);
-    setSchoolData(null); // Clear previous school data immediately
-    try {
-      const response = await fetch(`/api/schools/${schoolId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch school data.');
-      }
-      const data = await response.json();
-      setSchoolData(data);
-    } catch (error) {
-      setErrorSchool(error.message);
-      setSchoolData(null); // Clear data on error
-    } finally {
-      setLoadingSchool(false);
-    }
-  };
 
   const getStatusBadge = (school) => {
     const status = school.status || (school.approved ? 'approved' : 'pending');
@@ -280,6 +256,39 @@ const SchoolsPage = () => {
     }
   };
 
+  const toggleRowExpansion = async (schoolId) => {
+    const newExpandedRows = new Set(expandedRows);
+    
+    if (newExpandedRows.has(schoolId)) {
+      // Collapse row
+      newExpandedRows.delete(schoolId);
+      setExpandedSchoolData(prev => {
+        const newData = { ...prev };
+        delete newData[schoolId];
+        return newData;
+      });
+    } else {
+      // Expand row and fetch data if not already loaded
+      newExpandedRows.add(schoolId);
+      if (!expandedSchoolData[schoolId]) {
+        try {
+          const response = await fetch(`/api/schools/${schoolId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setExpandedSchoolData(prev => ({
+              ...prev,
+              [schoolId]: data
+            }));
+          }
+        } catch (error) {
+          console.error('Error fetching school data:', error);
+        }
+      }
+    }
+    
+    setExpandedRows(newExpandedRows);
+  };
+
   // Show loading state while checking authentication
   if (status === 'loading') {
     return (
@@ -436,133 +445,186 @@ const SchoolsPage = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredSchools.map((school) => (
-                      <TableRow key={school._id}>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="font-semibold">{school.name}</div>
-                            <div className="flex items-center text-sm text-gray-500">
-                              <MapPin className="h-3 w-3 mr-1" />
-                              {school.address}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="flex items-center text-sm">
-                              <Mail className="h-3 w-3 mr-1" />
-                              {school.email}
-                            </div>
-                            <div className="flex items-center text-sm">
-                              <Phone className="h-3 w-3 mr-1" />
-                              {school.telephone}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="text-sm">
-                              <span className="font-medium">Campagne #{school.currentCampaignNumber || 1}</span>
-                            </div>
-                            {school.campaigns && school.campaigns.length > 0 && (
-                              <div className="text-xs text-gray-500">
-                                {school.campaigns.filter(c => c.status === 'pending_approval').length} en attente
+                      <React.Fragment key={school._id}>
+                        <TableRow>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="font-semibold">{school.name}</div>
+                              <div className="flex items-center text-sm text-gray-500">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {school.address}
                               </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            {getStatusIcon(school)}
-                            {getStatusBadge(school)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2 flex-wrap">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedSchoolId(school._id)}
-                            >
-                              Voir détails
-                            </Button>
-                            
-                            {/* Actions basées sur le statut */}
-                            {(() => {
-                              const status = school.status || (school.approved ? 'approved' : 'pending');
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="flex items-center text-sm">
+                                <Mail className="h-3 w-3 mr-1" />
+                                {school.email}
+                              </div>
+                              <div className="flex items-center text-sm">
+                                <Phone className="h-3 w-3 mr-1" />
+                                {school.telephone}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="text-sm">
+                                <span className="font-medium">Campagne #{school.currentCampaignNumber || 1}</span>
+                              </div>
+                              {school.campaigns && school.campaigns.length > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  {school.campaigns.filter(c => c.status === 'pending_approval').length} en attente
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              {getStatusIcon(school)}
+                              {getStatusBadge(school)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2 flex-wrap">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                onClick={() => toggleRowExpansion(school._id)}
+                              >
+                                {expandedRows.has(school._id) ? 'Masquer détails' : 'Voir détails'}
+                              </Button>
                               
-                              switch (status) {
-                                case 'pending':
-                                  return (
-                                    <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-green-600 border-green-300 hover:bg-green-50"
-                                        onClick={() => handleApproveSchool(school._id)}
-                                      >
-                                        Approuver
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-red-600 border-red-300 hover:bg-red-50"
-                                        onClick={() => {
-                                          setSelectedSchoolForAction(school);
-                                          setShowRejectModal(true);
-                                        }}
-                                      >
-                                        Rejeter
-                                      </Button>
-                                    </>
-                                  );
+                              {/* Actions basées sur le statut */}
+                              {(() => {
+                                const status = school.status || (school.approved ? 'approved' : 'pending');
                                 
-                                case 'approved':
-                                  return (
-                                    <>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="text-gray-600 border-gray-300 hover:bg-gray-50"
-                                        onClick={() => {
-                                          setSelectedSchoolForAction(school);
-                                          setShowDeactivateModal(true);
-                                        }}
-                                      >
-                                        Désactiver
-                                      </Button>
-                                      {school.campaigns?.some(c => c.status === 'pending_approval') && (
+                                switch (status) {
+                                  case 'pending':
+                                    return (
+                                      <>
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                                          onClick={() => handleManageCampaigns(school._id)}
+                                          className="text-green-600 border-green-300 hover:bg-green-50 hover:border-green-400 transition-colors"
+                                          onClick={() => handleApproveSchool(school._id)}
                                         >
-                                          Gérer campagnes
+                                          Approuver
                                         </Button>
-                                      )}
-                                    </>
-                                  );
-                                
-                                case 'rejected':
-                                case 'deactivated':
-                                  return (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-green-600 border-green-300 hover:bg-green-50"
-                                      onClick={() => handleReactivateSchool(school._id)}
-                                    >
-                                      Réactiver
-                                    </Button>
-                                  );
-                                
-                                default:
-                                  return null;
-                              }
-                            })()}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 transition-colors"
+                                          onClick={() => {
+                                            setSelectedSchoolForAction(school);
+                                            setShowRejectModal(true);
+                                          }}
+                                        >
+                                          Rejeter
+                                        </Button>
+                                      </>
+                                    );
+                                  
+                                  case 'approved':
+                                    return (
+                                      <>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-gray-600 border-gray-300 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                                          onClick={() => {
+                                            setSelectedSchoolForAction(school);
+                                            setShowDeactivateModal(true);
+                                          }}
+                                        >
+                                          Désactiver
+                                        </Button>
+                                        {school.campaigns?.some(c => c.status === 'pending_approval') && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-blue-600 border-blue-300 hover:bg-blue-50 hover:border-blue-400 transition-colors"
+                                            onClick={() => handleManageCampaigns(school._id)}
+                                          >
+                                            Gérer campagnes
+                                          </Button>
+                                        )}
+                                      </>
+                                    );
+                                  
+                                  case 'rejected':
+                                  case 'deactivated':
+                                    return (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-green-600 border-green-300 hover:bg-green-50 hover:border-green-400 transition-colors"
+                                        onClick={() => handleReactivateSchool(school._id)}
+                                      >
+                                        Réactiver
+                                      </Button>
+                                    );
+                                  
+                                  default:
+                                    return null;
+                                }
+                              })()}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        
+                        {/* Expanded Details Row */}
+                        {expandedRows.has(school._id) && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="p-0">
+                              <div className="bg-gray-50 p-6 border-t">
+                                {expandedSchoolData[school._id] ? (
+                                  <div className="space-y-6">
+                                    <SchoolInfo school={expandedSchoolData[school._id]} />
+                                    <CampaignManagement 
+                                      school={expandedSchoolData[school._id]} 
+                                      onCampaignUpdate={(updatedCampaign) => {
+                                        // Update the expanded school data with the updated campaign
+                                        setExpandedSchoolData(prev => ({
+                                          ...prev,
+                                          [school._id]: {
+                                            ...prev[school._id],
+                                            campaigns: prev[school._id].campaigns.map(c => 
+                                              c._id === updatedCampaign._id ? updatedCampaign : c
+                                            )
+                                          }
+                                        }));
+                                        
+                                        // Also update the main school data to keep everything in sync
+                                        setAllSchools(prev => prev.map(s => {
+                                          if (s._id === school._id) {
+                                            return {
+                                              ...s,
+                                              campaigns: s.campaigns.map(c => 
+                                                c._id === updatedCampaign._id ? updatedCampaign : c
+                                              )
+                                            };
+                                          }
+                                          return s;
+                                        }));
+                                      }}
+                                    />
+                                    <SchoolOrders schoolId={school._id} school={expandedSchoolData[school._id]} />
+                                    <SchoolSalesData schoolId={school._id} />
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                                    <p className="mt-2 text-gray-600">Chargement des détails...</p>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
@@ -571,53 +633,6 @@ const SchoolsPage = () => {
           </CardContent>
         </Card>
 
-        {/* School Details */}
-        {selectedSchoolId && (
-          <div className="space-y-8">
-            <div className="flex justify-between items-center">
-              <h3 className="text-2xl font-bold">Détails de l'École</h3>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedSchoolId(null);
-                  setSchoolData(null);
-                  setErrorSchool(null);
-                }}
-              >
-                Fermer
-              </Button>
-            </div>
-
-            {loadingSchool && (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Chargement des détails de l'école...</p>
-              </div>
-            )}
-            
-            {errorSchool && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-red-600">Erreur: {errorSchool}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => fetchSchoolData(selectedSchoolId)}
-                >
-                  Réessayer
-                </Button>
-              </div>
-            )}
-
-            {schoolData && !loadingSchool && !errorSchool && (
-              <div className="space-y-8">
-                <SchoolInfo school={schoolData} />
-                <SchoolOrders schoolId={selectedSchoolId} school={schoolData} />
-                <SchoolSalesData schoolId={selectedSchoolId} />
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Reject School Modal */}
         {showRejectModal && selectedSchoolForAction && (

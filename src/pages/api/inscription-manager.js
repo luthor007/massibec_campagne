@@ -138,6 +138,19 @@ export default async function handler(req, res) {
         verificationUrl,
       });
 
+      // Send notification email to supplier
+      try {
+        await sendVerificationEmail({
+          to: 'louis@massibec.com',
+          subject: `Nouvelle inscription d'école - ${sanitizedName}`,
+          firstName: 'Louis',
+          verificationUrl: `${process.env.NEXTAUTH_URL}/dashboard-massibec/schools`,
+        });
+      } catch (emailError) {
+        console.error('Error sending notification email to supplier:', emailError);
+        // Don't fail the registration if notification email fails
+      }
+
       // Respond with a success message
       res.status(201).json({ message: 'School and user created successfully' });
     } catch (error) {

@@ -50,7 +50,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
     <div style={{ fontFamily: 'Arial, sans-serif', lineHeight: '1.1', color: '#333' }}>
 
       <p>Merci <strong>{firstName}</strong> pour votre commande.</p>
-      <p>La livraison se fera à l'école le <strong>{deliveryDate}</strong> et les produits vous seront donc acheminés tel que nous avons personnellement convenu.</p>
+      <p>La livraison se fera le <strong>{deliveryDate}</strong> et les produits vous seront donc acheminés tel que nous avons personnellement convenu.</p>
 
 
       <h3 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Transfert Interac</h3>

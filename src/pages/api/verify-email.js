@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       const { token } = req.query;
 
       if (!token) {
-        return res.status(400).json({ message: 'Token de vérification manquant.' });
+        return res.redirect(`${process.env.NEXTAUTH_URL}/email-verification-error`);
       }
 
       // Find the user with the matching verification token and ensure the token hasn't expired
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       });
 
       if (!user) {
-        return res.status(400).json({ message: 'Token de vérification invalide ou expiré.' });
+        return res.redirect(`${process.env.NEXTAUTH_URL}/email-verification-error`);
       }
 
       // Update the user's emailVerified status and remove the verification token

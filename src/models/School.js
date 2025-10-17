@@ -31,7 +31,15 @@ const CampaignSchema = new mongoose.Schema({
   financialGoal: { type: Number, required: true },
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   approvedAt: { type: Date },
-  rejectionReason: { type: String }
+  rejectionReason: { type: String },
+  // Lock fields for supplier control
+  profitSplitLocked: { type: Boolean, default: false },
+  datesLocked: { type: Boolean, default: false },
+  // Custom pricing per campaign
+  customPrices: [{
+    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+    price: { type: Number }
+  }]
 }, { timestamps: true });
 
 const SchoolSchema = new mongoose.Schema({
