@@ -30,6 +30,7 @@ export default async function handler(req, res) {
       notes
     } = req.body;
 
+
     // Validate required fields
     if (!financialGoal || financialGoal === '' || isNaN(parseFloat(financialGoal))) {
       return res.status(400).json({ message: 'L\'objectif financier est requis et doit être un nombre valide' });
@@ -62,19 +63,6 @@ export default async function handler(req, res) {
     // Handle dates - use existing dates if locked, otherwise use provided dates
     let finalStartDate, finalEndDate, finalDeliveryDate;
 
-    // Debug log
-    console.log('Debug dates:', {
-      datesLocked: campaign.datesLocked,
-      isSchoolManager,
-      isMassibec,
-      startDate,
-      endDate,
-      deliveryDate,
-      campaignStartDate: campaign.startDate,
-      campaignEndDate: campaign.endDate,
-      campaignDeliveryDate: campaign.deliveryDate
-    });
-
     // If dates are locked, use existing campaign dates (for school managers)
     // OR if form dates are null/empty, use existing campaign dates (for Massibec when fields are disabled)
     if ((campaign.datesLocked && isSchoolManager && !isMassibec) || 
@@ -82,13 +70,11 @@ export default async function handler(req, res) {
       finalStartDate = campaign.startDate;
       finalEndDate = campaign.endDate;
       finalDeliveryDate = campaign.deliveryDate;
-      console.log('Using campaign dates:', { finalStartDate, finalEndDate, finalDeliveryDate });
     } else {
       // Use provided dates from form
       finalStartDate = startDate;
       finalEndDate = endDate;
       finalDeliveryDate = deliveryDate;
-      console.log('Using form dates:', { finalStartDate, finalEndDate, finalDeliveryDate });
     }
 
     // Validate dates
@@ -170,12 +156,19 @@ export default async function handler(req, res) {
     campaign.endDate = endDateObj;
     campaign.deliveryDate = deliveryDateObj;
     campaign.financialGoal = parseFloat(financialGoal) || 0;
-    campaign.profitSplitType = profitSplitType;
+    campaign.profitSplitType = profitSplitType || 'percentage';
+    
+    // Parse values, but don't replace 0 with defaults
+    const parsedStudentBenefit = parseFloat(studentBenefit);
+    const parsedOrganizationBenefit = parseFloat(organizationBenefit);
+    const parsedRaffleBenefit = parseFloat(raffleBenefit);
+    
     campaign.profitSplit = {
-      studentBenefit: parseFloat(studentBenefit) || 0,
-      organizationBenefit: parseFloat(organizationBenefit) || 0,
-      raffleBenefit: parseFloat(raffleBenefit) || 0
+      studentBenefit: isNaN(parsedStudentBenefit) ? (profitSplitType === 'percentage' ? 85.6 : 0) : parsedStudentBenefit,
+      organizationBenefit: isNaN(parsedOrganizationBenefit) ? (profitSplitType === 'percentage' ? 9.4 : 0) : parsedOrganizationBenefit,
+      raffleBenefit: isNaN(parsedRaffleBenefit) ? (profitSplitType === 'percentage' ? 5.0 : 0) : parsedRaffleBenefit
     };
+    
     
     // Update notes if provided
     if (notes !== undefined) {

@@ -44,10 +44,15 @@ interface SendDeletionEmailParams {
 
 interface SendSaleNotificationEmailParams {
   to: string;
+  cc?: string;
+  subject?: string;
   studentName: string;
   firstName: string;
   customerEmail: string;
   customerPhone: string;
+  schoolName?: string;
+  schoolAddress?: string;
+  deliveryDate?: string;
   products: {
     productId: string;
     productName: string;
@@ -64,6 +69,8 @@ interface SendSaleNotificationEmailParams {
 
 interface SendEmailParams {
   to: string;
+  cc?: string;
+  from?: string;
   subject: string;
   firstName: string;
   customerEmail: string;
@@ -106,6 +113,7 @@ interface SendStudentOrderEmailParams {
 
 interface SendVerificationEmailParams {
   to: string;
+  cc?: string;
   subject: string;
   firstName: string;
   verificationUrl: string;
@@ -116,7 +124,7 @@ interface SendVerificationEmailParams {
  * @param params - Paramètres pour personnaliser l'e-mail de vérification.
  */
 const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
-  const { to, subject, firstName, verificationUrl } = params;
+  const { to, cc, subject, firstName, verificationUrl } = params;
 
   try {
     // Générer le contenu HTML en utilisant le composant EmailVerificationTemplate
@@ -128,12 +136,18 @@ const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
     );
 
     // Envoyer l'e-mail via Resend
-    const { data, error } = await resend.emails.send({
-      from: `${getFromName()} <${getFromEmail()}>`,
+    const emailOptions: any = {
+      from: `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
-    });
+    };
+
+    if (cc) {
+      emailOptions.cc = cc;
+    }
+
+    const { data, error } = await resend.emails.send(emailOptions);
 
     if (error) {
       console.error('Erreur Resend lors de l\'envoi de l\'e-mail de vérification:', error);
@@ -165,7 +179,7 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const { data, error } = await resend.emails.send({
-      from: `${getFromName()} <${getFromEmail()}>`,
+      from: `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
@@ -191,6 +205,8 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
 const sendEmail = async (params: SendEmailParams) => {
   const {
     to,
+    cc,
+    from,
     subject,
     firstName,
     customerEmail,
@@ -236,12 +252,18 @@ const sendEmail = async (params: SendEmailParams) => {
     );
 
     // Envoyer l'e-mail via Resend
-    const { data, error } = await resend.emails.send({
-      from: `${getFromName()} <${getFromEmail()}>`,
+    const emailOptions: any = {
+      from: from || `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
-    });
+    };
+
+    if (cc) {
+      emailOptions.cc = cc;
+    }
+
+    const { data, error } = await resend.emails.send(emailOptions);
 
     if (error) {
       console.error('Erreur Resend lors de l\'envoi de l\'e-mail:', error);
@@ -290,7 +312,7 @@ const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const { data, error } = await resend.emails.send({
-      from: `${getFromName()} <${getFromEmail()}>`,
+      from: `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
@@ -348,7 +370,7 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const { data, error } = await resend.emails.send({
-      from: `${getFromName()} <${getFromEmail()}>`,
+      from: `Campagne Massibec <commande@massibec.com>`,
       to: email,
       subject: `Confirmation de votre commande - Commande #${orderId}`,
       html: htmlContent,
@@ -374,10 +396,15 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
 const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams) => {
   const {
     to,
+    cc,
+    subject,
     studentName,
     firstName,
     customerEmail,
     customerPhone,
+    schoolName,
+    schoolAddress,
+    deliveryDate,
     products,
     totalAmount,
     tip,
@@ -394,6 +421,9 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
         customerEmail={customerEmail}
         customerPhone={customerPhone}
         studentName={studentName}
+        schoolName={schoolName}
+        schoolAddress={schoolAddress}
+        deliveryDate={deliveryDate}
         products={products}
         totalAmount={totalAmount}
         tip={tip}
@@ -404,12 +434,18 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
     );
 
     // Envoyer l'e-mail via Resend
-    const { data, error } = await resend.emails.send({
-      from: `${getFromName()} <${getFromEmail()}>`,
+    const emailOptions: any = {
+      from: `Campagne Massibec <commande@massibec.com>`,
       to: to,
-      subject: `Nouvelle Vente Reçue - Commande #${orderId}`,
+      subject: subject || `Nouvelle Vente Reçue - Commande #${orderId}`,
       html: htmlContent,
-    });
+    };
+
+    if (cc) {
+      emailOptions.cc = cc;
+    }
+
+    const { data, error } = await resend.emails.send(emailOptions);
 
     if (error) {
       console.error('Erreur Resend lors de l\'envoi de l\'e-mail de notification de vente:', error);

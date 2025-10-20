@@ -37,10 +37,15 @@ interface SendDeletionEmailParams {
 
 interface SendSaleNotificationEmailParams {
   to: string;
+  cc?: string;
+  subject?: string;
   studentName: string;
   firstName: string; // Customer's first name
   customerEmail: string;
   customerPhone: string;
+  schoolName?: string;
+  schoolAddress?: string;
+  deliveryDate?: string;
   products: {
     productId: string;
     productName: string;
@@ -57,6 +62,8 @@ interface SendSaleNotificationEmailParams {
 
 interface SendEmailParams {
   to: string;
+  cc?: string;
+  from?: string;
   subject: string;
   firstName: string;
   customerEmail: string;
@@ -99,26 +106,52 @@ interface SendStudentOrderEmailParams {
 
 interface SendVerificationEmailParams {
   to: string;
+  cc?: string;
   subject: string;
   firstName: string;
   verificationUrl: string;
 }
 
 // Création du transporteur SMTP avec Nodemailer
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER, // Votre adresse e-mail Gmail
-    pass: process.env.GMAIL_PASS, // Votre mot de passe d'application Gmail
-  },
-});
+// Supporte Gmail, Outlook/Microsoft 365, et autres SMTP
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'gmail';
+
+let transporterConfig: any;
+
+if (EMAIL_PROVIDER === 'outlook') {
+  // Configuration pour Microsoft 365 / Outlook
+  transporterConfig = {
+    host: 'smtp.office365.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.OUTLOOK_USER,
+      pass: process.env.OUTLOOK_PASS,
+    },
+    tls: {
+      ciphers: 'SSLv3',
+      rejectUnauthorized: false
+    }
+  };
+} else {
+  // Configuration par défaut pour Gmail
+  transporterConfig = {
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_PASS,
+    },
+  };
+}
+
+const transporter = nodemailer.createTransport(transporterConfig);
 
 /**
  * Envoie un e-mail de vérification via Gmail SMTP avec un contenu HTML généré par un composant React.
  * @param params - Paramètres pour personnaliser l'e-mail de vérification.
  */
 const sendVerificationEmailViaGmail = async (params: SendVerificationEmailParams) => {
-  const { to, subject, firstName, verificationUrl } = params;
+  const { to, cc, subject, firstName, verificationUrl } = params;
 
   try {
     // Générer le contenu HTML en utilisant le composant EmailVerificationTemplate
@@ -130,12 +163,16 @@ const sendVerificationEmailViaGmail = async (params: SendVerificationEmailParams
     );
 
     // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+    const mailOptions: any = {
+      from: `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
     };
+
+    if (cc) {
+      mailOptions.cc = cc;
+    }
 
     // Envoyer l'e-mail
     const info = await transporter.sendMail(mailOptions);
@@ -164,7 +201,7 @@ const sendPasswordResetEmailViaGmail = async (params: SendPasswordResetEmailPara
 
     // Options de l'e-mail
     const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+      from: `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
@@ -187,6 +224,8 @@ const sendPasswordResetEmailViaGmail = async (params: SendPasswordResetEmailPara
 const sendEmailViaGmail = async (params: SendEmailParams) => {
   const {
     to,
+    cc,
+    from,
     subject,
     firstName,
     customerEmail,
@@ -232,12 +271,16 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
     );
 
     // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+    const mailOptions: any = {
+      from: from || `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
     };
+
+    if (cc) {
+      mailOptions.cc = cc;
+    }
 
     // Envoyer l'e-mail
     const info = await transporter.sendMail(mailOptions);
@@ -283,7 +326,7 @@ const sendDeletionEmailViaGmail = async (params: SendDeletionEmailParams) => {
 
     // Options de l'e-mail
     const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+      from: `Campagne Massibec <commande@massibec.com>`,
       to,
       subject,
       html: htmlContent,
@@ -338,7 +381,7 @@ const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams
 
     // Options de l'e-mail
     const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
+      from: `Campagne Massibec <commande@massibec.com>`,
       to: email, // Envoi à l'adresse e-mail de l'étudiant
       subject: `Confirmation de votre commande - Commande #${orderId}`,
       html: htmlContent,
@@ -361,10 +404,15 @@ const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams
 const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEmailParams) => {
   const {
     to,
+    cc,
+    subject,
     studentName,
     firstName,
     customerEmail,
     customerPhone,
+    schoolName,
+    schoolAddress,
+    deliveryDate,
     products,
     totalAmount,
     tip,
@@ -381,6 +429,9 @@ const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEma
         customerEmail={customerEmail}
         customerPhone={customerPhone}
         studentName={studentName}
+        schoolName={schoolName}
+        schoolAddress={schoolAddress}
+        deliveryDate={deliveryDate}
         products={products}
         totalAmount={totalAmount}
         tip={tip}
@@ -391,12 +442,16 @@ const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEma
     );
 
     // Options de l'e-mail
-    const mailOptions = {
-      from: `${process.env.GMAIL_FROM_NAME} <${process.env.GMAIL_USER}>`,
-      to: to, // Send to the student's email
-      subject: `Nouvelle Vente Reçue - Commande #${orderId}`,
+    const mailOptions: any = {
+      from: `Campagne Massibec <commande@massibec.com>`,
+      to: to,
+      subject: subject || `Nouvelle Vente Reçue - Commande #${orderId}`,
       html: htmlContent,
     };
+
+    if (cc) {
+      mailOptions.cc = cc;
+    }
 
     // Envoyer l'e-mail
     const info = await transporter.sendMail(mailOptions);
@@ -412,8 +467,6 @@ const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEma
 // ROUTER FUNCTIONS - Check EMAIL_PROVIDER env variable to route to correct implementation
 // ============================================================================
 
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'gmail';
-
 /**
  * Routes sendVerificationEmail to the appropriate provider
  */
@@ -422,7 +475,7 @@ const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
     console.log('📧 Using Resend for verification email');
     return ResendMailer.sendVerificationEmail(params);
   } else {
-    console.log('📧 Using Gmail for verification email');
+    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for verification email`);
     return sendVerificationEmailViaGmail(params);
   }
 };
@@ -435,7 +488,7 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
     console.log('📧 Using Resend for password reset email');
     return ResendMailer.sendPasswordResetEmail(params);
   } else {
-    console.log('📧 Using Gmail for password reset email');
+    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for password reset email`);
     return sendPasswordResetEmailViaGmail(params);
   }
 };
@@ -448,7 +501,7 @@ const sendEmail = async (params: SendEmailParams) => {
     console.log('📧 Using Resend for email');
     return ResendMailer.sendEmail(params);
   } else {
-    console.log('📧 Using Gmail for email');
+    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for email`);
     return sendEmailViaGmail(params);
   }
 };
@@ -461,7 +514,7 @@ const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
     console.log('📧 Using Resend for deletion email');
     return ResendMailer.sendDeletionEmail(params);
   } else {
-    console.log('📧 Using Gmail for deletion email');
+    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for deletion email`);
     return sendDeletionEmailViaGmail(params);
   }
 };
@@ -474,7 +527,7 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
     console.log('📧 Using Resend for student order email');
     return ResendMailer.sendStudentOrderEmail(params);
   } else {
-    console.log('📧 Using Gmail for student order email');
+    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for student order email`);
     return sendStudentOrderEmailViaGmail(params);
   }
 };
@@ -487,7 +540,7 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
     console.log('📧 Using Resend for sale notification email');
     return ResendMailer.sendSaleNotificationEmail(params);
   } else {
-    console.log('📧 Using Gmail for sale notification email');
+    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for sale notification email`);
     return sendSaleNotificationEmailViaGmail(params);
   }
 };

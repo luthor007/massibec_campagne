@@ -1,9 +1,9 @@
-import { getToken } from 'next-auth/jwt';
 import dbConnect from '@/lib/mongodb';
 import School from '@/models/School';
+import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
@@ -21,33 +21,29 @@ export default async function handler(req, res) {
 
     await dbConnect();
 
-    const { schoolId } = req.body;
+    const { schoolName } = req.query;
 
-    if (!schoolId) {
-      return res.status(400).json({ message: 'ID de l\'école requis' });
+    if (!schoolName) {
+      return res.status(400).json({ message: 'Nom de l\'école requis' });
     }
 
-    // Find and reactivate the school
-    const school = await School.findById(schoolId);
+    // Find school by name
+    const school = await School.findOne({ name: schoolName });
+    
     if (!school) {
       return res.status(404).json({ message: 'École non trouvée' });
     }
 
-    // Reactivate the school
-    school.isActive = true;
-    school.status = 'approved'; // Reset status to approved when reactivating
-    school.deactivatedAt = undefined;
-    school.deactivationReason = undefined;
-
-    await school.save();
-
-    res.status(200).json({ 
-      message: 'École réactivée avec succès',
-      school: school.toObject()
+    res.status(200).json({
+      name: school.name,
+      code: school.code,
+      status: school.status,
+      approved: school.approved,
+      canRegisterStudents: school.status === 'approved'
     });
 
   } catch (error) {
-    console.error('Error reactivating school:', error);
+    console.error('Error checking school status:', error);
     res.status(500).json({ message: 'Erreur interne du serveur' });
   }
 }

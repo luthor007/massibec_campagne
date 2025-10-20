@@ -110,6 +110,13 @@ export default async function handler(req, res) {
         return res.status(404).json({ message: 'École non trouvée.' });
       }
 
+      // Verify that the school is approved
+      if (school.status !== 'approved') {
+        return res.status(403).json({ 
+          message: 'Cette école n\'est pas approuvée. Les commandes ne peuvent pas être passées.' 
+        });
+      }
+
       const activeCampaign = school.campaigns?.find((campaign) => campaign.isActive);
       const campaignNumber = activeCampaign?.campaignNumber || school.currentCampaignNumber || 1;
 

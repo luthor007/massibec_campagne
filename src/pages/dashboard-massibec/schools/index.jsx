@@ -37,7 +37,8 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react';
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -256,6 +257,53 @@ const SchoolsPage = () => {
     }
   };
 
+  const handleFixSchoolStatus = async () => {
+    try {
+      const response = await fetch(`/api/fix-school-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        showNotification(result.message, 'success');
+        console.log('Fix results:', result.results);
+        fetchAllSchools();
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error fixing school status:', error);
+      showNotification('Erreur lors de la correction', 'error');
+    }
+  };
+
+  const handleCheckTestMassibec = async () => {
+    try {
+      const response = await fetch(`/api/check-school-status?schoolName=Test Massibec`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        showNotification(`Test Massibec - Code: ${result.code}, Statut: ${result.status}, Peut inscrire: ${result.canRegisterStudents}`, 'success');
+        console.log('Test Massibec status:', result);
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error checking Test Massibec:', error);
+      showNotification('Erreur lors de la vérification', 'error');
+    }
+  };
+
   const toggleRowExpansion = async (schoolId) => {
     const newExpandedRows = new Set(expandedRows);
     
@@ -334,6 +382,22 @@ const SchoolsPage = () => {
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Actualiser
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleFixSchoolStatus}
+              className="flex items-center bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Corriger statuts
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCheckTestMassibec}
+              className="flex items-center bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Vérifier Test Massibec
             </Button>
             <select
               value={filterStatus}
@@ -555,7 +619,6 @@ const SchoolsPage = () => {
                                     );
                                   
                                   case 'rejected':
-                                  case 'deactivated':
                                     return (
                                       <Button
                                         variant="outline"

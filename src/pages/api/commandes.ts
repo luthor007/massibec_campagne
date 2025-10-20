@@ -132,9 +132,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Générer les données pour l'e-mail
       console.log(`Here is customer email: ${customerEmail}`)
+      const parentFullName = owner.name; // Le nom du parent/vendeur
+      
+      // Confirmation de commande au client
+      // À: Client, CC: vendeur
+      // De: (Nom du parent - Campagne (nom école)) <commande@massibec.com>
+      // Objet: (Commande #X)(Montant), pour (Nom du client), de (Nom du Parent) - Campagne (Nom école)
       const emailParams = {
         to: customerEmail,
-        subject: `Confirmation de votre commande - Commande #${newOrderId}`,
+        cc: owner.email,
+        from: `${parentFullName} - Campagne ${schoolData.name} <commande@massibec.com>`,
+        subject: `(Commande #${newOrderId})($${(totalAmount + tip).toFixed(2)}), pour (${customerName}), de (${parentFullName}) - Campagne (${schoolData.name})`,
         firstName: customerName,
         customerEmail: customerEmail,
         hoursAvailable: storeData.hoursAvailable,
@@ -160,16 +168,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sellerEmail: owner.email,
       };
 
-      // Envoyer l'e-mail de confirmation
+      // Envoyer l'e-mail de confirmation au client (avec vendeur en CC)
       await sendEmail(emailParams);
 
+      // Confirmation d'une commande à Massibec
+      // À: vendeur, CC: facturation@massibec.com
+      // De: Campagne Massibec <commande@massibec.com>
+      // Objet: (Commande #X) -(Montant)- de: (Nom du parent) - nom école - Pour: Massibec
+      // Texte: La distribution se fera à (Adresse de l'école) le (date de livraison)
       const emailParams2 = {
         to: owner.email,
-        subject: `Confirmation de votre commande - Commande #${newOrderId}`,
-        studentName: owner.name, // As
+        cc: 'facturation@massibec.com',
+        subject: `(Commande #${newOrderId}) -($${(totalAmount + tip).toFixed(2)})- de: (${parentFullName}) - ${schoolData.name} - Pour: Massibec`,
+        studentName: owner.name,
         firstName: customerName,
         customerEmail: customerEmail,
         customerPhone: phoneNumber,
+        schoolName: schoolData.name,
+        schoolAddress: owner.parentInfo.adresse,
+        deliveryDate: new Date(schoolData.dateDeLivraison).toLocaleDateString('fr-FR'),
         products: products.map((item: any) => ({
           productId: item.product,
           productName: item.name,
@@ -185,7 +202,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       };
 
-      // Envoyer l'e-mail de notification de vente à l'élève vendeur
+      // Envoyer l'e-mail de confirmation à Massibec (vendeur avec facturation en CC)
       await sendSaleNotificationEmail(emailParams2);
 
       res.status(201).json({ message: 'Commande créée avec succès.' });

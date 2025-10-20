@@ -25,6 +25,7 @@
 
         school.approved = true;
         school.status = 'approved';
+        school.isActive = true;
         await school.save();
 
          res.status(200).json({ message: 'École approuvée avec succès.' });

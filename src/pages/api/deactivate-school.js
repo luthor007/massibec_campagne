@@ -23,6 +23,7 @@ export default async function handler(req, res) {
         return res.status(404).json({ message: 'École non trouvée.' });
       }
 
+      school.isActive = false;
       school.status = 'deactivated';
       school.deactivationReason = reason || '';
       school.deactivatedAt = new Date();

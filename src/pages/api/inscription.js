@@ -1,5 +1,6 @@
 import dbConnect from '../../lib/mongodb';
 import User from '../../models/User';
+import School from '../../models/School';
 import bcrypt from 'bcryptjs';
 import { sendVerificationEmail } from '../../utils/gmailMailer';
 import crypto from 'crypto'; // Add this import statement
@@ -17,6 +18,18 @@ export default async function handler(req, res) {
 
       // Destructure and sanitize the fields from the request body
       const { name, email, password, schoolId, objectifPersonnel, parentInfo } = req.body;
+
+      // Verify that the school exists and is approved/active
+      const school = await School.findById(schoolId);
+      if (!school) {
+        return res.status(404).json({ message: 'École non trouvée.' });
+      }
+
+      if (school.status !== 'approved') {
+        return res.status(403).json({ 
+          message: 'Cette école n\'est pas approuvée. Veuillez contacter l\'administrateur.' 
+        });
+      }
 
       const sanitizedName = sanitizeString(name);
       const sanitizedEmail = sanitizeString(email);
@@ -56,12 +69,16 @@ export default async function handler(req, res) {
       await user.save();
 
       const verificationUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${verificationToken}`;
-      const emailSubject = 'Vérifiez votre adresse e-mail';
+      const parentFullName = `${sanitizeString(parentInfo.prenomParent)} ${sanitizeString(parentInfo.nomParent)}`;
       
+      // Confirmation d'inscription du vendeur (étudiant)
+      // À: parent
+      // De: Campagne Massibec <commande@massibec.com>
+      // Objet: Inscription (nom du parent) - Campagne (nom école) - Massibec
       await sendVerificationEmail({
         to: sanitizedEmail,
-        subject: emailSubject,
-        firstName: sanitizedName.split(' ')[0], // Assuming first name is the first word
+        subject: `Inscription (${parentFullName}) - Campagne (${school.name}) - Massibec`,
+        firstName: sanitizeString(parentInfo.prenomParent),
         verificationUrl,
       });
 

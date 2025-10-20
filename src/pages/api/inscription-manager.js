@@ -129,27 +129,18 @@ export default async function handler(req, res) {
       });
 
       const verificationUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${verificationToken}`;
-      const emailSubject = 'Vérifiez votre adresse e-mail';
       
+      // Confirmation d'inscription de l'école
+      // À: responsable, CC: commande@massibec.com
+      // De: Campagne Massibec <commande@massibec.com>
+      // Objet: Inscription (École xyz) Campagne Massibec
       await sendVerificationEmail({
         to: sanitizedEmail,
-        subject: emailSubject,
-        firstName: sanitizedName.split(' ')[0], // Assuming first name is the first word
+        cc: 'commande@massibec.com',
+        subject: `Inscription (${sanitizedName}) Campagne Massibec`,
+        firstName: sanitizedName.split(' ')[0],
         verificationUrl,
       });
-
-      // Send notification email to supplier
-      try {
-        await sendVerificationEmail({
-          to: 'louis@massibec.com',
-          subject: `Nouvelle inscription d'école - ${sanitizedName}`,
-          firstName: 'Louis',
-          verificationUrl: `${process.env.NEXTAUTH_URL}/dashboard-massibec/schools`,
-        });
-      } catch (emailError) {
-        console.error('Error sending notification email to supplier:', emailError);
-        // Don't fail the registration if notification email fails
-      }
 
       // Respond with a success message
       res.status(201).json({ message: 'School and user created successfully' });

@@ -47,14 +47,28 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
   useEffect(() => {
     if (school?.campaigns) {
       setCampaigns(school.campaigns);
-      // Select the first campaign by default if none selected
+      // Select the active campaign by default, or the first one if none selected
       if (school.campaigns.length > 0 && !selectedCampaignId) {
-        setSelectedCampaignId(school.campaigns[0]._id);
+        const activeCampaign = school.campaigns.find(c => c.isActive);
+        const defaultCampaign = activeCampaign || school.campaigns[0];
+        setSelectedCampaignId(defaultCampaign._id);
       }
     }
-  }, [school]);
+  }, [school, selectedCampaignId]);
 
   const selectedCampaign = campaigns.find(c => c._id === selectedCampaignId);
+  
+  // Ensure campaign has default profit split values only if they don't exist
+  const campaignWithDefaults = selectedCampaign ? {
+    ...selectedCampaign,
+    profitSplitType: selectedCampaign.profitSplitType || 'percentage',
+    profitSplit: {
+      studentBenefit: selectedCampaign.profitSplit?.studentBenefit !== undefined ? selectedCampaign.profitSplit.studentBenefit : 85.6,
+      organizationBenefit: selectedCampaign.profitSplit?.organizationBenefit !== undefined ? selectedCampaign.profitSplit.organizationBenefit : 9.4,
+      raffleBenefit: selectedCampaign.profitSplit?.raffleBenefit !== undefined ? selectedCampaign.profitSplit.raffleBenefit : 5.0,
+      ...selectedCampaign.profitSplit
+    }
+  } : null;
 
   const isDateInPast = (date) => {
     return new Date(date) < new Date();
@@ -108,6 +122,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
 
     const formData = new FormData(e.target);
     const financialGoalValue = formData.get('financialGoal');
+    
     
     // Validate financial goal
     if (!financialGoalValue || financialGoalValue === '' || isNaN(parseFloat(financialGoalValue))) {
@@ -253,51 +268,63 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Campaign Selector */}
-        {campaigns.length > 1 && (
-          <div>
-            <Label htmlFor="campaign-selector">Sélectionner une campagne</Label>
-            <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Choisir une campagne" />
-              </SelectTrigger>
-              <SelectContent>
-                {campaigns.map((campaign) => (
-                  <SelectItem key={campaign._id} value={campaign._id}>
-                    <div className="flex items-center justify-between w-full">
-                      <span>Campagne #{campaign.campaignNumber}</span>
-                      <div className="ml-2">
-                        {getStatusBadge(campaign.status)}
+        <div>
+          <Label htmlFor="campaign-selector">
+            {campaigns.length > 1 ? 'Sélectionner une campagne' : 'Campagne active'}
+          </Label>
+          <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Choisir une campagne" />
+            </SelectTrigger>
+            <SelectContent>
+              {campaigns.map((campaign) => (
+                <SelectItem key={campaign._id} value={campaign._id}>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Campagne #{campaign.campaignNumber}</span>
+                        {campaign.isActive && (
+                          <Badge variant="default" className="text-xs">
+                            Active
+                          </Badge>
+                        )}
                       </div>
+                      <span className="text-sm text-gray-500">
+                        {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}
+                      </span>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+                    <div className="ml-2">
+                      {getStatusBadge(campaign.status)}
+                    </div>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        {selectedCampaign && (
+        {campaignWithDefaults && (
           <div className="space-y-6">
             {/* Campaign Info */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
               <div>
                 <Label className="text-sm font-medium text-gray-600">Statut</Label>
                 <div className="mt-1">
-                  {getStatusBadge(selectedCampaign.status)}
+                  {getStatusBadge(campaignWithDefaults.status)}
                 </div>
               </div>
               <div>
                 <Label className="text-sm font-medium text-gray-600">Objectif financier</Label>
                 <div className="mt-1 flex items-center">
                   <DollarSign className="h-4 w-4 mr-1 text-green-600" />
-                  <span className="font-semibold">{selectedCampaign.financialGoal?.toLocaleString() || '0'}$</span>
+                  <span className="font-semibold">{campaignWithDefaults.financialGoal?.toLocaleString() || '0'}$</span>
                 </div>
               </div>
               <div>
                 <Label className="text-sm font-medium text-gray-600">Type de répartition</Label>
                 <div className="mt-1 flex items-center">
                   <Percent className="h-4 w-4 mr-1 text-blue-600" />
-                  <span>{selectedCampaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}</span>
+                  <span>{campaignWithDefaults.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}</span>
                 </div>
               </div>
             </div>
@@ -310,7 +337,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleStatusChange('pending_approval')}
-                  disabled={isUpdatingStatus || selectedCampaign.status === 'pending_approval'}
+                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'pending_approval'}
                   className="text-yellow-600 border-yellow-300 hover:bg-yellow-50"
                 >
                   <Clock className="h-4 w-4 mr-1" />
@@ -320,7 +347,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleStatusChange('approved')}
-                  disabled={isUpdatingStatus || selectedCampaign.status === 'approved'}
+                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'approved'}
                   className="text-green-600 border-green-300 hover:bg-green-50"
                 >
                   <Check className="h-4 w-4 mr-1" />
@@ -330,7 +357,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleStatusChange('active')}
-                  disabled={isUpdatingStatus || selectedCampaign.status === 'active'}
+                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'active'}
                   className="text-blue-600 border-blue-300 hover:bg-blue-50"
                 >
                   <Play className="h-4 w-4 mr-1" />
@@ -340,7 +367,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleStatusChange('rejected')}
-                  disabled={isUpdatingStatus || selectedCampaign.status === 'rejected'}
+                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'rejected'}
                   className="text-red-600 border-red-300 hover:bg-red-50"
                 >
                   <X className="h-4 w-4 mr-1" />
@@ -350,7 +377,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleStatusChange('completed')}
-                  disabled={isUpdatingStatus || selectedCampaign.status === 'completed'}
+                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'completed'}
                   className="text-gray-600 border-gray-300 hover:bg-gray-50"
                 >
                   <Pause className="h-4 w-4 mr-1" />
@@ -361,19 +388,19 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
 
             {/* Date Warnings */}
             <div className="space-y-2">
-              {isDateInPast(selectedCampaign.endDate) && (
+              {isDateInPast(campaignWithDefaults.endDate) && (
                 <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-red-600 mr-2" />
                   <span className="text-red-700 text-sm">
-                    ⚠️ La date de fin de campagne ({formatDate(selectedCampaign.endDate)}) est dans le passé
+                    ⚠️ La date de fin de campagne ({formatDate(campaignWithDefaults.endDate)}) est dans le passé
                   </span>
                 </div>
               )}
-              {isDateInPast(selectedCampaign.deliveryDate) && (
+              {isDateInPast(campaignWithDefaults.deliveryDate) && (
                 <div className="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg">
                   <AlertTriangle className="h-4 w-4 text-red-600 mr-2" />
                   <span className="text-red-700 text-sm">
-                    ⚠️ La date de livraison ({formatDate(selectedCampaign.deliveryDate)}) est dans le passé
+                    ⚠️ La date de livraison ({formatDate(campaignWithDefaults.deliveryDate)}) est dans le passé
                   </span>
                 </div>
               )}
@@ -387,13 +414,13 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                 onClick={() => handleToggleLock('profit')}
                 disabled={isTogglingLock}
                 className={`flex items-center transition-colors ${
-                  selectedCampaign.profitSplitLocked 
+                  campaignWithDefaults.profitSplitLocked 
                     ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' 
                     : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200'
                 }`}
               >
-                {selectedCampaign.profitSplitLocked ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
-                {selectedCampaign.profitSplitLocked ? 'Déverrouiller Profits' : 'Verrouiller Profits'}
+                {campaignWithDefaults.profitSplitLocked ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
+                {campaignWithDefaults.profitSplitLocked ? 'Déverrouiller Profits' : 'Verrouiller Profits'}
               </Button>
               <Button
                 variant="outline"
@@ -401,13 +428,13 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                 onClick={() => handleToggleLock('dates')}
                 disabled={isTogglingLock}
                 className={`flex items-center transition-colors ${
-                  selectedCampaign.datesLocked 
+                  campaignWithDefaults.datesLocked 
                     ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' 
                     : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200'
                 }`}
               >
-                {selectedCampaign.datesLocked ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
-                {selectedCampaign.datesLocked ? 'Déverrouiller Dates' : 'Verrouiller Dates'}
+                {campaignWithDefaults.datesLocked ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
+                {campaignWithDefaults.datesLocked ? 'Déverrouiller Dates' : 'Verrouiller Dates'}
               </Button>
             </div>
 
@@ -420,8 +447,8 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                     type="date"
                     id="startDate"
                     name="startDate"
-                    defaultValue={formatDateForInput(selectedCampaign.startDate)}
-                    disabled={selectedCampaign.datesLocked}
+                    defaultValue={formatDateForInput(campaignWithDefaults.startDate)}
+                    disabled={campaignWithDefaults.datesLocked}
                     className="mt-1"
                   />
                 </div>
@@ -431,8 +458,8 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                     type="date"
                     id="endDate"
                     name="endDate"
-                    defaultValue={formatDateForInput(selectedCampaign.endDate)}
-                    disabled={selectedCampaign.datesLocked}
+                    defaultValue={formatDateForInput(campaignWithDefaults.endDate)}
+                    disabled={campaignWithDefaults.datesLocked}
                     className="mt-1"
                   />
                 </div>
@@ -442,8 +469,8 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                     type="date"
                     id="deliveryDate"
                     name="deliveryDate"
-                    defaultValue={formatDateForInput(selectedCampaign.deliveryDate)}
-                    disabled={selectedCampaign.datesLocked}
+                    defaultValue={formatDateForInput(campaignWithDefaults.deliveryDate)}
+                    disabled={campaignWithDefaults.datesLocked}
                     className="mt-1"
                   />
                 </div>
@@ -455,7 +482,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   type="number"
                   id="financialGoal"
                   name="financialGoal"
-                  defaultValue={selectedCampaign.financialGoal || 0}
+                  defaultValue={campaignWithDefaults.financialGoal || 0}
                   min="0"
                   step="0.01"
                   className="mt-1"
@@ -475,9 +502,9 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   <div>
                     <Label htmlFor="profitSplitType">Type de répartition</Label>
                     <Select 
-                      defaultValue={selectedCampaign.profitSplitType} 
+                      defaultValue={campaignWithDefaults.profitSplitType || 'percentage'} 
                       name="profitSplitType"
-                      disabled={selectedCampaign.profitSplitLocked}
+                      disabled={campaignWithDefaults.profitSplitLocked}
                     >
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Sélectionnez le type de répartition" />
@@ -502,49 +529,49 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor="studentBenefit">
-                        Bénéfice étudiant {selectedCampaign.profitSplitType === 'percentage' ? '(%)' : '($)'}
+                        Bénéfice étudiant {campaignWithDefaults.profitSplitType === 'percentage' ? '(%)' : '($)'}
                       </Label>
                       <Input
                         type="number"
                         id="studentBenefit"
                         name="studentBenefit"
-                        defaultValue={selectedCampaign.profitSplit?.studentBenefit}
+                        defaultValue={campaignWithDefaults.profitSplit?.studentBenefit || 0}
                         min="0"
-                        step={selectedCampaign.profitSplitType === 'percentage' ? "0.1" : "0.01"}
-                        max={selectedCampaign.profitSplitType === 'percentage' ? "100" : undefined}
-                        disabled={selectedCampaign.profitSplitLocked}
+                        step={campaignWithDefaults.profitSplitType === 'percentage' ? "0.1" : "0.01"}
+                        max={campaignWithDefaults.profitSplitType === 'percentage' ? "100" : undefined}
+                        disabled={campaignWithDefaults.profitSplitLocked}
                         className="mt-1"
                       />
                     </div>
                     <div>
                       <Label htmlFor="organizationBenefit">
-                        Bénéfice organisation {selectedCampaign.profitSplitType === 'percentage' ? '(%)' : '($)'}
+                        Bénéfice organisation {campaignWithDefaults.profitSplitType === 'percentage' ? '(%)' : '($)'}
                       </Label>
                       <Input
                         type="number"
                         id="organizationBenefit"
                         name="organizationBenefit"
-                        defaultValue={selectedCampaign.profitSplit?.organizationBenefit}
+                        defaultValue={campaignWithDefaults.profitSplit?.organizationBenefit || 0}
                         min="0"
-                        step={selectedCampaign.profitSplitType === 'percentage' ? "0.1" : "0.01"}
-                        max={selectedCampaign.profitSplitType === 'percentage' ? "100" : undefined}
-                        disabled={selectedCampaign.profitSplitLocked}
+                        step={campaignWithDefaults.profitSplitType === 'percentage' ? "0.1" : "0.01"}
+                        max={campaignWithDefaults.profitSplitType === 'percentage' ? "100" : undefined}
+                        disabled={campaignWithDefaults.profitSplitLocked}
                         className="mt-1"
                       />
                     </div>
                     <div>
                       <Label htmlFor="raffleBenefit">
-                        Bénéfice tirage {selectedCampaign.profitSplitType === 'percentage' ? '(%)' : '($)'}
+                        Bénéfice tirage {campaignWithDefaults.profitSplitType === 'percentage' ? '(%)' : '($)'}
                       </Label>
                       <Input
                         type="number"
                         id="raffleBenefit"
                         name="raffleBenefit"
-                        defaultValue={selectedCampaign.profitSplit?.raffleBenefit}
+                        defaultValue={campaignWithDefaults.profitSplit?.raffleBenefit || 0}
                         min="0"
-                        step={selectedCampaign.profitSplitType === 'percentage' ? "0.1" : "0.01"}
-                        max={selectedCampaign.profitSplitType === 'percentage' ? "100" : undefined}
-                        disabled={selectedCampaign.profitSplitLocked}
+                        step={campaignWithDefaults.profitSplitType === 'percentage' ? "0.1" : "0.01"}
+                        max={campaignWithDefaults.profitSplitType === 'percentage' ? "100" : undefined}
+                        disabled={campaignWithDefaults.profitSplitLocked}
                         className="mt-1"
                       />
                     </div>
@@ -557,7 +584,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                 <Textarea
                   id="notes"
                   name="notes"
-                  defaultValue={selectedCampaign.notes}
+                  defaultValue={campaignWithDefaults.notes}
                   placeholder="Ajoutez des notes sur cette campagne..."
                   className="mt-1"
                 />

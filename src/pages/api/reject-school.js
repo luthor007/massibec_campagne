@@ -25,6 +25,7 @@ export default async function handler(req, res) {
 
       school.approved = false;
       school.status = 'rejected';
+      school.isActive = false;
       school.rejectionReason = reason || '';
       school.rejectedAt = new Date();
       await school.save();
