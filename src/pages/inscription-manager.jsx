@@ -1,10 +1,10 @@
 import Layout from '../components/Layout'
-import MultiStepInscriptionManagerForm from '../components/MultiStepInscriptionManagerForm'
+import SimpleInscriptionForm from '../components/SimpleInscriptionForm'
 
 export default function InscriptionManager() {
   return (
     <Layout>
-      <MultiStepInscriptionManagerForm />
+      <SimpleInscriptionForm />
     </Layout>
   )
 }

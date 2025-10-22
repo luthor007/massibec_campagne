@@ -1,6 +1,6 @@
 // components/Dashboard/Analytics/AnalyticsDashboard.jsx
 import React from 'react';
-import { Card, CardHeader, CardTitle } from '@shadcn/ui';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const salesData = [

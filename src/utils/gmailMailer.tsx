@@ -14,6 +14,9 @@ import EmailTemplateStudent from '../components/EmailTemplateStudent'; // Import
 // Import Resend implementations
 import * as ResendMailer from './resendMailer';
 
+// Import SendGrid implementations
+import * as SendGridMailer from './sendgridMailer';
+
 // Interfaces (existing)
 interface ProductItem {
   productId: string;
@@ -113,8 +116,8 @@ interface SendVerificationEmailParams {
 }
 
 // Création du transporteur SMTP avec Nodemailer
-// Supporte Gmail, Outlook/Microsoft 365, et autres SMTP
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'gmail';
+// Supporte Gmail, Outlook/Microsoft 365, Resend, et SendGrid
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'sendgrid';
 
 let transporterConfig: any;
 
@@ -474,6 +477,9 @@ const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
   if (EMAIL_PROVIDER === 'resend') {
     console.log('📧 Using Resend for verification email');
     return ResendMailer.sendVerificationEmail(params);
+  } else if (EMAIL_PROVIDER === 'sendgrid') {
+    console.log('📧 Using SendGrid for verification email');
+    return SendGridMailer.sendVerificationEmail(params);
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for verification email`);
     return sendVerificationEmailViaGmail(params);
@@ -487,6 +493,9 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
   if (EMAIL_PROVIDER === 'resend') {
     console.log('📧 Using Resend for password reset email');
     return ResendMailer.sendPasswordResetEmail(params);
+  } else if (EMAIL_PROVIDER === 'sendgrid') {
+    console.log('📧 Using SendGrid for password reset email');
+    return SendGridMailer.sendPasswordResetEmail(params);
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for password reset email`);
     return sendPasswordResetEmailViaGmail(params);
@@ -500,6 +509,9 @@ const sendEmail = async (params: SendEmailParams) => {
   if (EMAIL_PROVIDER === 'resend') {
     console.log('📧 Using Resend for email');
     return ResendMailer.sendEmail(params);
+  } else if (EMAIL_PROVIDER === 'sendgrid') {
+    console.log('📧 Using SendGrid for email');
+    return SendGridMailer.sendEmail(params);
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for email`);
     return sendEmailViaGmail(params);
@@ -513,6 +525,9 @@ const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
   if (EMAIL_PROVIDER === 'resend') {
     console.log('📧 Using Resend for deletion email');
     return ResendMailer.sendDeletionEmail(params);
+  } else if (EMAIL_PROVIDER === 'sendgrid') {
+    console.log('📧 Using SendGrid for deletion email');
+    return SendGridMailer.sendDeletionEmail(params);
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for deletion email`);
     return sendDeletionEmailViaGmail(params);
@@ -526,6 +541,9 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
   if (EMAIL_PROVIDER === 'resend') {
     console.log('📧 Using Resend for student order email');
     return ResendMailer.sendStudentOrderEmail(params);
+  } else if (EMAIL_PROVIDER === 'sendgrid') {
+    console.log('📧 Using SendGrid for student order email');
+    return SendGridMailer.sendStudentOrderEmail(params);
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for student order email`);
     return sendStudentOrderEmailViaGmail(params);
@@ -539,6 +557,9 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
   if (EMAIL_PROVIDER === 'resend') {
     console.log('📧 Using Resend for sale notification email');
     return ResendMailer.sendSaleNotificationEmail(params);
+  } else if (EMAIL_PROVIDER === 'sendgrid') {
+    console.log('📧 Using SendGrid for sale notification email');
+    return SendGridMailer.sendSaleNotificationEmail(params);
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for sale notification email`);
     return sendSaleNotificationEmailViaGmail(params);
@@ -554,3 +575,11 @@ export {
   sendVerificationEmail, 
   sendSaleNotificationEmail 
 };
+
+// Exportation des nouvelles fonctions SendGrid spécifiques
+export { 
+  sendSchoolConfirmationEmail,
+  sendStudentConfirmationEmail,
+  sendOrderConfirmationEmail,
+  sendMassibecConfirmationEmail
+} from './sendgridMailer';

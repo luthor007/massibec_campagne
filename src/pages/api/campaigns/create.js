@@ -1,5 +1,7 @@
 import dbConnect from '../../../lib/mongodb';
 import School from '../../../models/School';
+import Campaign from '../../../models/Campaign';
+import User from '../../../models/User';
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
@@ -16,7 +18,6 @@ export default async function handler(req, res) {
       const userId = token.sub;
 
       // Get user info to find the school
-      const User = require('../../../models/User');
       const user = await User.findById(userId).lean();
 
       if (!user || user.role !== 'school_manager') {
@@ -28,10 +29,8 @@ export default async function handler(req, res) {
         endDate,
         deliveryDate,
         financialGoal,
-        profitSplitType,
-        studentBenefit,
-        organizationBenefit,
-        raffleBenefit
+        customPrices,
+        profitSplits
       } = req.body;
 
       // Validate required fields
@@ -59,26 +58,6 @@ export default async function handler(req, res) {
         return res.status(400).json({ message: 'La date de livraison doit être au moins 3 semaines après la fin de la campagne' });
       }
 
-      // Validate profit split values
-      if (profitSplitType === 'percentage') {
-        const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
-        if (Math.abs(total - 100) > 0.01) {
-          return res.status(400).json({ message: `Les pourcentages doivent totaliser 100%. Total actuel: ${total.toFixed(1)}%` });
-        }
-      } else {
-        // For absolute values, check that all values are positive
-        if (studentBenefit < 0 || organizationBenefit < 0 || raffleBenefit < 0) {
-          return res.status(400).json({ message: 'Les valeurs absolues doivent être positives' });
-        }
-        
-        // Check that total doesn't exceed $3.00 per product
-        const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
-        if (total > 3.00) {
-          return res.status(400).json({ 
-            message: `Le total ne peut pas dépasser 3.00$ par produit. Total actuel: ${total.toFixed(2)}$` 
-          });
-        }
-      }
 
       // Find the school
       const school = await School.findById(user.schoolManagerInfo.organisme);
@@ -89,32 +68,26 @@ export default async function handler(req, res) {
       // Create new campaign
       const newCampaignNumber = school.currentCampaignNumber + 1;
       
-      const newCampaign = {
+      const newCampaign = new Campaign({
         campaignNumber: newCampaignNumber,
+        school: school._id,
         startDate: start,
         endDate: end,
         deliveryDate: delivery,
         isActive: false, // Will be activated after approval
         notes: `Campagne créée le ${new Date().toLocaleDateString('fr-CA')}`,
-        profitSplitType: profitSplitType,
-        profitSplit: {
-          studentBenefit: parseFloat(studentBenefit),
-          organizationBenefit: parseFloat(organizationBenefit),
-          raffleBenefit: parseFloat(raffleBenefit)
-        },
+        profitSplitType: 'absolute', // Always absolute values now
+        customPrices: customPrices || [],
+        profitSplits: profitSplits || [],
         financialGoal: parseFloat(financialGoal),
         status: 'pending_approval' // Pending Massibec approval
-      };
+      });
 
-      // Add the new campaign to the school
-      school.campaigns.push(newCampaign);
+      await newCampaign.save();
+
+      // Update school with new campaign info
       school.currentCampaignNumber = newCampaignNumber;
-      school.objectifFinancier = financialGoal;
-
-      // Update the main campaign dates (will be activated after approval)
-      school.debutCampagne = start;
-      school.finCampagne = end;
-      school.dateDeLivraison = delivery;
+      school.activeCampaignId = newCampaign._id;
 
       await school.save();
 

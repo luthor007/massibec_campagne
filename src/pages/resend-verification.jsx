@@ -1,6 +1,7 @@
 // src/pages/resend-verification.jsx
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 
 const ResendVerification = () => {
   const [email, setEmail] = useState('');
@@ -48,6 +49,11 @@ const ResendVerification = () => {
         <button type="submit" style={styles.button}>Renouveler la Vérification</button>
       </form>
       {message && <p style={styles.message}>{message}</p>}
+      <div style={styles.loginLink}>
+        <Link href="/connexion" style={styles.link}>
+          Retour à la connexion
+        </Link>
+      </div>
     </div>
   );
 };
@@ -93,6 +99,15 @@ const styles = {
   message: {
     marginTop: '20px',
     color: 'green',
+  },
+  loginLink: {
+    marginTop: '20px',
+    textAlign: 'center',
+  },
+  link: {
+    color: '#4A90E2',
+    textDecoration: 'none',
+    fontSize: '14px',
   },
 };
 

@@ -37,6 +37,8 @@ const UserSchema = new mongoose.Schema({
   verificationTokenExpires: {
     type: Date,
   },
+  profileCompleted: { type: Boolean, default: false },
+  profileCompletionPercentage: { type: Number, default: 0 },
   parentInfo: {
     nomParent: {
       type: String,
@@ -94,12 +96,11 @@ const UserSchema = new mongoose.Schema({
     titreOuFonction: { type: String, required: function () { return this.role === 'school_manager'; } },
     organisme: { type: mongoose.Schema.Types.ObjectId, ref: School, required: function () { return this.role === 'school_manager'; } },
     ville: { type: String, required: function () { return this.role === 'school_manager'; } },
-    objectifFinancier: { type: String, required: function () { return this.role === 'school_manager'; } },
-    nombreParticipants: { type: Number, required: function () { return this.role === 'school_manager'; } },
+    codePostal: { type: String, required: function () { return this.role === 'school_manager'; } },
     telephone: { type: String, required: function () { return this.role === 'school_manager'; } },
-    debutCampagne: { type: Date, required: function () { return this.role === 'school_manager'; } },
+    cellulaire: { type: String },
+    momentPourJoindre: { type: String, required: function () { return this.role === 'school_manager'; } }
   },
-
   store: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
 });
 
@@ -109,7 +110,9 @@ UserSchema.path('role').validate(function (value) {
     return !!this.school && !!this.objectifPersonnel && !!this.parentInfo;
   }
   if (value === 'school_manager') {
-    return !!this.schoolManagerInfo.titreOuFonction && !!this.schoolManagerInfo.objectifFinancier;
+    return !!this.schoolManagerInfo && 
+           !!this.schoolManagerInfo.titreOuFonction && 
+           !!this.schoolManagerInfo.organisme;
   }
   return false;
 }, 'Invalid role requirements');

@@ -6,57 +6,19 @@ const BonusSchema = new mongoose.Schema({
   totalBonusRange: { type: String, required: true }, // Total possible bonus range
 });
 
-const CampaignSchema = new mongoose.Schema({
-  campaignNumber: { type: Number, required: true },
-  startDate: { type: Date, required: true },
-  endDate: { type: Date, required: true },
-  deliveryDate: { type: Date },
-  isActive: { type: Boolean, default: false },
-  notes: { type: String },
-  status: { 
-    type: String, 
-    enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed', 'pending_school_approval'],
-    default: 'pending_approval'
-  },
-  profitSplitType: {
-    type: String,
-    enum: ['percentage', 'absolute'],
-    default: 'percentage'
-  },
-  profitSplit: {
-    studentBenefit: { type: Number, default: 85.6 },
-    organizationBenefit: { type: Number, default: 9.4 },
-    raffleBenefit: { type: Number, default: 5.0 }
-  },
-  financialGoal: { type: Number, required: true },
-  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  approvedAt: { type: Date },
-  rejectionReason: { type: String },
-  // Lock fields for supplier control
-  profitSplitLocked: { type: Boolean, default: false },
-  datesLocked: { type: Boolean, default: false },
-  // Custom pricing per campaign
-  customPrices: [{
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    price: { type: Number }
-  }]
-}, { timestamps: true });
 
 const SchoolSchema = new mongoose.Schema({
   code: { type: String, required: true, unique: true, default: () => Math.floor(Math.random() * 900000) + 100000 }, // Random 6 numbers code
   name: { type: String, required: true, unique: true },
   address: { type: String, required: true, unique: true },
-  objectifFinancier: { type: String, required: true },
-  debutCampagne: { type: Date, required: true },
+  ville: { type: String },
+  codePostal: { type: String },
+  logo: { type: String }, // Logo filename
   orderCounter: { type: Number, default: 0 }, // Initialize counter to 0
-  finCampagne: { type: Date, required: true },
-  dateDeLivraison: { type: Date, required: true },
-  currentCampaignNumber: { type: Number, default: 1 },
-  campaigns: { type: [CampaignSchema], default: [] },
-  activeCampaignId: { type: mongoose.Schema.Types.ObjectId, default: null },
-  telephone: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
+  currentCampaignNumber: { type: Number, default: 0 }, // Start with 0 campaigns
+  activeCampaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', default: null },
   approved: { type: Boolean, required: true, default: false },
+  profileCompleted: { type: Boolean, default: false },
   status: { 
     type: String, 
     enum: ['pending', 'approved', 'rejected', 'deactivated'],
@@ -93,35 +55,5 @@ const SchoolSchema = new mongoose.Schema({
   customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
-SchoolSchema.pre('save', function syncActiveCampaign(next) {
-  if (!this.campaigns || this.campaigns.length === 0) {
-    return next();
-  }
-
-  let activeCampaign = this.campaigns.find((campaign) => campaign.isActive);
-
-  if (!activeCampaign) {
-    activeCampaign = this.campaigns[0];
-    activeCampaign.isActive = true;
-  }
-
-  const activeId = activeCampaign._id?.toString();
-
-  this.campaigns.forEach((campaign) => {
-    const isActive = campaign._id?.toString() === activeId;
-    campaign.isActive = isActive;
-    if (isActive) {
-      activeCampaign = campaign;
-    }
-  });
-
-  this.activeCampaignId = activeCampaign._id;
-  this.currentCampaignNumber = activeCampaign.campaignNumber;
-  this.debutCampagne = activeCampaign.startDate;
-  this.finCampagne = activeCampaign.endDate;
-  this.dateDeLivraison = activeCampaign.deliveryDate;
-
-  next();
-});
 
 export default mongoose.models.School || mongoose.model('School', SchoolSchema);

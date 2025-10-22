@@ -3,10 +3,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from 'next/router'
-import Link from 'next/link'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronRight, CheckCircle, AlertCircle, Building, User, Phone, Mail } from 'lucide-react'
+import { ChevronRight, CheckCircle, AlertCircle, Calendar, Building, User, Phone, Mail } from 'lucide-react'
 
 export default function MultiStepInscriptionManagerForm() {
   const router = useRouter()
@@ -30,11 +29,8 @@ export default function MultiStepInscriptionManagerForm() {
     ville: '',
     codePostal: '',
     adresse: '',
-    momentPourJoindre: '',
-    logo: null // Add logo state
+    momentPourJoindre: ''
   })
-
-  const [logoPreview, setLogoPreview] = useState(null)
 
   const steps = [
     { id: 1, title: 'Informations du Responsable de Campagne', icon: User },
@@ -44,33 +40,6 @@ export default function MultiStepInscriptionManagerForm() {
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
-  }
-
-  const handleLogoChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setErrorMessage('Veuillez sélectionner un fichier image valide')
-        return
-      }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setErrorMessage('Le fichier doit faire moins de 5MB')
-        return
-      }
-
-      setFormData(prev => ({ ...prev, logo: file }))
-      
-      // Create preview
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        setLogoPreview(e.target.result)
-      }
-      reader.readAsDataURL(file)
-      setErrorMessage('')
-    }
   }
 
   // Email validation
@@ -125,42 +94,37 @@ export default function MultiStepInscriptionManagerForm() {
     }
 
     if (emailExists) {
-      setErrorMessage('Cette adresse e-mail est déjà utilisée')
+      setErrorMessage('Un compte existe déjà avec cette adresse e-mail')
+      setIsSubmitting(false)
+      return
+    }
+
+    // Calculate 3 weeks in milliseconds
+    const threeWeeksInMillis = 21 * 24 * 60 * 60 * 1000;
+    const finCampagneDate = new Date(formData.finCampagne);
+    const dateDeLivraisonDate = new Date(formData.dateDeLivraison);
+
+    if (dateDeLivraisonDate.getTime() - finCampagneDate.getTime() < threeWeeksInMillis) {
+      setErrorMessage("La date de livraison doit être au moins trois semaines après la fin de la campagne.")
       setIsSubmitting(false)
       return
     }
 
     try {
-      // Create FormData for file upload
-      const formDataToSend = new FormData()
-      
-      // Add all form fields except logo
-      Object.keys(formData).forEach(key => {
-        if (key !== 'logo' && formData[key] !== null) {
-          formDataToSend.append(key, formData[key])
-        }
-      })
-      
-      // Add logo file if present
-      if (formData.logo) {
-        formDataToSend.append('logo', formData.logo)
-      }
-
       const response = await fetch('/api/inscription-manager', {
         method: 'POST',
-        body: formDataToSend, // Use FormData instead of JSON
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        const data = await response.json()
-        alert('Inscription réussie ! Vérifiez votre e-mail pour confirmer votre compte.')
-        router.push('/connexion')
+        router.push('/email-verification')
       } else {
-        const errorData = await response.json()
-        setErrorMessage(errorData.message || 'Erreur lors de l\'inscription')
+        setErrorMessage(data.message || 'Erreur lors de l\'inscription')
       }
     } catch (error) {
-      console.error('Error:', error)
       setErrorMessage('Erreur de connexion. Veuillez réessayer.')
     } finally {
       setIsSubmitting(false)
@@ -179,8 +143,8 @@ export default function MultiStepInscriptionManagerForm() {
             className="space-y-6"
           >
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Informations du Responsable de Campagne</h2>
-              <p className="text-gray-600">Vos informations personnelles</p>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Informations personnelles</h2>
+              <p className="text-gray-600">Commençons par vos informations de base</p>
             </div>
 
             <div className="space-y-4">
@@ -234,11 +198,6 @@ export default function MultiStepInscriptionManagerForm() {
                     </div>
                   )}
                 </div>
-                {emailExists && (
-                  <p className="text-sm text-red-500 mt-1">
-                    Cette adresse e-mail est déjà utilisée
-                  </p>
-                )}
               </div>
 
               <div>
@@ -346,7 +305,7 @@ export default function MultiStepInscriptionManagerForm() {
             className="space-y-6"
           >
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Informations de l'École</h2>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Informations de l'école</h2>
               <p className="text-gray-600">Détails sur votre établissement scolaire</p>
             </div>
 
@@ -365,35 +324,6 @@ export default function MultiStepInscriptionManagerForm() {
                   placeholder="Nom de votre école"
                   required
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
-                  Logo de l'école (optionnel)
-                </Label>
-                <div className="space-y-3">
-                  <Input
-                    type="file"
-                    id="logo"
-                    name="logo"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  {logoPreview && (
-                    <div className="flex items-center space-x-3">
-                      <img 
-                        src={logoPreview} 
-                        alt="Aperçu du logo" 
-                        className="w-16 h-16 object-contain border border-gray-300 rounded-lg"
-                      />
-                      <span className="text-sm text-gray-600">Aperçu du logo</span>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500">
-                    Formats acceptés: JPG, PNG, GIF. Taille maximale: 5MB
-                  </p>
-                </div>
               </div>
 
               <div>
@@ -485,6 +415,121 @@ export default function MultiStepInscriptionManagerForm() {
           </motion.div>
         )
 
+      case 3:
+        return (
+          <motion.div
+            key="step3"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="text-center mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Configuration de la campagne</h2>
+              <p className="text-gray-600">Dernière étape ! Paramètres de votre campagne</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="objectifFinancier" className="block text-sm font-medium text-gray-700 mb-1">
+                  Objectif financier
+                </Label>
+                <Input
+                  type="number"
+                  id="objectifFinancier"
+                  name="objectifFinancier"
+                  value={formData.objectifFinancier}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="50000"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="nombreParticipants" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre de participants estimé
+                </Label>
+                <Input
+                  type="number"
+                  id="nombreParticipants"
+                  name="nombreParticipants"
+                  value={formData.nombreParticipants}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="200"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="debutCampagne" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date de début de campagne
+                </Label>
+                <Input
+                  type="date"
+                  id="debutCampagne"
+                  name="debutCampagne"
+                  value={formData.debutCampagne}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="finCampagne" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date de fin de campagne
+                </Label>
+                <Input
+                  type="date"
+                  id="finCampagne"
+                  name="finCampagne"
+                  value={formData.finCampagne}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="dateDeLivraison" className="block text-sm font-medium text-gray-700 mb-1">
+                  Date de livraison
+                </Label>
+                <Input
+                  type="date"
+                  id="dateDeLivraison"
+                  name="dateDeLivraison"
+                  value={formData.dateDeLivraison}
+                  onChange={handleChange}
+                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Doit être au moins 3 semaines après la fin de campagne
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="momentPourJoindre" className="block text-sm font-medium text-gray-700 mb-1">
+                  Meilleur moment pour vous joindre
+                </Label>
+                <Select value={formData.momentPourJoindre} onValueChange={(value) => setFormData(prev => ({ ...prev, momentPourJoindre: value }))}>
+                  <SelectTrigger className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <SelectValue placeholder="Sélectionnez un moment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="matin">Matin (8h-12h)</SelectItem>
+                    <SelectItem value="apres-midi">Après-midi (12h-17h)</SelectItem>
+                    <SelectItem value="soir">Soir (17h-20h)</SelectItem>
+                    <SelectItem value="weekend">Weekend</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </motion.div>
+        )
+
       default:
         return null
     }
@@ -492,105 +537,92 @@ export default function MultiStepInscriptionManagerForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-white">
-      <div className="max-w-2xl w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Inscription Gestionnaire</h1>
-          <p className="text-gray-600">Créez votre compte pour gérer les campagnes de financement</p>
+      <div className="w-full max-w-md">
+        {/* Progress */}
+        <div className="mb-8">
+          <div className="flex justify-center space-x-2 mb-4">
+            {steps.map((step, index) => {
+              const Icon = step.icon
+              return (
+                <div
+                  key={step.id}
+                  className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors ${
+                    currentStep >= step.id ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-center text-sm text-gray-500">
+            Étape {currentStep} sur {steps.length}: {steps[currentStep - 1].title}
+          </p>
         </div>
 
-        {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-8">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                currentStep >= step.id
-                  ? 'bg-blue-600 border-blue-600 text-white'
-                  : 'border-gray-300 text-gray-400'
-              }`}>
-                {currentStep > step.id ? (
-                  <CheckCircle className="w-5 h-5" />
-                ) : (
-                  <step.icon className="w-5 h-5" />
-                )}
-              </div>
-              <div className="ml-3 text-left">
-                <p className={`text-sm font-medium ${
-                  currentStep >= step.id ? 'text-blue-600' : 'text-gray-400'
-                }`}>
-                  {step.title}
-                </p>
-              </div>
-              {index < steps.length - 1 && (
-                <div className={`w-16 h-0.5 mx-4 ${
-                  currentStep > step.id ? 'bg-blue-600' : 'bg-gray-300'
-                }`} />
-              )}
-            </div>
-          ))}
-        </div>
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {errorMessage}
+          </div>
+        )}
 
-        {/* Form */}
-        <form onSubmit={(e) => e.preventDefault()} className="bg-white rounded-lg shadow-lg p-8">
+        {/* Form Content */}
+        <form onSubmit={currentStep === 3 ? handleSubmit : (e) => e.preventDefault()}>
           <AnimatePresence mode="wait">
             {renderStepContent()}
           </AnimatePresence>
+        </form>
 
-          {/* Error Message */}
-          {errorMessage && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-                <div className="ml-3">
-                  <p className="text-sm text-red-800">{errorMessage}</p>
-                </div>
-              </div>
-            </div>
+        {/* Navigation */}
+        <div className="mt-8 space-y-3">
+          {currentStep < 3 ? (
+            <Button
+              type="button"
+              onClick={nextStep}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium"
+            >
+              Continuer
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium disabled:opacity-50"
+              onClick={handleSubmit}
+            >
+              {isSubmitting ? 'Inscription en cours...' : 'Finaliser l\'inscription'}
+            </Button>
           )}
 
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
+          {currentStep > 1 && (
             <Button
               type="button"
               variant="outline"
               onClick={prevStep}
-              disabled={currentStep === 1}
-              className="px-6 py-2"
+              className="w-full"
             >
-              Précédent
+              Retour
             </Button>
+          )}
 
-            {currentStep < 2 ? (
-              <Button
-                type="button"
-                onClick={nextStep}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                Suivant
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white"
-              >
-                {isSubmitting ? 'Inscription...' : 'Terminer l\'inscription'}
-              </Button>
-            )}
-          </div>
-        </form>
-
-        {/* Login Link */}
-        <div className="text-center mt-6">
-          <p className="text-gray-600">
-            Déjà un compte ?{' '}
-            <Link href="/connexion" className="text-blue-600 hover:text-blue-700 font-medium">
+          <p className="text-center text-sm text-gray-500 mt-4">
+            Déjà inscrit ?{' '}
+            <button
+              onClick={() => router.push('/connexion')}
+              className="text-blue-500 hover:text-blue-600"
+            >
               Se connecter
-            </Link>
+            </button>
           </p>
         </div>
       </div>
     </div>
   )
 }
+
+
+
+
+
