@@ -1,7 +1,8 @@
 import dbConnect from '../../../../lib/mongodb';
-import School from '../../../../models/School';
-import User from '../../../../models/User';
+import Campaign from '../../../../models/Campaign';
 import { getToken } from 'next-auth/jwt';
+import mongoose from 'mongoose';
+import { parseLocalDate } from '../../../../utils/dateHelpers';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -11,194 +12,212 @@ export default async function handler(req, res) {
   try {
     await dbConnect();
 
-    // Get the token to authenticate the user
-    const token = await getToken({ req });
+    // Extract the token from the request
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     if (!token) {
-      return res.status(401).json({ message: 'Non autorisé' });
+      return res.status(401).json({ message: 'Non autorisé, pas connecté' });
     }
 
     const { campaignId } = req.query;
-    const {
-      startDate,
-      endDate,
-      deliveryDate,
-      financialGoal,
-      profitSplitType,
-      studentBenefit,
-      organizationBenefit,
-      raffleBenefit,
-      notes
-    } = req.body;
 
-
-    // Validate required fields
-    if (!financialGoal || financialGoal === '' || isNaN(parseFloat(financialGoal))) {
-      return res.status(400).json({ message: 'L\'objectif financier est requis et doit être un nombre valide' });
+    if (!campaignId) {
+      return res.status(400).json({ message: 'ID de campagne requis' });
     }
 
-    // Find the school that owns this campaign
-    const school = await School.findOne({
-      'campaigns._id': campaignId
-    });
-
-    if (!school) {
-      return res.status(404).json({ message: 'Campagne non trouvée' });
-    }
-
-    // Check if the user is the school manager or Massibec
-    const user = await User.findById(token.sub);
-    const isSchoolManager = school._id.toString() === token.schoolManagerInfo?.organisme?.toString();
-    const isMassibec = user && user.role === 'fournisseur';
-    
-    if (!isSchoolManager && !isMassibec) {
-      return res.status(403).json({ message: 'Accès non autorisé' });
-    }
-
-    // Find the campaign
-    const campaign = school.campaigns.id(campaignId);
+    // Find the campaign - populate school if needed
+    const campaign = await Campaign.findById(campaignId).populate('school');
     if (!campaign) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    // Handle dates - use existing dates if locked, otherwise use provided dates
-    let finalStartDate, finalEndDate, finalDeliveryDate;
-
-    // If dates are locked, use existing campaign dates (for school managers)
-    // OR if form dates are null/empty, use existing campaign dates (for Massibec when fields are disabled)
-    if ((campaign.datesLocked && isSchoolManager && !isMassibec) || 
-        (!startDate || !endDate || !deliveryDate)) {
-      finalStartDate = campaign.startDate;
-      finalEndDate = campaign.endDate;
-      finalDeliveryDate = campaign.deliveryDate;
-    } else {
-      // Use provided dates from form
-      finalStartDate = startDate;
-      finalEndDate = endDate;
-      finalDeliveryDate = deliveryDate;
+    // Check if user is school manager
+    const User = (await import('../../../../models/User')).default;
+    const user = await User.findById(token.sub);
+    if (!user || user.role !== 'school_manager') {
+      return res.status(401).json({ message: 'Non autorisé' });
     }
 
-    // Validate dates
-    if (!finalStartDate || !finalEndDate || !finalDeliveryDate) {
-      return res.status(400).json({ message: 'Toutes les dates sont requises' });
-    }
-
-    // Additional validation for Date objects
-    if (finalStartDate instanceof Date && isNaN(finalStartDate.getTime())) {
-      return res.status(400).json({ message: 'Date de début invalide' });
-    }
-    if (finalEndDate instanceof Date && isNaN(finalEndDate.getTime())) {
-      return res.status(400).json({ message: 'Date de fin invalide' });
-    }
-    if (finalDeliveryDate instanceof Date && isNaN(finalDeliveryDate.getTime())) {
-      return res.status(400).json({ message: 'Date de livraison invalide' });
-    }
-
-    // Check if dates are valid and create Date objects
-    let startDateObj, endDateObj, deliveryDateObj;
+    // Verify user belongs to this school
+    // Handle both populated and unpopulated school field
+    const schoolId = campaign.school?._id?.toString() || campaign.school?.toString() || campaign.school;
+    const userSchoolId = user.schoolManagerInfo?.organisme?.toString();
     
-    // If dates are already Date objects (from existing campaign), use them directly
-    if (finalStartDate instanceof Date) {
-      startDateObj = finalStartDate;
-      endDateObj = finalEndDate;
-      deliveryDateObj = finalDeliveryDate;
-    } else {
-      // If dates are strings, create Date objects
-      startDateObj = new Date(finalStartDate + 'T00:00:00');
-      endDateObj = new Date(finalEndDate + 'T00:00:00');
-      deliveryDateObj = new Date(finalDeliveryDate + 'T00:00:00');
+    if (schoolId !== userSchoolId) {
+      console.log('School ID mismatch:', { 
+        campaignSchoolId: schoolId, 
+        userSchoolId: userSchoolId,
+        campaignSchool: campaign.school 
+      });
+      return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
     }
 
-    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime()) || isNaN(deliveryDateObj.getTime())) {
-      return res.status(400).json({ message: 'Format de date invalide' });
-    }
-
-    // Check locks for school managers (Massibec can override)
-    if (isSchoolManager && !isMassibec) {
-      // Only allow editing if campaign is not active
-      if (campaign.status === 'active') {
-        return res.status(400).json({ message: 'Les campagnes actives ne peuvent pas être modifiées' });
-      }
-      
-      // Check if profit split is locked
-      if (campaign.profitSplitLocked && (studentBenefit || organizationBenefit || raffleBenefit)) {
-        return res.status(400).json({ message: 'La répartition des profits est verrouillée par le fournisseur' });
-      }
-      
-      // Check if dates are locked
-      if (campaign.datesLocked && (startDate || endDate || deliveryDate)) {
-        return res.status(400).json({ message: 'Les dates sont verrouillées par le fournisseur' });
-      }
-    }
-
-    // Validate profit split values
-    if (profitSplitType === 'percentage') {
-      const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
-      if (Math.abs(total - 100) > 0.01) {
-        return res.status(400).json({ message: `Les pourcentages doivent totaliser 100%. Total actuel: ${total.toFixed(1)}%` });
-      }
-    } else {
-      // For absolute values, check that all values are positive
-      if (studentBenefit < 0 || organizationBenefit < 0 || raffleBenefit < 0) {
-        return res.status(400).json({ message: 'Les valeurs absolues doivent être positives' });
-      }
-      
-      // Check that total doesn't exceed $3.00 per product
-      const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
-      if (total > 3.00) {
-        return res.status(400).json({ 
-          message: `Le total ne peut pas dépasser 3.00$ par produit. Total actuel: ${total.toFixed(2)}$` 
-        });
-      }
-    }
-
-    // Update campaign details - use validated Date objects
-    campaign.startDate = startDateObj;
-    campaign.endDate = endDateObj;
-    campaign.deliveryDate = deliveryDateObj;
-    campaign.financialGoal = parseFloat(financialGoal) || 0;
-    campaign.profitSplitType = profitSplitType || 'percentage';
+    // Check if campaign is approved - if so, prevent modifications
+    console.log('Campaign status check:', {
+      campaignId: campaign._id,
+      status: campaign.status,
+      isApproved: campaign.status === 'approved'
+    });
     
-    // Parse values, but don't replace 0 with defaults
-    const parsedStudentBenefit = parseFloat(studentBenefit);
-    const parsedOrganizationBenefit = parseFloat(organizationBenefit);
-    const parsedRaffleBenefit = parseFloat(raffleBenefit);
-    
-    campaign.profitSplit = {
-      studentBenefit: isNaN(parsedStudentBenefit) ? (profitSplitType === 'percentage' ? 85.6 : 0) : parsedStudentBenefit,
-      organizationBenefit: isNaN(parsedOrganizationBenefit) ? (profitSplitType === 'percentage' ? 9.4 : 0) : parsedOrganizationBenefit,
-      raffleBenefit: isNaN(parsedRaffleBenefit) ? (profitSplitType === 'percentage' ? 5.0 : 0) : parsedRaffleBenefit
-    };
-    
-    
-    // Update notes if provided
-    if (notes !== undefined) {
-      campaign.notes = notes;
-    }
-
-    // Reset status to pending_approval when school modifies campaign
     if (campaign.status === 'approved') {
-      campaign.status = 'pending_approval';
+      return res.status(400).json({ 
+        message: 'Cette campagne a été approuvée et ne peut plus être modifiée. Veuillez demander à Massibec de la désapprouver.' 
+      });
     }
 
-    // Clear any Massibec modifications when school updates
-    campaign.massibecModifications = undefined;
+    // Extract update data from request body
+    const {
+      name,
+      startDate,
+      endDate,
+      deliveryDate,
+      distributionStartHour,
+      distributionEndHour,
+      financialGoal,
+      customPrices,
+      profitSplits,
+      donationPresets,
+      donationSplit,
+      donationsForStudents,
+      donationsForSchool
+    } = req.body;
 
-    // If this is the active campaign, also update the main school dates
-    if (campaign.isActive) {
-      school.debutCampagne = startDateObj;
-      school.finCampagne = endDateObj;
-      school.dateDeLivraison = deliveryDateObj;
-      school.objectifFinancier = financialGoal;
+    // Validate dates if provided
+    if (startDate || endDate || deliveryDate) {
+      // Validate start date if provided
+      if (startDate) {
+        const start = parseLocalDate(startDate);
+        campaign.startDate = start;
+      }
+
+      // Validate end date if provided
+      if (endDate) {
+        const end = parseLocalDate(endDate);
+        const start = startDate ? parseLocalDate(startDate) : parseLocalDate(campaign.startDate.toISOString().split('T')[0]);
+        
+        if (end <= start) {
+          return res.status(400).json({ message: 'La date de fin doit être après la date de début' });
+        }
+
+        campaign.endDate = end;
+      }
+
+      // Validate delivery date if provided
+      if (deliveryDate) {
+        const delivery = parseLocalDate(deliveryDate);
+        const end = endDate ? parseLocalDate(endDate) : parseLocalDate(campaign.endDate.toISOString().split('T')[0]);
+        
+        // Check if delivery date is at least 3 weeks after end date
+        const threeWeeksInMillis = 21 * 24 * 60 * 60 * 1000;
+        const daysDifference = delivery.getTime() - end.getTime();
+        
+        console.log('Delivery date validation:', {
+          deliveryDate,
+          endDate: endDate || campaign.endDate.toISOString().split('T')[0],
+          delivery: delivery.toISOString(),
+          end: end.toISOString(),
+          daysDifference,
+          threeWeeksInMillis,
+          daysDifferenceInDays: daysDifference / (24 * 60 * 60 * 1000),
+          isValid: daysDifference >= threeWeeksInMillis
+        });
+        
+        if (daysDifference < threeWeeksInMillis) {
+          return res.status(400).json({ 
+            message: `La date de livraison doit être au moins 3 semaines après la fin de la campagne (actuellement ${Math.round(daysDifference / (24 * 60 * 60 * 1000))} jours)` 
+          });
+        }
+
+        campaign.deliveryDate = delivery;
+      }
     }
 
-    await school.save();
+    // Update campaign fields
+    if (name !== undefined) campaign.name = name.trim() || null;
+    if (distributionStartHour !== undefined) campaign.distributionStartHour = distributionStartHour;
+    if (distributionEndHour !== undefined) campaign.distributionEndHour = distributionEndHour;
+    if (financialGoal !== undefined) campaign.financialGoal = financialGoal;
+    
+    // Convert productId strings to ObjectIds for customPrices
+    if (customPrices) {
+      console.log('[campaigns/update API] Received customPrices:', JSON.stringify(customPrices, null, 2));
+      campaign.customPrices = customPrices.map(cp => {
+        const price = Number(cp.price);
+        const productIdObj = mongoose.Types.ObjectId.isValid(cp.productId) ? new mongoose.Types.ObjectId(cp.productId) : cp.productId;
+        console.log(`[campaigns/update API] Processing customPrice - productId: ${cp.productId} -> ${productIdObj}, price: ${cp.price} -> ${price}`);
+        return {
+          productId: productIdObj,
+          price: price
+        };
+      });
+      console.log('[campaigns/update API] Final customPrices to save:', JSON.stringify(campaign.customPrices.map(cp => ({
+        productId: cp.productId.toString(),
+        price: cp.price
+      })), null, 2));
+    }
+    
+    // Convert productId strings to ObjectIds for profitSplits
+    if (profitSplits) {
+      campaign.profitSplits = profitSplits.map(ps => ({
+        productId: mongoose.Types.ObjectId.isValid(ps.productId) ? new mongoose.Types.ObjectId(ps.productId) : ps.productId,
+        studentCash: ps.studentCash !== undefined ? Number(ps.studentCash) : (ps.student !== undefined ? Number(ps.student) : 1.00),
+        studentSchoolAccount: ps.studentSchoolAccount !== undefined ? Number(ps.studentSchoolAccount) : 0,
+        schoolProject: ps.schoolProject !== undefined ? Number(ps.schoolProject) : (ps.school !== undefined ? Number(ps.school) : 0.75),
+        raffle: ps.raffle !== undefined ? Number(ps.raffle) : 0.25
+      }));
+    }
+
+    // Update new donation configuration
+    if (donationsForStudents) {
+      campaign.donationsForStudents = {
+        enabled: donationsForStudents.enabled,
+        presets: donationsForStudents.presets,
+        splitConfig: donationsForStudents.splitConfig
+      };
+    }
+    if (donationsForSchool) {
+      campaign.donationsForSchool = {
+        enabled: donationsForSchool.enabled,
+        presets: donationsForSchool.presets
+      };
+    }
+
+    // Legacy: Update old donation configuration for backward compatibility
+    if (donationPresets) {
+      campaign.donationPresets = donationPresets;
+    }
+    if (donationSplit) {
+      campaign.donationSplit = donationSplit;
+    }
+
+    // Save the campaign
+    await campaign.save();
+
+    // Populate productId fields for customPrices and profitSplits before returning
+    await campaign.populate([
+      { path: 'customPrices.productId', select: 'name price cost image' },
+      { path: 'profitSplits.productId', select: 'name' },
+      { path: 'school', select: 'name code' }
+    ]);
+
+    console.log('Campaign updated successfully:', {
+      campaignId: campaign._id,
+      startDate: campaign.startDate,
+      endDate: campaign.endDate,
+      deliveryDate: campaign.deliveryDate,
+      financialGoal: campaign.financialGoal,
+      customPricesCount: campaign.customPrices?.length,
+      profitSplitsCount: campaign.profitSplits?.length,
+      distributionStartHour: campaign.distributionStartHour,
+      distributionEndHour: campaign.distributionEndHour
+    });
 
     res.status(200).json({ 
       message: 'Campagne mise à jour avec succès',
       campaign: campaign.toObject()
     });
+
   } catch (error) {
-    console.error('Erreur lors de la mise à jour de la campagne:', error);
-    res.status(500).json({ message: 'Erreur interne du serveur' });
+    console.error('Error updating campaign:', error);
+    res.status(500).json({ message: 'Erreur lors de la mise à jour de la campagne', error: error.message });
   }
 }

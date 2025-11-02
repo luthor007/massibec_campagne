@@ -1,8 +1,10 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Layout from '../../components/Layout'
 import { motion } from 'framer-motion'
+import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip'
+import useOnboarding from '../../hooks/useOnboarding'
 import {
   Card,
   CardContent,
@@ -40,20 +42,25 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import { ToastAction } from "@/components/ui/toast"
+import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
+import { calculateStudentEarnings, getUserCampaignContext, isTestCampaign } from '@/utils/campaignHelpers'
+import CampaignSelector from '@/components/Dashboard/CampaignSelector'
+import JoinCampaignModal from '@/components/Dashboard/JoinCampaignModal'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts'
 import {
   Award, Gift, Share2, TrendingUp, Star, Zap, Target,
-  AlertTriangle, Check, ArrowUp, ArrowDown, Trophy, Calendar
+  AlertTriangle, Check, ArrowUp, ArrowDown, Trophy, Calendar, ArrowLeft, AlertCircle
 } from 'lucide-react'
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Info } from 'lucide-react'
 import { Users, ShoppingCart, DollarSign } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import Link from 'next/link'
 
 
 // Reward Levels
@@ -158,7 +165,8 @@ export default function StatistiquesEtudiantUltime() {
   const [activeTab, setActiveTab] = useState("apercu")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [selectedSchoolYear, setSelectedSchoolYear] = useState('2025-2026')
+  const [schoolFetchFailed, setSchoolFetchFailed] = useState(false)
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null)
   
   const [orders, setOrders] = useState([])
   const [school, setSchool] = useState(null)
@@ -170,38 +178,158 @@ export default function StatistiquesEtudiantUltime() {
   const [totalRaffle, setTotalRaffle] = useState(0)
   const [earnings, setEarnings] = useState([])
   const [products, setProducts] = useState([])
+  const [totalStudentEarning, setTotalStudentEarning] = useState(0)
+  
+  // Campaign-related state
+  const [campaignContext, setCampaignContext] = useState(null)
+  const [showJoinCampaignModal, setShowJoinCampaignModal] = useState(false)
+  
+  // Onboarding state
+  const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
+  const [tooltipTarget, setTooltipTarget] = useState(null);
+  const statsCardsRef = useRef(null);
+  
+  // Use onboarding hook
+  const {
+    progress,
+    currentStep,
+    isLoading: onboardingLoading,
+    markStepComplete,
+    getStepContent
+  } = useOnboarding();
 
   const { toast } = useToast()
   const { data: session, status } = useSession()
 
   const userId = session?.user?.id
+  // Campaign-first identifiers
+  const activeCampaignId = campaignContext?.activeCampaignId
   const schoolId = session?.user?.school
+  // Get school ID from campaign context or fallback to user's school
+  const effectiveSchoolId = campaignContext?.schoolId || schoolId
 
-  // Get current school year date range
-  const getCurrentSchoolYear = () => {
-    return schoolYears.find(year => year.id === selectedSchoolYear) || schoolYears[1] // Default to 2025-2026
+  // Get current campaign or fallback to active campaign
+  const getCurrentCampaign = () => {
+    if (selectedCampaignId && campaignContext?.campaigns) {
+      return campaignContext.campaigns.find(c => c._id === selectedCampaignId)
+    }
+    return campaignContext?.campaigns?.[0] // Fallback to first campaign
   }
 
-  // Filter orders by school year
+  // Check if current campaign is in test mode
+  const isTest = (() => {
+    const currentCampaign = getCurrentCampaign();
+    return currentCampaign ? isTestCampaign(currentCampaign) : false;
+  })();
+
+  // Filter orders by campaign
   const getFilteredOrders = useCallback(() => {
     if (!orders || orders.length === 0) return []
     
-    const currentYear = schoolYears.find(year => year.id === selectedSchoolYear) || schoolYears[1]
-    const startDate = new Date(currentYear.startDate)
-    const endDate = new Date(currentYear.endDate)
+    const currentCampaign = getCurrentCampaign()
     
-    return orders.filter(order => {
-      const orderDate = new Date(order.createdAt)
-      return orderDate >= startDate && orderDate <= endDate
-    })
-  }, [orders, selectedSchoolYear])
+    // If no campaign selected, return all orders
+    if (!currentCampaign) return orders
 
+    // Current campaign objects may be shaped either with `_id` (embedded user.campaign doc)
+    // or `campaignId` (actual Campaign._id). Orders store the actual campaignId.
+    const campaignIdToMatch = (
+      currentCampaign.campaignId?._id ||
+      currentCampaign.campaignId ||
+      currentCampaign._id
+    )?.toString()
+
+    // If order has no campaignId, include it for the current campaign
+    // This handles legacy orders or orders created before campaign system
+    return orders.filter(order => {
+      // If order has no campaignId, include it
+      if (!order.campaignId) return true
+      
+      // Otherwise, match by campaignId
+      if (!campaignIdToMatch) return true
+      
+      return order.campaignId?.toString() === campaignIdToMatch
+    })
+  }, [orders, selectedCampaignId, campaignContext])
+
+  // Debug logs removed - campaign context now working properly
+
+  // Fetch campaign context
   useEffect(() => {
-    console.log('Session:', session);
-    console.log('Status:', status);
-    console.log('User ID:', userId);
-    console.log('School ID:', schoolId);
-  }, [session, status, userId, schoolId]);
+    const fetchCampaignContext = async () => {
+      if (!session?.user) return;
+      
+      try {
+        const response = await fetch('/api/users/campaigns');
+        if (response.ok) {
+          const data = await response.json();
+          // Create campaign context directly from API response
+          const context = {
+            mode: data.mode,
+            activeCampaignId: data.activeCampaignId,
+            campaigns: data.campaigns,
+            schoolId: data.campaigns && data.campaigns.length > 0 
+              ? data.campaigns[0].school?._id 
+              : undefined
+          };
+          setCampaignContext(context);
+        }
+      } catch (error) {
+        console.error('Error fetching campaign context:', error);
+      }
+    };
+
+    fetchCampaignContext();
+  }, [session]);
+
+  // Campaign handlers
+  const handleCampaignSwitch = (campaignId) => {
+    // Refresh data when campaign switches
+    window.location.reload(); // Simple refresh for now
+  };
+
+  const handleJoinCampaignSuccess = (campaign) => {
+    toast({
+      title: "Campagne rejoint avec succès!",
+      description: `Vous avez rejoint la campagne ${campaign.campaignCode} de ${campaign.school.name}`,
+    });
+    setShowJoinCampaignModal(false);
+    // Refresh campaign context
+    window.location.reload();
+  };
+
+  // Onboarding logic for stats page
+  useEffect(() => {
+    if (!onboardingLoading && currentStep?.key === 'viewedStats') {
+      setShowOnboardingTooltip(true);
+      setTooltipTarget(statsCardsRef.current);
+    } else {
+      setShowOnboardingTooltip(false);
+    }
+  }, [currentStep, onboardingLoading]);
+
+  // Onboarding handlers
+  const handleOnboardingNext = async () => {
+    if (currentStep?.key === 'viewedStats') {
+      const success = await markStepComplete('viewedStats', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  };
+
+  const handleOnboardingSkip = async () => {
+    if (currentStep?.key === 'viewedStats') {
+      const success = await markStepComplete('viewedStats', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  };
+
+  const handleOnboardingClose = () => {
+    setShowOnboardingTooltip(false);
+  };
 
   // Calculate total products sold
   const calculateTotalProductsSold = useCallback(() => {
@@ -212,32 +340,42 @@ export default function StatistiquesEtudiantUltime() {
     }, 0);
   }, [getFilteredOrders]);
 
-  // Calculate total student earnings
+  // Calculate total student earnings using campaign data
   const calculateTotalStudentEarnings = useCallback(() => {
     const filteredOrders = getFilteredOrders()
     if (!filteredOrders || !school) return 0;
-    let totalEarnings = 0;
-
-    filteredOrders.forEach(order => {
-      const { products, tip } = order;
-
-      // Calculate total cost of products in the order
-      const totalCost = products.reduce((acc, product) => {
-        return acc + (product.productCost * product.quantity);
-      }, 0);
-
-      // Calculate profit before tips
-      const profitBeforeTips = order.totalAmount - totalCost;
-
-      // Calculate student earnings based on the percentage
-      const studentEarnings = (profitBeforeTips * (school.split.studentBenefit / 100)) + tip;
-
-      // Add to total earnings
-      totalEarnings += studentEarnings;
-    });
-
-    return totalEarnings;
-  }, [getFilteredOrders, school]);
+    
+    try {
+      // Use campaign context data instead of querying database
+      const currentCampaign = getCurrentCampaign();
+      const campaign = currentCampaign ? {
+        _id: currentCampaign._id,
+        profitSplits: [], // We don't have detailed profit splits on client side
+        profitSplitType: 'percentage'
+      } : null;
+      
+      const fallbackSplit = school.split;
+      
+      // Calculate earnings using campaign-specific per-product profit splits
+      const totalEarnings = calculateStudentEarnings(filteredOrders, campaign, fallbackSplit);
+      
+      return totalEarnings;
+    } catch (error) {
+      console.error('Error calculating student earnings:', error);
+      // Fallback to old calculation if campaign helpers fail
+      let totalEarnings = 0;
+      filteredOrders.forEach(order => {
+        const { products, tip } = order;
+        const totalCost = products.reduce((acc, product) => {
+          return acc + (product.productCost * product.quantity);
+        }, 0);
+        const profitBeforeTips = order.totalAmount - totalCost;
+        const studentEarnings = (profitBeforeTips * (school.split.studentBenefit / 100)) + (tip || 0);
+        totalEarnings += studentEarnings;
+      });
+      return totalEarnings;
+    }
+  }, [getFilteredOrders, school, getCurrentCampaign]);
 
 
     // Calculate total student tip
@@ -314,11 +452,44 @@ export default function StatistiquesEtudiantUltime() {
       const ownerData = await userResponse.json()
       setUser(ownerData)
     } catch (error) {
-      setError(error.message)
+      // Fallback to session user if API fails (e.g., DB offline)
+      if (session?.user) {
+        setUser({
+          _id: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
+        })
+      }
     }
   }, [])
 
   // Fetch School Data
+  // Campaign-centric fetch for stats context
+  const fetchCampaignStatsContext = useCallback(async (campaignId, fallbackSchoolId) => {
+    try {
+      // We already have the school ID from campaign context, no need to call campaign API
+      if (fallbackSchoolId) {
+        await fetchSchoolData(fallbackSchoolId)
+      } else {
+        // No school ID available, use degraded mode
+        setSchool({
+          _id: 'unknown',
+          name: 'École',
+          code: 'N/A',
+          split: { studentBenefit: 85.6, organizationBenefit: 9.4, raffleBenefit: 5.0 },
+          finCampagne: new Date().toISOString(),
+          dateDeLivraison: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        setSchoolFetchFailed(true)
+      }
+    } catch (e) {
+      console.error('Error fetching campaign stats context:', e)
+      if (fallbackSchoolId) {
+        await fetchSchoolData(fallbackSchoolId)
+      }
+    }
+  }, [])
+
   const fetchSchoolData = useCallback(async (schoolId) => {
     try {
       const response = await fetch(`/api/schools/${schoolId}`)
@@ -328,7 +499,16 @@ export default function StatistiquesEtudiantUltime() {
       const schoolData = await response.json()
       setSchool(schoolData)
     } catch (error) {
-      setError(error.message)
+      // Degraded mode: provide sensible defaults so the page still loads
+      setSchool({
+        _id: schoolId,
+        name: 'École',
+        code: 'N/A',
+        split: { studentBenefit: 85.6, organizationBenefit: 9.4, raffleBenefit: 5.0 },
+        finCampagne: new Date().toISOString(),
+        dateDeLivraison: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      setSchoolFetchFailed(true)
     }
   }, [])
 
@@ -340,9 +520,11 @@ export default function StatistiquesEtudiantUltime() {
         throw new Error('Failed to fetch orders')
       }
       const data = await response.json()
-      setOrders(data || '')
+      // Ensure we always store an array (empty array when no orders)
+      setOrders(Array.isArray(data) ? data : [])
     } catch (error) {
-      setError(error.message)
+      // Fallback to empty orders so UI still renders
+      setOrders([])
     }
   }, [])
 
@@ -354,10 +536,11 @@ export default function StatistiquesEtudiantUltime() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ schoolYear: selectedSchoolYear })
+        body: JSON.stringify({ campaignId: getCurrentCampaign()?._id })
       })
       if (!response.ok) {
-        throw new Error('Failed to fetch top sellers')
+        console.warn(`Top sellers API returned ${response.status}: ${response.statusText}`)
+        throw new Error(`Failed to fetch top sellers: ${response.status}`)
       }
       const data = await response.json()
       setTopPerformers(data.topPerformers)
@@ -365,9 +548,14 @@ export default function StatistiquesEtudiantUltime() {
       setUserEarnings(data.userTotalEarnings)
       setUserProductsSold(data.userTotalProductsSold)
     } catch (error) {
-      setError(error.message)
+      console.warn('Top sellers fetch failed, using defaults:', error.message)
+      // Fallback defaults
+      setTopPerformers([])
+      setUserRank(null)
+      setUserEarnings(0)
+      setUserProductsSold(0)
     }
-  }, [selectedSchoolYear])
+  }, [selectedCampaignId, campaignContext])
 
   // Fetch School Raffle
   const fetchSchoolRaffle = useCallback(async (schoolId) => {
@@ -377,17 +565,19 @@ export default function StatistiquesEtudiantUltime() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ schoolYear: selectedSchoolYear })
+        body: JSON.stringify({ campaignId: getCurrentCampaign()?._id })
       })
       if (!response.ok) {
-        throw new Error('Failed to fetch school raffle')
+        console.warn(`Raffle API returned ${response.status}: ${response.statusText}`)
+        throw new Error(`Failed to fetch school raffle: ${response.status}`)
       }
       const data = await response.json()
       setTotalRaffle(data.totalRaffle)
     } catch (error) {
-      setError(error.message)
+      console.warn('Raffle fetch failed, using default:', error.message)
+      setTotalRaffle(0)
     }
-  }, [selectedSchoolYear])
+  }, [selectedCampaignId, campaignContext])
 
   // Fetch Weekly Earnings
   const fetchWeeklyEarnings = useCallback(async (schoolId, userId) => {
@@ -397,7 +587,7 @@ export default function StatistiquesEtudiantUltime() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ schoolYear: selectedSchoolYear })
+        body: JSON.stringify({ campaignId: getCurrentCampaign()?._id })
       })
       if (!response.ok) {
         throw new Error('Failed to fetch weekly earnings')
@@ -409,11 +599,12 @@ export default function StatistiquesEtudiantUltime() {
       }))
       setEarnings(salesData)
     } catch (error) {
-      setError(error.message)
+      // Fallback to empty data
+      setEarnings([])
     } finally {
       setLoading(false)
     }
-  }, [selectedSchoolYear])
+  }, [selectedCampaignId, campaignContext])
 
   // Fetch Products (Assuming updateProductListWithSchool is defined elsewhere)
   const fetchProducts = useCallback(async () => {
@@ -460,18 +651,42 @@ export default function StatistiquesEtudiantUltime() {
 
   // useEffect to fetch school data, top sellers, raffle, and weekly earnings when user and schoolId are available
   useEffect(() => {
-    if (user && schoolId) {
-      fetchSchoolData(schoolId)
-      fetchTopSellers(schoolId, userId)
-      fetchSchoolRaffle(schoolId)
-      fetchWeeklyEarnings(schoolId, userId)
+    const fetchData = async () => {
+      // Wait for campaign context to be loaded
+      if (!campaignContext && session?.user) {
+        return; // Still loading campaign context
+      }
+      
+      if (user && (activeCampaignId || effectiveSchoolId)) {
+        await fetchCampaignStatsContext(activeCampaignId, effectiveSchoolId)
+        
+        // Only fetch these if we have a valid school ID
+        if (effectiveSchoolId && effectiveSchoolId !== 'unknown') {
+          fetchTopSellers(effectiveSchoolId, userId)
+          fetchSchoolRaffle(effectiveSchoolId)
+          fetchWeeklyEarnings(effectiveSchoolId, userId)
+        }
+      } else if (user && !effectiveSchoolId) {
+        // If no school id can be resolved, stop loading to avoid infinite spinner
+        setLoading(false)
+      }
     }
-  }, [user, schoolId, fetchSchoolData, fetchTopSellers, fetchSchoolRaffle, fetchWeeklyEarnings, userId, selectedSchoolYear])
+    
+    fetchData()
+  }, [user, campaignContext, activeCampaignId, effectiveSchoolId, fetchCampaignStatsContext, fetchSchoolData, fetchTopSellers, fetchSchoolRaffle, fetchWeeklyEarnings, userId, selectedCampaignId])
 
-  // useEffect to fetch orders and products on mount
+  // Fetch orders and products on mount; ensure loading finishes even if these endpoints fail
   useEffect(() => {
-    fetchOrders()
-    fetchProducts()
+    let cancelled = false
+    const run = async () => {
+      try {
+        await Promise.allSettled([fetchOrders(), fetchProducts()])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
   }, [fetchOrders, fetchProducts])
 
   // useEffect to handle real-time updates (if applicable)
@@ -482,22 +697,91 @@ export default function StatistiquesEtudiantUltime() {
       const filteredOrders = getFilteredOrders()
       const productBreakdown = filteredOrders.reduce((breakdown, order) => {
         order.products.forEach(product => {
-          const existingProduct = breakdown.find(p => p.name === product.name)
+          // Calculate earnings for this product
+          const profit = (product.productPrice - product.productCost) * product.quantity
+          const studentPercentage = school?.split?.studentBenefit || 85.6
+          const earnings = (profit * studentPercentage / 100) + (order.tip || 0)
+          
+          // Calculate unit price
+          const unitPrice = product.productPrice
+          
+          const existingProduct = breakdown.find(p => p.name === product.productName)
           if (existingProduct) {
             existingProduct.quantity += product.quantity
-            existingProduct.earnings += product.earnings
+            existingProduct.earnings += earnings
           } else {
-            breakdown.push({ name: product.name, quantity: product.quantity, earnings: product.earnings, unitPrice: product.unitPrice })
+            breakdown.push({ 
+              name: product.productName, 
+              quantity: product.quantity, 
+              earnings: earnings, 
+              unitPrice: unitPrice 
+            })
           }
         })
         return breakdown
       }, [])
-      return productBreakdown
+      
+      // Round earnings to 2 decimal places
+      const roundedBreakdown = productBreakdown.map(product => ({
+        ...product,
+        earnings: Math.round(product.earnings * 100) / 100
+      }))
+      
+      // Custom sort: priority products first, then by quantity (best sellers)
+      const priorityProducts = ['Pâté à la viande', 'Pâté au poulet', 'Tarte au sucre']
+      
+      return roundedBreakdown.sort((a, b) => {
+        // Helper function to check if a product name matches a priority product (case-insensitive, exact match)
+        const getPriorityIndex = (productName) => {
+          const normalizedName = productName.toLowerCase().trim()
+          return priorityProducts.findIndex(priority => {
+            const normalizedPriority = priority.toLowerCase().trim()
+            return normalizedName === normalizedPriority
+          })
+        }
+        
+        const aPriorityIndex = getPriorityIndex(a.name)
+        const bPriorityIndex = getPriorityIndex(b.name)
+        
+        // If both are priority products, maintain their order
+        if (aPriorityIndex !== -1 && bPriorityIndex !== -1) {
+          return aPriorityIndex - bPriorityIndex
+        }
+        
+        // If only a is priority, a comes first
+        if (aPriorityIndex !== -1) {
+          return -1
+        }
+        
+        // If only b is priority, b comes first
+        if (bPriorityIndex !== -1) {
+          return 1
+        }
+        
+        // If neither is priority, sort by quantity (best sellers first)
+        return b.quantity - a.quantity
+      })
     }
+
+  // Calculate total student earnings using campaign data
+  useEffect(() => {
+    const calculateEarnings = async () => {
+      if (school && orders.length > 0) {
+        try {
+          const earnings = await calculateTotalStudentEarnings();
+          setTotalStudentEarning(earnings);
+        } catch (error) {
+          console.error('Error calculating student earnings:', error);
+          setTotalStudentEarning(0);
+        }
+      }
+    };
+    
+    calculateEarnings();
+  }, [school, orders, calculateTotalStudentEarnings]);
 
   // Calculate derived data
   const totalProductsSold = calculateTotalProductsSold()
-  const totalStudentEarning = calculateTotalStudentEarnings()
   const moneyRemaining = user ? user.objectifPersonnel - totalStudentEarning : 0
   const progressTowardGoal = user ? (totalStudentEarning / user.objectifPersonnel) * 100 : 0
   const productBreakdown = getProductBreakdown(orders)
@@ -505,8 +789,9 @@ export default function StatistiquesEtudiantUltime() {
   const nextChanceProducts = 6 - (totalProductsSold % 6)
   const schoolGoal = school ? school.objectifFinancier : 0
   const personalGoal = user ? user.objectifPersonnel : 0
-  const orderDeadline = school ? school.finCampagne : ''
-  const deliveryDate = school ? school.dateDeLivraison : ''
+  const currentCampaign = getCurrentCampaign()
+  const orderDeadline = currentCampaign?.endDate || school?.finCampagne || ''
+  const deliveryDate = currentCampaign?.deliveryDate || school?.dateDeLivraison || ''
   const totalSales = calculateTotalStudentSales()
   const totalCost = calculateTotalStudentCost()
   const totalTip = calculateTotalStudentTip()
@@ -536,7 +821,7 @@ export default function StatistiquesEtudiantUltime() {
     for (const level in profitRewards) {
       if (totalProfit < profitRewards[level].minimum) {
         nextReward.name = profitRewards[level].badge
-        nextReward.productsAway = profitRewards[level].minimum - totalProfit
+        nextReward.productsAway = Math.round((profitRewards[level].minimum - totalProfit) * 100) / 100
         break
       }
     }
@@ -567,48 +852,125 @@ export default function StatistiquesEtudiantUltime() {
 
   return (
     <Layout>
-    <div className="container mx-auto p-4 space-y-6">
+      {isTest && (
+        <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 shadow-sm mb-4 mt-16">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-orange-900 mb-1">
+                ⚠️ MODE TEST
+              </h3>
+              <p className="text-sm text-orange-800">
+                Les statistiques affichées sont en mode test et ne sont pas définitives jusqu'à l'approbation de la campagne.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-8 space-y-6 max-w-7xl">
       {/* Header */}
       <motion.div
-        className="flex justify-between items-center mb-6"
+        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8"
         initial={{ opacity: 0, y: -50 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-          Tableau de Bord de Campagne
-        </h1>
+        <div className="flex-1 space-y-3">
+          {/* Back arrow */}
+          <Link 
+            href="/dashboard" 
+            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors mb-2"
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Retour au tableau de bord
+          </Link>
+          
+          {/* Title */}
+          <div className="space-y-2">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+              Statistique de campagne
+            </h1>
+            <p className="text-sm text-gray-600">
+              Suivez vos performances et vos progrès
+            </p>
+          </div>
+        </div>
         
-        {/* School Year Selector */}
-        <div className="flex items-center space-x-2">
-          <Calendar className="h-5 w-5 text-gray-600" />
-          <Select value={selectedSchoolYear} onValueChange={setSelectedSchoolYear}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Année scolaire" />
-            </SelectTrigger>
-            <SelectContent>
-              {schoolYears.map((year) => (
-                <SelectItem key={year.id} value={year.id}>
-                  {year.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Campaign Selectors */}
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+          <CampaignSelector 
+            onCampaignSwitch={handleCampaignSwitch}
+            onJoinCampaign={() => setShowJoinCampaignModal(true)}
+          />
+          
+          <div className="flex items-center space-x-2">
+            <Calendar className="h-5 w-5 text-gray-600" />
+            <Select 
+              value={selectedCampaignId || campaignContext?.campaigns?.[0]?._id} 
+              onValueChange={setSelectedCampaignId}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Sélectionner une campagne" />
+              </SelectTrigger>
+              <SelectContent>
+                {campaignContext?.campaigns?.map((campaign) => (
+                  <SelectItem key={campaign._id} value={campaign._id}>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{campaign.campaignCode}</span>
+                      <span className="text-xs text-gray-500">
+                        {campaign.startDate && campaign.endDate 
+                          ? `${new Date(campaign.startDate).toLocaleDateString('fr-CA', { month: 'short', day: 'numeric' })} - ${new Date(campaign.endDate).toLocaleDateString('fr-CA', { month: 'short', day: 'numeric' })}`
+                          : 'Dates non disponibles'
+                        }
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </motion.div>
 
       {/* Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MotivationCard />
-        <DailyChallenge />
-        <AchievementsCard totalProfit={totalStudentEarning} />
-      </div>
+      <motion.div 
+        ref={statsCardsRef}
+        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+        animate={currentStep?.key === 'viewedStats' ? {
+          scale: [1, 1.02, 1],
+        } : {}}
+        transition={{
+          duration: 2,
+          repeat: currentStep?.key === 'viewedStats' ? Infinity : 0,
+          ease: "easeInOut"
+        }}
+      >
+        <div className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 rounded-lg p-2' : ''}>
+          <MotivationCard />
+        </div>
+        <div className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 rounded-lg p-2' : ''}>
+          <DailyChallenge />
+        </div>
+        <div className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 rounded-lg p-2' : ''}>
+          <AchievementsCard totalProfit={totalStudentEarning} />
+        </div>
+      </motion.div>
 
       {/* Tabs Section */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="apercu">Aperçu</TabsTrigger>
-          <TabsTrigger value="produits">Produits</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100/50 p-1 rounded-lg">
+          <TabsTrigger 
+            value="apercu"
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 font-medium transition-all duration-200 rounded-md"
+          >
+            Aperçu
+          </TabsTrigger>
+          <TabsTrigger 
+            value="produits"
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 font-medium transition-all duration-200 rounded-md"
+          >
+            Produits
+          </TabsTrigger>
         </TabsList>
 
         {/* Aperçu Tab */}
@@ -623,7 +985,7 @@ export default function StatistiquesEtudiantUltime() {
                 salesTarget={user?.objectifPersonnel || 1000}
                 productsSold={totalProductsSold}
                 customersReached={userProductsSold} // Assuming customersReached is number of products sold
-                daysLeft={Math.ceil((new Date(school?.finCampagne) - new Date()) / (1000 * 60 * 60 * 24))}
+                daysLeft={orderDeadline ? Math.ceil((new Date(orderDeadline) - new Date()) / (1000 * 60 * 60 * 24)) : 0}
                 leaderboardPosition={userRank}
                 milestones={profitRewards}
                 topPerformers={topPerformers}
@@ -664,6 +1026,33 @@ export default function StatistiquesEtudiantUltime() {
       <RecommendationsCard />
       <RaffleInfoCard raffleInfo={raffleInfo} />
     </div>
+    
+    {/* Onboarding Tooltip */}
+    {showOnboardingTooltip && currentStep && tooltipTarget && (
+      <OnboardingTooltip
+        isVisible={showOnboardingTooltip}
+        position="top"
+        title={getStepContent(currentStep.key).title}
+        message={getStepContent(currentStep.key).message}
+        tip={getStepContent(currentStep.key).tip}
+        stats={getStepContent(currentStep.key).stats}
+        benefit={getStepContent(currentStep.key).benefit}
+        onNext={handleOnboardingNext}
+        onSkip={handleOnboardingSkip}
+        onClose={handleOnboardingClose}
+        currentStep={currentStep.order}
+        totalSteps={6}
+        showCelebration={false}
+        targetElement={tooltipTarget}
+      />
+    )}
+
+    {/* Join Campaign Modal */}
+    <JoinCampaignModal 
+      isOpen={showJoinCampaignModal}
+      onClose={() => setShowJoinCampaignModal(false)}
+      onSuccess={handleJoinCampaignSuccess}
+    />
     </Layout>
   )
 }
@@ -777,7 +1166,7 @@ function AchievementsCard({ totalProfit }) {
     for (const level in profitRewards) {
       if (totalProfit < profitRewards[level].minimum) {
         nextReward.name = profitRewards[level].badge
-        nextReward.productsAway = profitRewards[level].minimum - totalProfit
+        nextReward.productsAway = Math.round((profitRewards[level].minimum - totalProfit) * 100) / 100
         break
       }
     }
@@ -798,7 +1187,7 @@ function AchievementsCard({ totalProfit }) {
       <CardContent>
         <div className="flex justify-between mb-4">
           <h3 className="font-semibold">Profits Actuels</h3>
-          <Badge variant="outline" className="ml-2 text-yellow-500">Profits: {totalProfit}$</Badge>
+          <Badge variant="outline" className="ml-2 text-yellow-500">Profits: {Math.round(totalProfit * 100) / 100}$</Badge>
         </div>
         <ScrollArea className="h-[200px] mb-4">
           {accumulatedProfitRewards.map((reward, index) => (
@@ -817,7 +1206,7 @@ function AchievementsCard({ totalProfit }) {
 
         <div className="flex items-center mt-4">
           <Award className="mr-2 h-5 w-5 text-yellow-500" />
-          <p><strong>Prochaine Récompense:</strong> {nextProfitReward.name} (à {nextProfitReward.productsAway} profits près)</p>
+          <p><strong>Prochaine Récompense:</strong> {nextProfitReward.name} (à {nextProfitReward.productsAway.toFixed(2)}$ près)</p>
         </div>
       </CardContent>
     </Card>
@@ -923,7 +1312,9 @@ function LeaderboardCard({ rank, topPerformers }) {
         <CardTitle>Classement</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="mb-4">Votre Rang: <Badge variant="secondary" className="text-lg">{rank}ème</Badge></p>
+        <div className="mb-4">
+          Votre Rang: <Badge variant="secondary" className="text-lg">{rank}ème</Badge>
+        </div>
         <h3 className="font-semibold mb-2">Meilleurs Vendeurs:</h3>
         <ol className="list-decimal list-inside">
           {topPerformers.map((performer, index) => (
@@ -934,10 +1325,12 @@ function LeaderboardCard({ rank, topPerformers }) {
               transition={{ duration: 0.5, delay: index * 0.1 }}
               className="mb-2"
             >
-              {performer.name} - {performer.totalProductsSold} produits vendus
-              <Badge variant="outline" className="ml-2">
-                {performer.category}
-              </Badge>
+              <div className="flex items-center justify-between">
+                <span>{performer.name} - {performer.totalProductsSold} produits vendus</span>
+                <Badge variant="outline">
+                  {performer.category}
+                </Badge>
+              </div>
             </motion.li>
           ))}
         </ol>
@@ -980,15 +1373,15 @@ function ProductBreakdownCard({ productBreakdown, totalProductsSold, totalEarnin
               <TableRow key={index}>
                 <TableCell>{product.name}</TableCell>
                 <TableCell>{product.quantity}</TableCell>
-                <TableCell>{product.unitPrice}$</TableCell>
-                <TableCell>{product.earnings}$</TableCell>
+                <TableCell>{product.unitPrice.toFixed(2)}$</TableCell>
+                <TableCell>{product.earnings.toFixed(2)}$</TableCell>
               </TableRow>
             ))}
             <TableRow className="font-bold">
               <TableCell>Total</TableCell>
               <TableCell>{totalProductsSold}</TableCell>
               <TableCell></TableCell>
-              <TableCell>{totalEarnings}$</TableCell>
+              <TableCell>{Math.round(totalEarnings * 100) / 100}$</TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -1123,7 +1516,7 @@ function RewardsCard({ totalProfit }) {
     for (const level in profitRewards) {
       if (totalProfit < profitRewards[level].minimum) {
         nextReward.name = profitRewards[level].badge
-        nextReward.productsAway = profitRewards[level].minimum - totalProfit
+        nextReward.productsAway = Math.round((profitRewards[level].minimum - totalProfit) * 100) / 100
         break
       }
     }
@@ -1153,7 +1546,7 @@ function RewardsCard({ totalProfit }) {
         </ScrollArea>
         <div className="flex items-center mt-4">
           <Award className="mr-2 h-5 w-5 text-yellow-500" />
-          <p><strong>Prochaine Récompense:</strong> {nextReward.name} (à {nextReward.productsAway} profits près)</p>
+          <p><strong>Prochaine Récompense:</strong> {nextReward.name} (à {nextReward.productsAway.toFixed(2)}$ près)</p>
         </div>
       </CardContent>
     </Card>
@@ -1162,6 +1555,67 @@ function RewardsCard({ totalProfit }) {
 
 // Recommendations Card Component
 function RecommendationsCard() {
+  const { data: session } = useSession();
+  const [storeId, setStoreId] = useState(null);
+  const [isSharing, setIsSharing] = useState(false);
+
+  useEffect(() => {
+    const fetchStoreId = async () => {
+      if (session?.user?.id) {
+        try {
+          const response = await fetch('/api/get-store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: session.user.id }),
+          });
+          const data = await response.json();
+          if (data.storeId) {
+            setStoreId(data.storeId);
+          }
+        } catch (error) {
+          console.error('Error fetching store ID:', error);
+        }
+      }
+    };
+    fetchStoreId();
+  }, [session]);
+
+  const handleShare = async () => {
+    if (!storeId) {
+      toast.error('Votre boutique n\'est pas encore configurée. Veuillez d\'abord personnaliser votre boutique.');
+      return;
+    }
+
+    setIsSharing(true);
+    const storeUrl = `${window.location.origin}/boutique/${storeId}`;
+    
+    try {
+      // Try using Web Share API first
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Ma boutique de financement',
+          text: 'Découvrez ma boutique et commandez vos produits préférés!',
+          url: storeUrl
+        });
+      } else {
+        // Fallback to copying to clipboard
+        await navigator.clipboard.writeText(storeUrl);
+        toast.success('Lien copié dans le presse-papiers! Partagez-le maintenant.');
+      }
+    } catch (error) {
+      // User cancelled or error occurred, try clipboard fallback
+      try {
+        await navigator.clipboard.writeText(storeUrl);
+        toast.success('Lien copié dans le presse-papiers!');
+      } catch (clipboardError) {
+        console.error('Error copying to clipboard:', clipboardError);
+        toast.error('Impossible de partager le lien. Veuillez le copier manuellement.');
+      }
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1173,9 +1627,13 @@ function RecommendationsCard() {
           <li>Organisez un mini-événement pour promouvoir vos produits</li>
           <li>Utilisez les réseaux sociaux pour atteindre plus de clients potentiels</li>
         </ul>
-        <Button className="mt-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+        <Button 
+          className="mt-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+          onClick={handleShare}
+          disabled={isSharing || !storeId}
+        >
           <Share2 className="mr-2 h-4 w-4" />
-          Partager votre lien de vente
+          {isSharing ? 'Partage en cours...' : 'Partager votre lien de vente'}
         </Button>
       </CardContent>
     </Card>

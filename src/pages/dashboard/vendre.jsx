@@ -1,12 +1,19 @@
 // pages/dashboard/vendre.jsx - Version Production Ready
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
+import { motion } from 'framer-motion';
 import Layout from '../../components/Layout';
 import PDFGenerator from '../../components/SalesTools/PDFGenerator';
 import QRCodeGenerator from '../../components/SalesTools/QRCodeGenerator';
 import ClientManager from '../../components/SalesTools/ClientManager';
 import EmailCampaign from '../../components/SalesTools/EmailCampaign';
+import CampaignSelector from '../../components/Dashboard/CampaignSelector';
+import JoinCampaignModal from '../../components/Dashboard/JoinCampaignModal';
+import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip';
+import useOnboarding from '../../hooks/useOnboarding';
+import { getUserCampaignContext } from '../../utils/campaignHelpers';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,7 +30,8 @@ import {
   Gift,
   Eye,
   CheckCircle,
-  Lightbulb
+  Lightbulb,
+  ArrowLeft
 } from 'lucide-react';
 
 export default function VendrePage() {
@@ -34,12 +42,93 @@ export default function VendrePage() {
   const [selectedClients, setSelectedClients] = useState([]);
   const [salesStats, setSalesStats] = useState({ total: 0, thisMonth: 0, growth: 0 });
   const [loading, setLoading] = useState(true);
+  
+  // Campaign-related state
+  const [campaignContext, setCampaignContext] = useState(null);
+  const [showJoinCampaignModal, setShowJoinCampaignModal] = useState(false);
+  
+  // Onboarding state
+  const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
+  const [tooltipTarget, setTooltipTarget] = useState(null);
+  const toolsTabsRef = useRef(null);
+  
+  // Use onboarding hook
+  const {
+    progress,
+    currentStep,
+    isLoading: onboardingLoading,
+    markStepComplete,
+    getStepContent
+  } = useOnboarding();
 
   useEffect(() => {
     if (session) {
       fetchStoreInfo();
     }
   }, [session]);
+
+  // Fetch campaign context
+  useEffect(() => {
+    const fetchCampaignContext = async () => {
+      if (!session?.user) return;
+      
+      try {
+        const response = await fetch('/api/users/campaigns');
+        if (response.ok) {
+          const data = await response.json();
+          const context = getUserCampaignContext(data);
+          setCampaignContext(context);
+        }
+      } catch (error) {
+        console.error('Error fetching campaign context:', error);
+      }
+    };
+
+    fetchCampaignContext();
+  }, [session]);
+
+  // Campaign handlers
+  const handleCampaignSwitch = (campaignId) => {
+    window.location.reload(); // Simple refresh for now
+  };
+
+  const handleJoinCampaignSuccess = (campaign) => {
+    setShowJoinCampaignModal(false);
+    window.location.reload();
+  };
+
+  // Onboarding logic for tools page
+  useEffect(() => {
+    if (!onboardingLoading && currentStep?.key === 'viewedTools') {
+      setShowOnboardingTooltip(true);
+      setTooltipTarget(toolsTabsRef.current);
+    } else {
+      setShowOnboardingTooltip(false);
+    }
+  }, [currentStep, onboardingLoading]);
+
+  // Onboarding handlers
+  const handleOnboardingNext = async () => {
+    if (currentStep?.key === 'viewedTools') {
+      const success = await markStepComplete('viewedTools', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  };
+
+  const handleOnboardingSkip = async () => {
+    if (currentStep?.key === 'viewedTools') {
+      const success = await markStepComplete('viewedTools', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  };
+
+  const handleOnboardingClose = () => {
+    setShowOnboardingTooltip(false);
+  };
 
   useEffect(() => {
     if (storeInfo?.storeId) {
@@ -90,27 +179,27 @@ export default function VendrePage() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert('Copié dans le presse-papiers !');
+    toast.success('Copié dans le presse-papiers !');
   };
 
   const socialTemplates = {
     facebook: [
       {
-        text: "🍰 Nouvelle campagne de financement ! Commandez vos délicieuses tartes Massibec et soutenez notre école. Livraison gratuite ! #Massibec #Financement #École",
+        text: "🍰 Nouvelle campagne de financement ! Commandez vos délicieuses tartes Massibec et soutenez notre organisation. Livraison gratuite ! #Massibec #Financement",
         tip: "Partagez sur votre mur et dans les groupes locaux"
       },
       {
-        text: "🎯 Objectif: 1000 tartes vendues ! Aidez-nous à atteindre notre but en commandant vos tartes préférées. Chaque commande compte ! #Objectif #Tartes #École",
+        text: "🎯 Objectif: 1000 tartes vendues ! Aidez-nous à atteindre notre but en commandant vos tartes préférées. Chaque commande compte ! #Objectif #Tartes",
         tip: "Créez un événement Facebook pour votre campagne"
       },
       {
-        text: "❤️ Merci à tous ceux qui ont déjà commandé ! Il nous reste encore quelques jours pour atteindre notre objectif. Commandez maintenant et soutenez notre école ! #Merci #Soutien",
+        text: "❤️ Merci à tous ceux qui ont déjà commandé ! Il nous reste encore quelques jours pour atteindre notre objectif. Commandez maintenant et soutenez notre organisation ! #Merci #Soutien",
         tip: "Taguez les personnes qui ont commandé pour les remercier"
       }
     ],
     instagram: [
       {
-        text: "✨ Nouvelle collection de tartes Massibec disponible ! Swipe pour voir nos délicieux produits 👆 Commandez maintenant et soutenez notre école 🏫 #Massibec #Tartes #École",
+        text: "✨ Nouvelle collection de tartes Massibec disponible ! Swipe pour voir nos délicieux produits 👆 Commandez maintenant et soutenez notre organisation 🏫 #Massibec #Tartes",
         tip: "Créez un carrousel avec photos des produits"
       },
       {
@@ -124,15 +213,15 @@ export default function VendrePage() {
     ],
     tiktok: [
       {
-        text: "POV: Tu découvres les meilleures tartes de ta vie 🥧✨ Commandez maintenant et soutenez notre école ! Lien en bio #Massibec #Tartes #École #Financement",
+        text: "POV: Tu découvres les meilleures tartes de ta vie 🥧✨ Commandez maintenant et soutenez notre organisation ! Lien en bio #Massibec #Tartes #Financement",
         tip: "Filmez une vidéo de dégustation authentique"
       },
       {
-        text: "Cette école vend des tartes et c'est génial ! 🎓🍰 Voici pourquoi vous devriez commander 👇 #École #Tartes #Massibec #Financement",
+        text: "Cette organisation vend des tartes et c'est génial ! 🎓🍰 Voici pourquoi vous devriez commander 👇 #Tartes #Massibec #Financement",
         tip: "Créez une vidéo avec musique tendance"
       },
       {
-        text: "Jour 1 de ma campagne de financement vs Jour 30 😱 Regardez notre progression ! #Transformation #Financement #École",
+        text: "Jour 1 de ma campagne de financement vs Jour 30 😱 Regardez notre progression ! #Transformation #Financement",
         tip: "Montrez votre évolution et vos résultats"
       }
     ]
@@ -154,14 +243,34 @@ export default function VendrePage() {
   }
 
   return (
-    <Layout>
+    <Layout className="pt-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-6 mt-2 sm:mb-8 sm:mt-4">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            Outils de Vente
-          </h1>
-          <p className="text-gray-600 text-sm sm:text-base lg:text-lg">Boostez vos ventes avec nos outils marketing prêts à utiliser</p>
+        <div className="mb-6 sm:mb-8">
+          {/* Back Arrow */}
+          <div className="mb-4">
+            <Button 
+              variant="ghost" 
+              onClick={() => router.push('/dashboard')}
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Retour au tableau de bord</span>
+            </Button>
+          </div>
+          
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                Outils de Vente
+              </h1>
+              <p className="text-gray-600 text-sm sm:text-base lg:text-lg">Boostez vos ventes avec nos outils marketing prêts à utiliser</p>
+            </div>
+            <CampaignSelector 
+              onCampaignSwitch={handleCampaignSwitch}
+              onJoinCampaign={() => setShowJoinCampaignModal(true)}
+            />
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -214,7 +323,18 @@ export default function VendrePage() {
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="marketing" className="space-y-4 sm:space-y-6">
+        <motion.div
+          ref={toolsTabsRef}
+          animate={currentStep?.key === 'viewedTools' ? {
+            scale: [1, 1.02, 1],
+          } : {}}
+          transition={{
+            duration: 2,
+            repeat: currentStep?.key === 'viewedTools' ? Infinity : 0,
+            ease: "easeInOut"
+          }}
+        >
+        <Tabs defaultValue="marketing" className={`space-y-4 sm:space-y-6 ${currentStep?.key === 'viewedTools' ? 'ring-4 ring-blue-500 rounded-lg p-4' : ''}`}>
           <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
             <TabsTrigger value="marketing" className="text-xs sm:text-sm">🎨 Marketing</TabsTrigger>
             <TabsTrigger value="clients" className="text-xs sm:text-sm">👥 Clients</TabsTrigger>
@@ -525,7 +645,35 @@ export default function VendrePage() {
             </Card>
           </TabsContent>
         </Tabs>
+        </motion.div>
       </div>
+      
+      {/* Onboarding Tooltip */}
+      {showOnboardingTooltip && currentStep && tooltipTarget && (
+        <OnboardingTooltip
+          isVisible={showOnboardingTooltip}
+          position="top"
+          title={getStepContent(currentStep.key).title}
+          message={getStepContent(currentStep.key).message}
+          tip={getStepContent(currentStep.key).tip}
+          stats={getStepContent(currentStep.key).stats}
+          benefit={getStepContent(currentStep.key).benefit}
+          onNext={handleOnboardingNext}
+          onSkip={handleOnboardingSkip}
+          onClose={handleOnboardingClose}
+          currentStep={currentStep.order}
+          totalSteps={6}
+          showCelebration={false}
+          targetElement={tooltipTarget}
+        />
+      )}
+
+      {/* Join Campaign Modal */}
+      <JoinCampaignModal 
+        isOpen={showJoinCampaignModal}
+        onClose={() => setShowJoinCampaignModal(false)}
+        onSuccess={handleJoinCampaignSuccess}
+      />
     </Layout>
   );
 }

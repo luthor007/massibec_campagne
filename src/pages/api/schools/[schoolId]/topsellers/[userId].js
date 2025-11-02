@@ -2,6 +2,7 @@ import dbConnect from '../../../../../lib/mongodb';
 import User from '../../../../../models/User';
 import Order from '../../../../../models/Order';
 import School from '../../../../../models/School';
+import { calculateStudentEarnings, getCampaignDataWithFallback } from '../../../../../utils/campaignHelpers';
 
 const profitRewards = {
   level1: {
@@ -76,18 +77,28 @@ const profitRewards = {
   }
 };
 
-const calculateTotalEarnings = (orders, school) => {
-  let totalEarnings = 0;
-
-  orders.forEach(order => {
-    const { products, tip } = order;
-    const totalCost = products.reduce((acc, product) => acc + (product.productCost * product.quantity), 0);
-    const profitBeforeTips = order.totalAmount - totalCost;
-    const studentEarnings = (profitBeforeTips * (school.split.studentBenefit / 100)) + (tip || 0);
-    totalEarnings += studentEarnings;
-  });
-
-  return totalEarnings;
+const calculateTotalEarnings = async (orders, school) => {
+  try {
+    // Get campaign data with fallback to school data
+    const { campaign, fallbackSplit } = await getCampaignDataWithFallback(school._id, school);
+    
+    // Calculate earnings using campaign-specific per-product profit splits
+    const totalEarnings = calculateStudentEarnings(orders, campaign, fallbackSplit);
+    
+    return totalEarnings;
+  } catch (error) {
+    console.error('Error calculating total earnings:', error);
+    // Fallback to old calculation if campaign helpers fail
+    let totalEarnings = 0;
+    orders.forEach(order => {
+      const { products, tip } = order;
+      const totalCost = products.reduce((acc, product) => acc + (product.productCost * product.quantity), 0);
+      const profitBeforeTips = order.totalAmount - totalCost;
+      const studentEarnings = (profitBeforeTips * (school.split.studentBenefit / 100)) + (tip || 0);
+      totalEarnings += studentEarnings;
+    });
+    return totalEarnings;
+  }
 };
 
 // Function to determine the user's category based on total earnings
@@ -110,7 +121,7 @@ const schoolYears = {
 
 export default async function handler(req, res) {
   const { schoolId, userId } = req.query;
-  const { schoolYear = '2025-2026' } = req.body;
+  const { schoolYear = '2025-2026', campaignId } = req.body;
 
   try {
     await dbConnect();
@@ -130,30 +141,62 @@ export default async function handler(req, res) {
     const startDate = new Date(yearData.startDate);
     const endDate = new Date(yearData.endDate);
 
-    // Fetch all students in the school
-    const students = await User.find({ school: schoolId, role: 'student' });
+    // Fetch all students in the school (both legacy school field and campaign-based)
+    const students = await User.find({ 
+      $or: [
+        { school: schoolId, role: 'student' },
+        { 'campaigns.schoolId': schoolId, role: 'student' }
+      ]
+    });
     if (!students || students.length === 0) {
-      return res.status(404).json({ message: 'No students found for this school.' });
+      return res.status(200).json({
+        topPerformers: [],
+        userRank: null,
+        userTotalEarnings: '0.00',
+        userTotalProductsSold: 0,
+        userCategory: 'Noob'
+      });
     }
 
-    // Calculate total earnings for each student (filtered by school year)
+    // Calculate total earnings for each student (filtered by school year and campaign)
     const studentData = await Promise.all(students.map(async student => {
-      const orders = await Order.find({ 
+      const orderQuery = { 
         user: student._id,
         createdAt: {
           $gte: startDate,
           $lte: endDate
         }
-      });
-      const totalEarnings = calculateTotalEarnings(orders, school);
+      };
+      
+      // Filter by campaign if provided
+      if (campaignId) {
+        orderQuery.$or = [
+          { campaignId: campaignId },
+          { campaignId: { $exists: false } },
+          { campaignId: null }
+        ];
+      }
+      
+      const orders = await Order.find(orderQuery);
+      const totalEarnings = await calculateTotalEarnings(orders, school);
       const totalProductsSold = orders.reduce((acc, order) => acc + order.products.reduce((sum, p) => sum + p.quantity, 0), 0);
       const category = determineUserCategory(totalEarnings);
       return { student, totalEarnings, totalProductsSold, category };
     }));
 
-    // Sort by total earnings and get the top 3 sellers
-    const topPerformers = studentData
-      .sort((a, b) => b.totalEarnings - a.totalEarnings)
+    // Sort by total earnings (descending), then alphabetically by name (ascending)
+    const sortedStudentData = studentData.sort((a, b) => {
+      // First sort by total earnings (descending)
+      if (b.totalEarnings !== a.totalEarnings) {
+        return b.totalEarnings - a.totalEarnings;
+      }
+      // If earnings are equal, sort alphabetically by name (ascending)
+      return a.student.name.localeCompare(b.student.name, 'fr', { sensitivity: 'base' });
+    });
+
+    // Get the top 3 sellers
+    const topPerformers = sortedStudentData
+      .slice(0, 3)
       .map(({ student, totalEarnings, totalProductsSold, category }) => ({
         name: student.name,
         totalEarnings: totalEarnings.toFixed(2),
@@ -162,10 +205,8 @@ export default async function handler(req, res) {
       }));
 
     // Find the current user's rank and earnings
-    const currentUserData = studentData.find(data => data.student._id.toString() === userId);
-    const userRank = studentData
-      .sort((a, b) => b.totalEarnings - a.totalEarnings)
-      .findIndex(data => data.student._id.toString() === userId) + 1;
+    const currentUserData = sortedStudentData.find(data => data.student._id.toString() === userId);
+    const userRank = sortedStudentData.findIndex(data => data.student._id.toString() === userId) + 1;
 
     if (!currentUserData) {
       return res.status(404).json({ message: 'User not found' });

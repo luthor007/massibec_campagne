@@ -2,6 +2,7 @@
 @import 'tailwindcss/components';
 
 @import 'tailwindcss/utilities';
+@import '../styles/dashboard.css';
 
 body {
   font-family: Arial, Helvetica, sans-serif;

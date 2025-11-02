@@ -1,57 +1,74 @@
 import dbConnect from '../../../lib/mongodb';
 import Campaign from '../../../models/Campaign';
 import School from '../../../models/School';
-import User from '../../../models/User';
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    try {
-      await dbConnect();
+  if (req.method !== 'GET') {
+    return res.status(405).json({ message: 'Méthode non autorisée' });
+  }
 
-      const { campaignId } = req.query;
+  try {
+    await dbConnect();
 
-      if (!campaignId) {
-        return res.status(400).json({ message: 'Campaign ID is required' });
-      }
+    const { campaignId } = req.query;
 
-      // Extract the token from the request
-      const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-      if (!token) {
-        return res.status(401).json({ message: 'Non autorisé, pas connecté' });
-      }
-
-      const userId = token.sub;
-
-      // Get user info to find the school
-      const user = await User.findById(userId).lean();
-
-      if (!user || user.role !== 'school_manager') {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-
-      // Find the campaign
-      const campaign = await Campaign.findById(campaignId)
-        .populate('school', 'name address ville codePostal logo')
-        .populate('customPrices.productId', 'name price cost image')
-        .populate('profitSplits.productId', 'name');
-
-      if (!campaign) {
-        return res.status(404).json({ message: 'Campagne non trouvée' });
-      }
-
-      // Verify the campaign belongs to the user's school
-      if (campaign.school._id.toString() !== user.schoolManagerInfo.organisme.toString()) {
-        return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
-      }
-
-      res.status(200).json({ campaign });
-
-    } catch (error) {
-      console.error('Error fetching campaign:', error);
-      res.status(500).json({ message: 'Erreur lors de la récupération de la campagne', error: error.message });
+    if (!campaignId) {
+      return res.status(400).json({ message: 'ID de campagne requis' });
     }
-  } else {
-    res.status(405).json({ message: 'Method not allowed' });
+
+    // Try to find campaign in Campaign collection first
+    let campaign = await Campaign.findById(campaignId).lean();
+    
+    // If not found in Campaign collection, check school's embedded campaigns
+    if (!campaign) {
+      // Find school that has this campaign embedded
+      const school = await School.findOne({
+        'campaigns._id': campaignId
+      }).lean();
+      
+      if (school) {
+        const embeddedCampaign = school.campaigns?.find((camp) => 
+          camp._id?.toString() === campaignId.toString()
+        );
+        if (embeddedCampaign) {
+          campaign = embeddedCampaign;
+        }
+      }
+    }
+    
+    if (!campaign) {
+      return res.status(404).json({ message: 'Campagne non trouvée' });
+    }
+
+    // For public access (no token), only return public campaign data (donations config, etc.)
+    // For authenticated users, return full campaign data
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    
+    if (!token) {
+      // Public access - return only public data needed for checkout
+      const publicCampaign = {
+        _id: campaign._id,
+        campaignNumber: campaign.campaignNumber,
+        campaignCode: campaign.campaignCode,
+        donationsForStudents: campaign.donationsForStudents || {
+          enabled: true,
+          presets: [0, 5, 10, 20]
+        },
+        donationsForSchool: campaign.donationsForSchool || {
+          enabled: true,
+          presets: [0, 5, 10, 20]
+        },
+        customPrices: campaign.customPrices || [],
+        profitSplits: campaign.profitSplits || []
+      };
+      return res.status(200).json({ campaign: publicCampaign });
+    }
+
+    // Authenticated access - return full campaign data
+    res.status(200).json({ campaign });
+  } catch (error) {
+    console.error('Error fetching campaign:', error);
+    res.status(500).json({ message: 'Erreur lors de la récupération de la campagne', error: error.message });
   }
 }

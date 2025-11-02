@@ -1,6 +1,7 @@
 // pages/inscription.jsx
 
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,11 +26,6 @@ export default function InscriptionForm() {
     objectifPersonnel: '', // Changed to string for user input
     nomParent: '',
     prenomParent: '',
-    adresse: '',
-    app: '',
-    ville: '',
-    province: '',
-    codePostal: '',
     telephone: '',
     schoolCode: '', // Added here for school code input
 
@@ -87,21 +83,24 @@ export default function InscriptionForm() {
     e.preventDefault();
 
     if (formData.motDePasse !== formData.confirmationMotDePasse) {
-      return alert("Les mots de passe ne correspondent pas.");
+      toast.error("Les mots de passe ne correspondent pas.");
+      return;
     }
 
     if (!formData.schoolCode) {
-      return alert("Veuillez entrer le code de l'école.");
+      toast.error("Veuillez entrer le code de l'école.");
+      return;
     }
 
     const school = await verifySchoolCode(formData.schoolCode);
     if (!school) {
-      return alert("Le code d'identification de l'école n'est pas valide");
+      toast.error("Le code d'identification de l'école n'est pas valide");
+      return;
     }
 
     const schoolId = school._id;
 
-    if (formData.objectifPersonnel === "" || !formData.prenom || !formData.nom || !formData.nomParent || !formData.prenomParent || !formData.adresse || !formData.ville || !formData.telephone) {
+    if (formData.objectifPersonnel === "" || !formData.prenom || !formData.nom || !formData.nomParent || !formData.prenomParent || !formData.telephone) {
       setErrorMessage("Veuillez remplir tous les champs obligatoires");
       setIsSubmitting(false);
       return;
@@ -123,18 +122,13 @@ export default function InscriptionForm() {
           parentInfo: {
             nomParent: formData.nomParent,
             prenomParent: formData.prenomParent,
-            adresse: formData.adresse,
-            app: formData.app,
-            ville: formData.ville,
-            province: formData.province,
-            codePostal: formData.codePostal,
             telephone: formData.telephone,
           }
         }),
       });
 
       if (response.ok) {
-        alert('Inscription réussie!');
+        toast.success('Inscription réussie!');
         router.push('/email-verification');
       } else {
         const errorData = await response.json();
@@ -316,70 +310,6 @@ export default function InscriptionForm() {
           id="email"
           name="email"
           value={formData.email}
-          onChange={handleChange}
-          required
-        />
-      </div>
-      
-      {/* Adresse */}
-      <div className="space-y-2">
-        <Label htmlFor="adresse">Adresse</Label>
-        <Input
-          type="text"
-          id="adresse"
-          name="adresse"
-          value={formData.adresse}
-          onChange={handleChange}
-          required
-        />
-      </div>
-      
-      {/* Appartment (Optionnel) */}
-      <div className="space-y-2">
-        <Label htmlFor="app">App. (Optionnel)</Label>
-        <Input
-          type="text"
-          id="app"
-          name="app"
-          value={formData.app}
-          onChange={handleChange}
-        />
-      </div>
-      
-      {/* Ville */}
-      <div className="space-y-2">
-        <Label htmlFor="ville">Ville</Label>
-        <Input
-          type="text"
-          id="ville"
-          name="ville"
-          value={formData.ville}
-          onChange={handleChange}
-          required
-        />
-      </div>
-      
-      {/* Province */}
-      <div className="space-y-2">
-        <Label htmlFor="province">Province</Label>
-        <Input
-          type="text"
-          id="province"
-          name="province"
-          value={formData.province}
-          onChange={handleChange}
-          required
-        />
-      </div>
-      
-      {/* Code Postal */}
-      <div className="space-y-2">
-        <Label htmlFor="codePostal">Code Postal</Label>
-        <Input
-          type="text"
-          id="codePostal"
-          name="codePostal"
-          value={formData.codePostal}
           onChange={handleChange}
           required
         />

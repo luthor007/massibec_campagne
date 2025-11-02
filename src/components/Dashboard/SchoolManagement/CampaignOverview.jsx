@@ -16,9 +16,16 @@ import {
   Mail
 } from 'lucide-react';
 import ParentLetterModal from './ParentLetterModal';
+import CampaignCodeDisplay from './CampaignCodeDisplay';
+import { getTerminology } from '@/utils/organizationHelpers';
+import { isTestCampaign } from '@/utils/campaignHelpers';
 
 const CampaignOverview = ({ campaign, stats, loading, school }) => {
   const [showParentLetterModal, setShowParentLetterModal] = useState(false);
+  // Get terminology based on organization type
+  const organizationType = school?.organizationType || campaign?.organizationType || 'school';
+  const terminology = getTerminology(organizationType);
+  const isTest = isTestCampaign(campaign);
   const getStatusColor = (status) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800 border-green-200';
@@ -49,11 +56,19 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('fr-CA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    if (!date) return 'N/A';
+    const dateObj = new Date(date);
+    if (isNaN(dateObj.getTime())) return 'N/A';
+    
+    // Use UTC methods to avoid timezone issues
+    const year = dateObj.getUTCFullYear();
+    const month = dateObj.getUTCMonth();
+    const day = dateObj.getUTCDate();
+    
+    const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+                    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    
+    return `${day} ${months[month]} ${year}`;
   };
 
   if (loading) {
@@ -81,7 +96,18 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {isTest && (
+        <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+          <div className="flex items-center space-x-2 mb-2">
+            <AlertCircle className="h-5 w-5 text-orange-600" />
+            <span className="font-bold text-orange-900">⚠️ MODE TEST</span>
+          </div>
+          <p className="text-sm text-orange-800">
+            Les statistiques affichées sont en mode test et ne sont pas définitives.
+          </p>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
         <div className="flex items-center justify-between">
@@ -91,10 +117,10 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Campagne #{campaign.campaignNumber}
+                {campaign.name || `Campagne #${campaign.campaignNumber}`}
               </h2>
               <p className="text-gray-600 mt-1 font-medium">
-                Vue d'ensemble des performances
+                {campaign.name ? `Campagne #${campaign.campaignNumber}` : 'Vue d\'ensemble des performances'}
               </p>
             </div>
           </div>
@@ -122,6 +148,9 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
           </div>
         </div>
       </div>
+
+      {/* Campaign Code Section */}
+      <CampaignCodeDisplay campaign={campaign} school={school} />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -156,7 +185,7 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
           <CardContent>
             <div className="text-2xl font-bold text-blue-700">{stats.participantCount}</div>
             <p className="text-xs text-blue-600 mt-1">
-              étudiants actifs
+              {terminology.participants} actifs
             </p>
           </CardContent>
         </Card>
@@ -235,7 +264,7 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
                       <div className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-bold">
                         {index + 1}
                       </div>
-                      <span className="text-sm">Participant #{seller.userId.slice(-4)}</span>
+                      <span className="text-sm font-medium">{seller.userName || 'Utilisateur inconnu'}</span>
                     </div>
                     <span className="font-medium">{formatCurrency(seller.totalSales)}</span>
                   </div>

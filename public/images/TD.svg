@@ -1,0 +1,31 @@
+<svg version="1.1" id="Layer_1" xmlns:x="ns_extend;" xmlns:i="ns_ai;" xmlns:graph="ns_graphs;" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 57 51" style="enable-background:new 0 0 57 51;" xml:space="preserve">
+ <style type="text/css">
+  .st0{fill:#19B14B;}
+	.st1{clip-path:url(#SVGID_2_);fill:#FFFFFF;}
+ </style>
+ <metadata>
+  <sfw xmlns="ns_sfw;">
+   <slices>
+   </slices>
+   <sliceSourceBounds bottomLeftOrigin="true" height="51" width="57" x="172" y="-225.7">
+   </sliceSourceBounds>
+  </sfw>
+ </metadata>
+ <g>
+  <rect class="st0" width="57" height="51">
+  </rect>
+  <g>
+   <defs>
+    <rect id="SVGID_1_" width="57" height="51">
+    </rect>
+   </defs>
+   <clipPath id="SVGID_2_">
+    <use href="#SVGID_1_" style="overflow:visible;">
+    </use>
+   </clipPath>
+   <path class="st1" d="M37.4,40H24.2V16h6.7v19.7h6.4c4.4,0,6.3-3.1,6.3-11c0-7.9-2.1-10.3-6.6-10.3H22.3V40h-6.6V14.5H6v-4.2h33
+			c8,0,11.7,4.1,11.7,14.4C50.7,38.3,45.1,40,37.4,40">
+   </path>
+  </g>
+ </g>
+</svg>

@@ -2,6 +2,8 @@ import dbConnect from '../../../lib/mongodb';
 import Campaign from '../../../models/Campaign';
 import School from '../../../models/School';
 import User from '../../../models/User';
+import SchoolManager from '../../../models/SchoolManager';
+import Product from '../../../models/Product';
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
@@ -17,24 +19,72 @@ export default async function handler(req, res) {
 
       const userId = token.sub;
 
-      // Get user info to find the school
+      // Get user info to find the schools
       const user = await User.findById(userId).lean();
 
       if (!user || user.role !== 'school_manager') {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
-      // Find the school
-      const school = await School.findById(user.schoolManagerInfo.organisme);
-      if (!school) {
-        return res.status(404).json({ message: 'École non trouvée' });
+      // Get all schools this user manages (including SchoolManager relationships)
+      const schoolManagerRecords = await SchoolManager.find({
+        user: userId,
+        status: 'active'
+      }).lean();
+
+      let schoolIds = schoolManagerRecords.map(sm => sm.school);
+
+      // Also check for backward compatibility - if user is original school manager
+      if (user.schoolManagerInfo?.organisme) {
+        const legacySchoolId = user.schoolManagerInfo.organisme.toString();
+        const alreadyInList = schoolIds.some(sid => sid?.toString() === legacySchoolId);
+        if (!alreadyInList) {
+          schoolIds.push(user.schoolManagerInfo.organisme);
+        }
       }
 
-      // Get all campaigns for this school
-      const campaigns = await Campaign.find({ school: school._id })
+      // If no schools found, return empty array
+      if (schoolIds.length === 0) {
+        return res.status(200).json({ campaigns: [] });
+      }
+
+      // Get all campaigns for all schools this user manages
+      let campaigns = await Campaign.find({ school: { $in: schoolIds } })
         .populate('customPrices.productId', 'name price cost image')
         .populate('profitSplits.productId', 'name')
         .sort({ campaignNumber: -1 }); // Most recent first
+
+      // If no campaigns in Campaign collection, check schools' campaigns arrays (legacy)
+      if (campaigns.length === 0) {
+        const schools = await School.find({ _id: { $in: schoolIds } }).lean();
+        const legacyCampaigns = [];
+        
+        for (const school of schools) {
+          if (school.campaigns && school.campaigns.length > 0) {
+            legacyCampaigns.push(...school.campaigns.map(campaign => ({
+          _id: campaign._id,
+          campaignNumber: campaign.campaignNumber,
+          startDate: campaign.startDate,
+          endDate: campaign.endDate,
+          deliveryDate: campaign.deliveryDate,
+          isActive: campaign.isActive,
+          status: campaign.status || 'active',
+          financialGoal: campaign.financialGoal,
+          profitSplitType: campaign.profitSplitType || 'absolute',
+          customPrices: campaign.customPrices || [],
+          profitSplits: campaign.profitSplits || [],
+          notes: campaign.notes,
+              createdAt: campaign.createdAt,
+              updatedAt: campaign.updatedAt,
+              school: school._id
+            })));
+          }
+        }
+        
+        if (legacyCampaigns.length > 0) {
+          campaigns = legacyCampaigns;
+        }
+      }
 
       res.status(200).json({ campaigns });
 

@@ -4,8 +4,9 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, RefreshCw, School, User, Eye, Edit, Users, Plus } from 'lucide-react';
+import { LogOut, RefreshCw, School, User, Eye, Edit, Users, Plus, FileText, Settings, Cog, Store, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { isTestCampaign } from '../../utils/campaignHelpers';
 
 // Custom Hooks
 import { useSchoolData } from '../../hooks/useSchoolData';
@@ -20,6 +21,11 @@ import CampaignCreator from '../../components/Dashboard/SchoolManagement/Campaig
 import ParticipantsList from '../../components/Dashboard/SchoolManagement/ParticipantsList';
 import WelcomeModal from '../../components/Dashboard/SchoolManagement/WelcomeModal';
 import OnboardingWizard from '../../components/Dashboard/OnboardingWizard';
+import RapportView from '../../components/Dashboard/SchoolManagement/RapportView';
+import TeamManagement from '../../components/Dashboard/SchoolManagement/TeamManagement';
+import SchoolSettings from '../../components/Dashboard/SchoolManagement/SchoolSettings';
+import MultiSchoolSelector from '../../components/Dashboard/SchoolManagement/MultiSchoolSelector';
+import CreateSchoolModal from '../../components/Dashboard/SchoolManagement/CreateSchoolModal';
 
 export default function DashboardManager() {
   const { data: session, status } = useSession();
@@ -27,25 +33,62 @@ export default function DashboardManager() {
   const [activeTab, setActiveTab] = useState('overview');
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false);
+  const [schoolListRefreshTrigger, setSchoolListRefreshTrigger] = useState(0);
+  
+  // Initialize selectedCampaignId from localStorage or null
+  const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedCampaignId') || null;
+    }
+    return null;
+  });
+
+  // State for selected school
+  const [selectedSchoolId, setSelectedSchoolId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedSchoolId') || null;
+    }
+    return null;
+  });
 
   // Custom hooks for data management
+  // Only pass selectedSchoolId if it exists, otherwise let useSchoolData fetch from user's associations
+  const schoolIdParam = selectedSchoolId || undefined;
   const { 
     school, 
     schoolLoading, 
     schoolError, 
     refreshSchoolData 
-  } = useSchoolData(session?.user?.id);
+  } = useSchoolData(schoolIdParam);
+
+  // Clear invalid selectedSchoolId if school data fetch fails
+  useEffect(() => {
+    if (schoolError && selectedSchoolId) {
+      console.log('School fetch failed, clearing invalid selectedSchoolId from localStorage');
+      setSelectedSchoolId(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('selectedSchoolId');
+      }
+      // Retry fetching school data without the invalid schoolId
+      refreshSchoolData();
+    }
+  }, [schoolError, selectedSchoolId, refreshSchoolData]);
 
   const { 
-    campaigns, 
+    campaigns: allCampaigns, 
     campaignsLoading, 
     campaignsError, 
     refreshCampaigns 
   } = useCampaigns(session?.user?.id);
 
+  // Filter campaigns by selected school if a school is selected
+  const campaigns = selectedSchoolId && school?.id
+    ? allCampaigns?.filter(campaign => campaign.school?._id?.toString() === selectedSchoolId || campaign.school === selectedSchoolId) || []
+    : allCampaigns || [];
+
   // Get the selected campaign
-  const activeCampaign = campaigns?.find(campaign => campaign._id === selectedCampaignId) || null;
+  const activeCampaign = campaigns?.find(campaign => campaign._id?.toString() === selectedCampaignId?.toString()) || null;
 
   const { 
     stats, 
@@ -78,10 +121,20 @@ export default function DashboardManager() {
     setActiveTab(tab);
   };
 
-  // Handle campaign selection
+  // Handle campaign selection and persist to localStorage
   const handleCampaignSelect = (campaignId) => {
     setSelectedCampaignId(campaignId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedCampaignId', campaignId);
+    }
   };
+
+  // Save to localStorage whenever selectedCampaignId changes
+  useEffect(() => {
+    if (selectedCampaignId && typeof window !== 'undefined') {
+      localStorage.setItem('selectedCampaignId', selectedCampaignId);
+    }
+  }, [selectedCampaignId]);
 
   // Refresh all data
   const handleRefresh = async () => {
@@ -98,10 +151,38 @@ export default function DashboardManager() {
     }
   };
 
+  // Switch to student dashboard view (preview mode)
+  const handleSwitchToBoutique = async () => {
+    try {
+      // Check if we're already in student preview mode
+      const currentViewMode = typeof window !== 'undefined' ? localStorage.getItem('viewMode') : null;
+      
+      if (currentViewMode === 'student_preview') {
+        // Return to manager dashboard
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('viewMode');
+        }
+        router.push('/dashboard-manager');
+        return;
+      }
+
+      // Set view mode to student preview
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('viewMode', 'student_preview');
+      }
+
+      // Redirect to student dashboard (preview mode)
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Error switching to student dashboard:', error);
+      toast.error(error.message || 'Erreur lors de l\'accès au dashboard participant');
+    }
+  };
+
   // Handle campaign creation
   const handleCampaignCreated = (newCampaign) => {
     refreshCampaigns();
-    setSelectedCampaignId(newCampaign._id);
+    setSelectedCampaignId(newCampaign._id?.toString() || newCampaign._id);
     setActiveTab('overview');
     setShowWelcomeModal(false); // Hide welcome modal after campaign creation
     toast.success('Campagne créée avec succès !');
@@ -116,37 +197,117 @@ export default function DashboardManager() {
   // Auto-select first campaign if none selected
   useEffect(() => {
     if (campaigns && campaigns.length > 0 && !selectedCampaignId) {
-      setSelectedCampaignId(campaigns[0]._id);
+      setSelectedCampaignId(campaigns[0]._id?.toString() || campaigns[0]._id);
     }
   }, [campaigns, selectedCampaignId]);
 
   // Show welcome modal if no campaigns exist (but not if user just created one or if wizard is shown)
   useEffect(() => {
-    if (school && campaigns && campaigns.length === 0 && !schoolLoading && !campaignsLoading && activeTab !== 'create' && !showOnboardingWizard) {
+    // Only evaluate after all data has finished loading
+    if (schoolLoading || campaignsLoading) {
+      console.log('Still loading:', { schoolLoading, campaignsLoading });
+      return; // Don't show/hide modal while still loading
+    }
+    
+    const profileIsCompleted = school?.profileCompleted === true;
+    
+    console.log('Campaigns loaded:', { 
+      campaignsCount: campaigns?.length || 0, 
+      activeTab, 
+      showOnboardingWizard,
+      hasSchool: !!school,
+      profileIsCompleted
+    });
+    
+    // Don't show welcome modal if onboarding wizard should be shown (profile not completed)
+    // Only show modal if profile is completed, no campaigns exist, and wizard is not shown
+    if (school && profileIsCompleted && campaigns && campaigns.length === 0 && activeTab !== 'create' && !showOnboardingWizard) {
+      console.log('Showing welcome modal - no campaigns found and profile completed');
       setShowWelcomeModal(true);
     } else if (campaigns && campaigns.length > 0) {
+      console.log('Hiding welcome modal - campaigns exist');
       setShowWelcomeModal(false); // Hide welcome modal if campaigns exist
+    } else if (!profileIsCompleted) {
+      console.log('Hiding welcome modal - profile not completed (wizard should show)');
+      setShowWelcomeModal(false); // Hide welcome modal if profile not completed
     }
   }, [school, campaigns, schoolLoading, campaignsLoading, activeTab, showOnboardingWizard]);
 
   // Show onboarding wizard if user profile is not completed
   useEffect(() => {
-    if (session?.user && school && !schoolLoading && !school.profileCompleted) {
-      setShowOnboardingWizard(true);
+    // Only evaluate after all data has finished loading
+    if (schoolLoading || campaignsLoading || status === 'loading') {
+      console.log('Still loading, skipping wizard check:', { schoolLoading, campaignsLoading, status });
+      return; // Don't show/hide wizard while still loading
     }
-  }, [session, school, schoolLoading]);
+    
+    // Explicit check: profile is NOT completed if:
+    // 1. school exists AND profileCompleted is explicitly false
+    // 2. school exists AND profileCompleted is undefined/null (defaults to false)
+    const profileIsCompleted = school?.profileCompleted === true;
+    const profileNotCompleted = school && school.profileCompleted !== true; // true only if explicitly set to true
+    
+    console.log('Onboarding wizard check:', {
+      hasSession: !!session?.user,
+      hasSchool: !!school,
+      schoolId: school?.id,
+      schoolLoading,
+      campaignsLoading,
+      status,
+      profileCompleted: school?.profileCompleted,
+      profileIsCompleted,
+      profileNotCompleted,
+      showOnboardingWizard,
+      schoolError: schoolError?.message
+    });
+    
+    // Show wizard if: user is logged in, school exists, profile is NOT completed, wizard not already showing
+    if (session?.user && school && profileNotCompleted && !showOnboardingWizard) {
+      console.log('✅ Showing onboarding wizard - profile not completed');
+      setShowOnboardingWizard(true);
+    } else if (school && profileIsCompleted && showOnboardingWizard) {
+      console.log('Hiding onboarding wizard - profile completed');
+      setShowOnboardingWizard(false);
+    } else if (schoolError) {
+      console.error('❌ Cannot show wizard - school loading error:', schoolError);
+    } else if (!school && !schoolLoading) {
+      console.warn('⚠️ Cannot show wizard - school is null and not loading');
+    }
+  }, [session, school, schoolLoading, schoolError, campaignsLoading, status, showOnboardingWizard]);
 
   // Handle campaign update
-  const handleCampaignUpdate = () => {
-    refreshCampaigns();
-    refreshStats();
+  const handleCampaignUpdate = async (updatedCampaign) => {
+    console.log('handleCampaignUpdate called with:', updatedCampaign);
+    
+    // Refresh campaigns to get updated data
+    await refreshCampaigns();
+    await refreshStats();
+    
+    // If updated campaign is provided, ensure it's selected
+    if (updatedCampaign && updatedCampaign._id) {
+      const campaignId = updatedCampaign._id.toString();
+      if (selectedCampaignId !== campaignId) {
+        setSelectedCampaignId(campaignId);
+      }
+    }
+    
     toast.success('Campagne mise à jour');
   };
 
-  const handleOnboardingComplete = () => {
+  const handleOnboardingComplete = async () => {
     setShowOnboardingWizard(false);
-    refreshSchoolData(); // Refresh school data to get updated profile status
-    toast.success('Profil complété avec succès !');
+    try {
+      // Wait a bit for the database update to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // Force refresh school data with cache busting
+      await refreshSchoolData();
+      // Also refresh the school list in MultiSchoolSelector
+      setSchoolListRefreshTrigger(prev => prev + 1);
+      toast.success('Profil complété avec succès !');
+    } catch (error) {
+      console.error('Error refreshing school data:', error);
+      toast.error('Erreur lors de la mise à jour du profil');
+    }
   };
 
   if (status === 'loading' || schoolLoading || campaignsLoading) {
@@ -195,18 +356,37 @@ export default function DashboardManager() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-18 py-2">
               <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
-                    <School className="h-7 w-7 text-white" />
-                        </div>
-                        <div>
-                    <h1 className="text-xl font-bold text-gray-900">
-                      {school?.name || 'École'}
-                    </h1>
-                    <p className="text-sm text-gray-500 font-medium">Gestionnaire d'école</p>
-                        </div>
-                      </div>
-                    </div>
+                <MultiSchoolSelector
+                  selectedSchoolId={selectedSchoolId || school?.id}
+                  refreshTrigger={schoolListRefreshTrigger}
+                  onSelectSchool={(schoolId) => {
+                    setSelectedSchoolId(schoolId);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('selectedSchoolId', schoolId);
+                    }
+                    // Clear selected campaign when switching schools
+                    setSelectedCampaignId(null);
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem('selectedCampaignId');
+                    }
+                    refreshSchoolData();
+                    refreshCampaigns();
+                  }}
+                  onCreateSchool={() => {
+                    setShowCreateSchoolModal(true);
+                  }}
+                  onSchoolsChange={(schools) => {
+                    // If no school is selected and schools exist, select the first one
+                    if (!selectedSchoolId && schools.length > 0) {
+                      const firstSchoolId = schools[0].id;
+                      setSelectedSchoolId(firstSchoolId);
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('selectedSchoolId', firstSchoolId);
+                      }
+                    }
+                  }}
+                />
+              </div>
 
               <div className="flex items-center space-x-3">
                 <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-lg">
@@ -214,13 +394,13 @@ export default function DashboardManager() {
                   <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
                     </div>
                         <Button 
-                  onClick={handleRefresh} 
+                  onClick={handleSwitchToBoutique} 
                           variant="outline" 
                           size="sm"
                   className="border-gray-300 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200"
                         >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Actualiser
+                  <Users className="h-4 w-4 mr-2" />
+                  Voir comme participant
                         </Button>
                           <Button 
                   onClick={handleLogout} 
@@ -250,6 +430,23 @@ export default function DashboardManager() {
                     
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* TEST Mode Banner */}
+          {activeCampaign && isTestCampaign(activeCampaign) && (
+            <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-xl p-4 shadow-sm">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-orange-900 mb-1">
+                    ⚠️ MODE TEST
+                  </h3>
+                  <p className="text-sm text-orange-800">
+                    Cette campagne est en attente d'approbation. Toutes les données, commandes, statistiques et rapports sont en mode test et ne sont pas définitives jusqu'à l'approbation de la campagne par Massibec.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Error Messages */}
           {statsError && (
             <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm">
@@ -274,7 +471,7 @@ export default function DashboardManager() {
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
             <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 overflow-hidden">
-              <TabsList className="grid w-full grid-cols-4 bg-gray-50/50 h-14 p-1">
+              <TabsList className="grid w-full grid-cols-6 bg-gray-50/50 h-14 p-1">
                 <TabsTrigger 
                   value="overview" 
                   className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
@@ -297,11 +494,25 @@ export default function DashboardManager() {
                   Participants
                 </TabsTrigger>
                 <TabsTrigger 
+                  value="rapport" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Rapports
+                </TabsTrigger>
+                <TabsTrigger 
                   value="create" 
                   className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Créer
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="settings" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Paramètres & Équipe
                 </TabsTrigger>
               </TabsList>
                                 </div>
@@ -327,6 +538,14 @@ export default function DashboardManager() {
               <ParticipantsList 
                 campaign={activeCampaign}
                 onRefresh={handleRefresh}
+                school={school}
+              />
+          </TabsContent>
+
+            <TabsContent value="rapport" className="space-y-6">
+              <RapportView 
+                campaign={activeCampaign}
+                school={school}
               />
           </TabsContent>
 
@@ -335,6 +554,27 @@ export default function DashboardManager() {
                 onCampaignCreated={handleCampaignCreated}
                 school={school}
               />
+          </TabsContent>
+
+            <TabsContent value="settings" className="space-y-6">
+              {schoolLoading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Chargement des paramètres...</p>
+                </div>
+              ) : school?.id ? (
+                <div className="space-y-6">
+                  <SchoolSettings 
+                    school={school} 
+                    onUpdate={refreshSchoolData}
+                  />
+                  <TeamManagement schoolId={school.id} />
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-red-500">Erreur: Impossible de charger les paramètres de l'école</p>
+                </div>
+              )}
           </TabsContent>
         </Tabs>
       </main>
@@ -354,6 +594,26 @@ export default function DashboardManager() {
         user={session.user}
         school={school}
         onComplete={handleOnboardingComplete}
+      />
+
+      {/* Create School Modal */}
+      <CreateSchoolModal
+        isOpen={showCreateSchoolModal}
+        onClose={() => setShowCreateSchoolModal(false)}
+        onSchoolCreated={(newSchool) => {
+          // Refresh school list
+          setSchoolListRefreshTrigger(prev => prev + 1);
+          // Select the newly created school and refresh data
+          setSelectedSchoolId(newSchool.id);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('selectedSchoolId', newSchool.id);
+          }
+          // Wait a bit for the list to refresh, then refresh school data
+          setTimeout(() => {
+            refreshSchoolData();
+            refreshCampaigns();
+          }, 500);
+        }}
       />
     </>
   );

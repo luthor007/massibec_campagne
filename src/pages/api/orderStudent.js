@@ -5,6 +5,7 @@ import OrderStudent from '../../models/OrderStudent';
 import School from '../../models/School';
 import { getNextSequence } from '../../utils/getNextSequence';
 import { sendStudentOrderEmail } from '../../utils/gmailMailer'; // Import de la nouvelle fonction
+import { calculateOrderProfits, getCampaignDataWithFallback, isTestCampaign } from '../../utils/campaignHelpers';
 
 export default async function handler(req, res) {
   await dbConnect();
@@ -120,12 +121,26 @@ export default async function handler(req, res) {
       const activeCampaign = school.campaigns?.find((campaign) => campaign.isActive);
       const campaignNumber = activeCampaign?.campaignNumber || school.currentCampaignNumber || 1;
 
+      // Get campaign data with fallback to school data
+      const { campaign, fallbackSplit } = await getCampaignDataWithFallback(schoolId, school);
 
-      const { studentBenefit, organizationBenefit, raffleBenefit } = school.split;
+      // Check if campaign is in test mode - also check Campaign collection if needed
+      let isTest = false;
+      if (campaign) {
+        isTest = isTestCampaign(campaign);
+      } else if (activeCampaign?._id) {
+        // Try to fetch from Campaign collection
+        const Campaign = (await import('../../models/Campaign')).default;
+        const campaignFromDb = await Campaign.findById(activeCampaign._id).lean();
+        if (campaignFromDb) {
+          isTest = isTestCampaign(campaignFromDb);
+        }
+      }
 
-      // Calculer le profit par produit et les bénéfices
-      let totalStudentBenefit = 0;
-      let totalOrganizationBenefit = 0;
+      // Calculer le profit par produit et les bénéfices using campaign data
+      let totalStudentCashBenefit = 0;
+      let totalStudentSchoolAccountBenefit = 0;
+      let totalSchoolProjectBenefit = 0;
       let totalRaffleBenefit = 0;
 
       const productMap = new Map();
@@ -133,14 +148,46 @@ export default async function handler(req, res) {
       products.forEach(product => {
         const { productName, quantity, price, cost } = product;
         
+        // Try to find product-specific profit split in campaign
+        const profitSplit = campaign?.profitSplits?.find(ps => 
+          ps.productId?.toString() === product.productId?.toString()
+        );
+        
+        let studentCashBenefit, studentSchoolAccountBenefit, schoolProjectBenefit, raffleBenefit;
+        
+        if (profitSplit && campaign.profitSplitType === 'absolute') {
+          // Use absolute per-unit values from campaign
+          const studentCash = Number(profitSplit.studentCash) || Number(profitSplit.student) || 0;
+          const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 0;
+          const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0;
+          const raffle = Number(profitSplit.raffle) || 0;
+          
+          studentCashBenefit = studentCash * quantity;
+          studentSchoolAccountBenefit = studentSchoolAccount * quantity;
+          schoolProjectBenefit = schoolProject * quantity;
+          raffleBenefit = raffle * quantity;
+        } else {
+          // Fallback to percentage calculation using school.split
+          const profit = (price - cost) * quantity;
+          const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
+          const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
+          const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
+          
+          // Assume all student benefit goes to cash for percentage fallback
+          studentCashBenefit = profit * (studentPercentage / 100);
+          studentSchoolAccountBenefit = 0;
+          schoolProjectBenefit = profit * (organizationPercentage / 100);
+          raffleBenefit = profit * (rafflePercentage / 100);
+        }
+        
         if (productMap.has(productName)) {
           // Add quantity to existing product
           const existing = productMap.get(productName);
           existing.quantity += quantity;
-          existing.profit = (price - cost) * existing.quantity;
-          existing.studentBenefit = existing.profit * (studentBenefit / 100);
-          existing.organizationBenefit = existing.profit * (organizationBenefit / 100);
-          existing.raffleBenefit = existing.profit * (raffleBenefit / 100);
+          existing.studentCashBenefit += studentCashBenefit;
+          existing.studentSchoolAccountBenefit += studentSchoolAccountBenefit;
+          existing.schoolProjectBenefit += schoolProjectBenefit;
+          existing.raffleBenefit += raffleBenefit;
         } else {
           // Create new product entry
           const profit = (price - cost) * quantity;
@@ -150,11 +197,20 @@ export default async function handler(req, res) {
             price,
             cost,
             profit,
-            studentBenefit: profit * (studentBenefit / 100),
-            organizationBenefit: profit * (organizationBenefit / 100),
-            raffleBenefit: profit * (raffleBenefit / 100),
+            studentCashBenefit,
+            studentSchoolAccountBenefit,
+            schoolProjectBenefit,
+            raffleBenefit,
+            // Legacy fields for backward compatibility
+            studentBenefit: studentCashBenefit + studentSchoolAccountBenefit,
+            organizationBenefit: schoolProjectBenefit,
           });
         }
+        
+        totalStudentCashBenefit += studentCashBenefit;
+        totalStudentSchoolAccountBenefit += studentSchoolAccountBenefit;
+        totalSchoolProjectBenefit += schoolProjectBenefit;
+        totalRaffleBenefit += raffleBenefit;
       });
 
       const calculatedProducts = Array.from(productMap.values());
@@ -178,10 +234,15 @@ export default async function handler(req, res) {
         amountPaid,
         transferAmount,
         bonusOrganization,
-        studentBenefit: totalStudentBenefit,
-        organizationBenefit: totalOrganizationBenefit,
+        studentCashBenefit: totalStudentCashBenefit,
+        studentSchoolAccountBenefit: totalStudentSchoolAccountBenefit,
+        schoolProjectBenefit: totalSchoolProjectBenefit,
         raffleBenefit: totalRaffleBenefit,
         orderId: newOrderId,
+        isTest: isTest, // Mark order as test if campaign is in test mode
+        // Legacy fields for backward compatibility
+        studentBenefit: totalStudentCashBenefit + totalStudentSchoolAccountBenefit,
+        organizationBenefit: totalSchoolProjectBenefit,
       });
 
       await orderStudent.save();
@@ -210,6 +271,7 @@ export default async function handler(req, res) {
         totalAmount,
         amountPaid,
         paymentInstructions,
+        organizationType: school.organizationType || 'school', // Pass organization type for dynamic terminology
       });
 
       res.status(201).json(orderStudent);

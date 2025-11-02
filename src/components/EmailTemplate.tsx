@@ -2,6 +2,30 @@
 
 import React from 'react';
 
+// Helper function to get terminology - must be client-side compatible
+const getTerminology = (organizationType) => {
+  const orgType = organizationType || 'school';
+  if (orgType === 'school') {
+    return {
+      participant: 'étudiant',
+      participants: 'étudiants',
+      participantLabel: 'étudiant(e)',
+      participantsLabel: 'étudiants',
+      organization: 'école',
+      organizationLabel: 'École'
+    };
+  } else {
+    return {
+      participant: 'membre',
+      participants: 'membres',
+      participantLabel: 'membre',
+      participantsLabel: 'membres',
+      organization: 'organisation',
+      organizationLabel: 'Organisation'
+    };
+  }
+};
+
 interface EmailTemplateProps {
   firstName: string;
   customerEmail: string;
@@ -15,7 +39,13 @@ interface EmailTemplateProps {
     amount: string;
   }[];
   totalAmount: number;
-  tip: number;
+  tip?: number; // Legacy field
+  studentDonation?: number;
+  schoolDonation?: number;
+  studentDonationSplit?: {
+    studentAccount: number;
+    studentCash: number;
+  };
   autoDeposit: boolean;
   orderId: string;
   orderDate: string;
@@ -26,6 +56,7 @@ interface EmailTemplateProps {
   sellerName: string;
   sellerPhone: string;
   sellerEmail: string;
+  organizationType?: string; // New prop for organization type
 }
 
 const EmailTemplate: React.FC<EmailTemplateProps> = ({
@@ -34,7 +65,10 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
   hoursAvailable,
   products,
   totalAmount,
-  tip,
+  tip = 0,
+  studentDonation = 0,
+  schoolDonation = 0,
+  studentDonationSplit,
   autoDeposit,
   orderId,
   orderDate,
@@ -45,7 +79,12 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
   sellerName,
   sellerPhone,
   sellerEmail,
+  organizationType = 'school', // Default to school for backward compatibility
 }) => {
+  // Get terminology based on organization type
+  const terminology = getTerminology(organizationType);
+  // Calculate total donation (new or legacy)
+  const totalDonation = studentDonation + schoolDonation + tip;
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', lineHeight: '1.1', color: '#333' }}>
 
@@ -60,7 +99,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
         <strong>Adresse courriel :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a> <br />
         {autoDeposit ? null : <><strong>Question de sécurité :</strong> {firstName}<br /></>}
         {autoDeposit ? null : <strong>Réponse :</strong>} {autoDeposit ? null : <a href={`mailto:${customerEmail}`}>{customerEmail}</a>}<br />
-        <strong>Montant :</strong> {totalAmount.toFixed(2)} $<br/>
+        <strong>Montant :</strong> {(totalAmount || 0).toFixed(2)} $<br/>
         {autoDeposit ? <><strong>Message :</strong> #{orderId}</> : null}
       </p>
 
@@ -88,7 +127,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
             <tr key={index}>
               <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.productName}</td>
               <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{item.quantity}</td>
-              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>${item.price.toFixed(2)}</td>
+              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>${(item.price || 0).toFixed(2)}</td>
               <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>${item.amount}</td>
             </tr>
           ))}
@@ -104,16 +143,40 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
               {(products.reduce((acc, item) => acc + item.quantity * 0.17, 0)).toFixed(2)}
             </td>
           </tr>
-          <tr>
-            <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>Pourboire :</td>
-            <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>
-              {tip.toFixed(2)}
-            </td>
-          </tr>
+          {/* Donation row(s) */}
+          {totalDonation > 0 && (
+            <>
+              {studentDonation > 0 && (
+                <tr>
+                  <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>Don {terminology.participant} :</td>
+                  <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', color: '#3B82F6' }}>
+                    ${studentDonation.toFixed(2)}
+                  </td>
+                </tr>
+              )}
+              {schoolDonation > 0 && (
+                <tr>
+                  <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>Don {terminology.organization} :</td>
+                  <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', color: '#10B981' }}>
+                    ${schoolDonation.toFixed(2)}
+                  </td>
+                </tr>
+              )}
+              {/* Legacy tip display for backward compatibility */}
+              {tip > 0 && studentDonation === 0 && schoolDonation === 0 && (
+                <tr>
+                  <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>Pourboire :</td>
+                  <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>
+                    ${tip.toFixed(2)}
+                  </td>
+                </tr>
+              )}
+            </>
+          )}
           <tr>
             <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>Total à payer :</td>
             <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>
-              ${totalAmount.toFixed(2)}
+              ${((totalAmount || 0) + (totalDonation || 0)).toFixed(2)}
             </td>
           </tr>
         </tbody>

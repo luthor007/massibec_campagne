@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from "@/hooks/use-toast"
-import { Edit, Trash2, Plus, Search, DollarSign, ShoppingCart } from 'lucide-react'
+import { Edit, Trash2, Plus, Search, DollarSign, ShoppingCart, GripVertical, ChevronUp, ChevronDown } from 'lucide-react'
 
 
 
@@ -21,19 +21,37 @@ import { Edit, Trash2, Plus, Search, DollarSign, ShoppingCart } from 'lucide-rea
 const updateProductListWithSchool = async (productList) => {
   const updatedProducts = await Promise.all(productList.map(async (product) => {
     try {
+      // Skip if product.school is missing, invalid, or already a string (name)
+      if (!product.school || typeof product.school === 'string') {
+        return {
+          ...product,
+          school: product.school || 'Universel',
+          isEditing: false
+        }
+      }
+      
       const response = await fetch(`/api/schools/${product.school}`)
       if (!response.ok) {
-        throw new Error(`Échec de la récupération des données de l'école: ${response.statusText}`)
+        console.warn(`Échec de la récupération des données de l'école pour le produit ${product.id}`)
+        return {
+          ...product,
+          school: 'Inconnu',
+          isEditing: false
+        }
       }
       const schoolData = await response.json()
       return {
         ...product,
-        school: schoolData.name,
+        school: schoolData.name || 'Inconnu',
         isEditing: false
       }
     } catch (error) {
       console.error('Erreur lors de la mise à jour du produit:', error)
-      return product
+      return {
+        ...product,
+        school: product.school || 'Erreur',
+        isEditing: false
+      }
     }
   }))
   return updatedProducts
@@ -116,6 +134,9 @@ const ProductList = () => {
   }
 
   const saveChanges = async (product) => {
+    // Preserve the original product for recovery in case of error
+    const originalProduct = products.find(p => p.id === product.id);
+    
     try {
       const res = await fetch(`/api/products/${product.id}`, {
         method: 'PUT',
@@ -130,7 +151,7 @@ const ProductList = () => {
           image: product.image,
           isDefault: product.isDefault,
           productId: product.productId,
-          school: product.school
+          // Don't send school field - it's not handled by the API
         }),
       });
 
@@ -141,18 +162,33 @@ const ProductList = () => {
 
       const updatedProduct = await res.json();
       
-      setProducts(products.map(p => 
-        p.id === product.id 
-          ? { ...p, ...updatedProduct, isEditing: false } 
-          : p
-      ));
+      // Only update state if we got a valid response
+      if (updatedProduct && updatedProduct.id) {
+        setProducts(products.map(p => 
+          p.id === product.id 
+            ? { ...p, ...updatedProduct, isEditing: false, school: p.school } 
+            : p
+        ));
 
-      toast({
-        title: "Produit mis à jour",
-        description: "Le produit a été mis à jour avec succès.",
-      });
+        toast({
+          title: "Produit mis à jour",
+          description: "Le produit a été mis à jour avec succès.",
+        });
+      } else {
+        throw new Error('Réponse invalide du serveur');
+      }
     } catch (err) {
       console.error('Erreur lors de la mise à jour du produit:', err);
+      
+      // Restore original product state to prevent blank display
+      if (originalProduct) {
+        setProducts(products.map(p => 
+          p.id === product.id 
+            ? { ...originalProduct, isEditing: false } 
+            : p
+        ));
+      }
+      
       toast({
         title: "Erreur",
         description: err.message || 'Échec de la mise à jour du produit. Veuillez réessayer.',
@@ -171,6 +207,13 @@ const ProductList = () => {
 
   const sortedProducts = React.useMemo(() => {
     let sortableProducts = [...products]
+    // Always sort by order first
+    sortableProducts.sort((a, b) => {
+      const orderA = a.order || 0
+      const orderB = b.order || 0
+      return orderA - orderB
+    })
+    
     if (sortConfig.key !== null) {
       sortableProducts.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) {
@@ -184,6 +227,93 @@ const ProductList = () => {
     }
     return sortableProducts
   }, [products, sortConfig])
+
+  const handleReorder = async (newOrder) => {
+    // Save new order to server first
+    try {
+      const response = await fetch('/api/products/reorder', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          products: newOrder.map((product, index) => ({
+            id: product.id || product._id,
+            order: index
+          }))
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save order')
+      }
+
+      // Update local state with new order values
+      const updatedProducts = newOrder.map((product, index) => ({
+        ...product,
+        order: index
+      }))
+      
+      setProducts(updatedProducts)
+
+      toast({
+        title: "Ordre mis à jour",
+        description: "L'ordre des produits a été sauvegardé.",
+      })
+    } catch (error) {
+      console.error('Error saving order:', error)
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder l'ordre des produits.",
+        variant: "destructive",
+      })
+      // Reload products to reset to original order
+      window.location.reload()
+    }
+  }
+
+  const moveProduct = async (productId, direction) => {
+    const currentIndex = products.findIndex(p => p.id === productId)
+    if (currentIndex === -1) return
+    
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    if (newIndex < 0 || newIndex >= products.length) return
+
+    // Swap products
+    const newProducts = [...products]
+    ;[newProducts[currentIndex], newProducts[newIndex]] = [newProducts[newIndex], newProducts[currentIndex]]
+
+    // Save to server
+    try {
+      const response = await fetch('/api/products/reorder', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          products: newProducts.map((product, index) => ({
+            id: product.id || product._id,
+            order: index
+          }))
+        }),
+      })
+
+      if (response.ok) {
+        setProducts(newProducts)
+        toast({
+          title: "Ordre mis à jour",
+          description: "L'ordre des produits a été sauvegardé.",
+        })
+      }
+    } catch (error) {
+      console.error('Error saving order:', error)
+      toast({
+        title: "Erreur",
+        description: "Impossible de sauvegarder l'ordre des produits.",
+        variant: "destructive",
+      })
+    }
+  }
 
   const filteredProducts = sortedProducts.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,53 +369,69 @@ const ProductList = () => {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[250px]">
-                    <button className="font-bold" onClick={() => handleSort('name')}>
+                <TableRow className="bg-gradient-to-r from-gray-50 to-blue-50">
+                  <TableHead className="w-[80px] font-semibold text-gray-700">Ordre</TableHead>
+                  <TableHead className="w-[250px] font-semibold text-gray-700">
+                    <button className="font-bold hover:text-blue-600 transition-colors" onClick={() => handleSort('name')}>
                       Nom du Produit {sortConfig.key === 'name' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button className="font-bold" onClick={() => handleSort('productId')}>
+                  <TableHead className="font-semibold text-gray-700">
+                    <button className="font-bold hover:text-blue-600 transition-colors" onClick={() => handleSort('productId')}>
                       ID Produit {sortConfig.key === 'productId' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button className="font-bold" onClick={() => handleSort('cost')}>
+                  <TableHead className="font-semibold text-gray-700">
+                    <button className="font-bold hover:text-blue-600 transition-colors" onClick={() => handleSort('cost')}>
                       Coût {sortConfig.key === 'cost' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button className="font-bold" onClick={() => handleSort('price')}>
+                  <TableHead className="font-semibold text-gray-700">
+                    <button className="font-bold hover:text-blue-600 transition-colors" onClick={() => handleSort('price')}>
                       Prix de Vente {sortConfig.key === 'price' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button className="font-bold" onClick={() => handleSort('profit')}>
+                  <TableHead className="font-semibold text-gray-700">
+                    <button className="font-bold hover:text-blue-600 transition-colors" onClick={() => handleSort('profit')}>
                       Profit {sortConfig.key === 'profit' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </button>
                   </TableHead>
-                  <TableHead>
-                    <button className="font-bold" onClick={() => handleSort('school')}>
+                  <TableHead className="font-semibold text-gray-700">
+                    <button className="font-bold hover:text-blue-600 transition-colors" onClick={() => handleSort('school')}>
                       École {sortConfig.key === 'school' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
                     </button>
                   </TableHead>
-                  <TableHead>Produit par Défaut</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Produit par Défaut</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <AnimatePresence>
-                  {filteredProducts.map((product) => {
-                    const profitPerUnit = product.price - product.cost
+                {filteredProducts.map((product, index) => {
+                  const profitPerUnit = product.price - product.cost
+                  const displayOrder = index + 1
                     return (
-                      <motion.tr
-                        key={product.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
+                      <TableRow key={product.id} className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100">
+                      <TableCell className="w-[80px]">
+                        <div className="flex flex-col items-center gap-1 min-h-[80px] justify-center">
+                          <button
+                            onClick={() => moveProduct(product.id, 'up')}
+                            disabled={index === 0}
+                            className="p-1.5 hover:bg-blue-50 hover:border-blue-200 border border-transparent rounded-md transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed group"
+                            title="Déplacer vers le haut"
+                          >
+                            <ChevronUp className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                          </button>
+                          <span className="font-mono text-sm font-bold px-3 py-1 bg-gradient-to-br from-blue-50 to-purple-50 text-gray-700 rounded-md shadow-sm min-w-[30px] text-center">{displayOrder}</span>
+                          <button
+                            onClick={() => moveProduct(product.id, 'down')}
+                            disabled={index === filteredProducts.length - 1}
+                            className="p-1.5 hover:bg-blue-50 hover:border-blue-200 border border-transparent rounded-md transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed group"
+                            title="Déplacer vers le bas"
+                          >
+                            <ChevronDown className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                          </button>
+                        </div>
+                      </TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-3">
                             <div className="h-10 w-10 rounded-full overflow-hidden">
@@ -409,10 +555,9 @@ const ProductList = () => {
                             </div>
                           )}
                         </TableCell>
-                      </motion.tr>
-                    )
-                  })}
-                </AnimatePresence>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>

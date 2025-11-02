@@ -12,12 +12,29 @@ export default async function handler(req, res) {
         return res.status(400).json({ message: 'Email is required' });
       }
 
-      // Check if user exists
-      const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+      // Normalize email the same way as inscription API (remove zero-width chars too)
+      const normalizedEmail = email ? email.toLowerCase().trim().replace(/[\u200B-\u200D\uFEFF]/g, '') : '';
+      
+      // Check if user exists - try exact match first
+      let existingUser = await User.findOne({ email: normalizedEmail });
+      
+      // If not found, try case-insensitive regex search
+      if (!existingUser) {
+        const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        existingUser = await User.findOne({ 
+          email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') }
+        });
+      }
 
       res.status(200).json({ 
         exists: !!existingUser,
-        message: existingUser ? 'Email already exists' : 'Email available'
+        message: existingUser ? 'Email already exists' : 'Email available',
+        ...(existingUser && process.env.NODE_ENV === 'development' && {
+          debug: {
+            existingEmail: existingUser.email,
+            role: existingUser.role
+          }
+        })
       });
     } catch (error) {
       console.error('Error checking email:', error);

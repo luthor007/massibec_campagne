@@ -1,5 +1,6 @@
 // pages/dashboard/vendre.jsx - Version Production Ready
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
@@ -90,7 +91,7 @@ export default function VendrePage() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert('Copié dans le presse-papiers !');
+    toast.success('Copié dans le presse-papiers !');
   };
 
   const socialTemplates = {

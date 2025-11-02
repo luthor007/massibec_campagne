@@ -11,6 +11,8 @@ export interface IProductItem {
   product: mongoose.Types.ObjectId | IProduct;
   quantity: number;
   productName?: string; // Optionnel, utilisé pour l'e-mail
+  productPrice?: number;
+  productCost?: number;
 }
 
 export interface IOrder extends Document {
@@ -23,9 +25,12 @@ export interface IOrder extends Document {
   totalAmount: number;
   customerName: string;
   customerEmail: string;
-  status: 'En attente' | 'Payer' | 'Commander' | 'Complété';
+  phoneNumber: string;
+  status: 'En attente' | 'Payé' | 'Commander' | 'Complété';
   createdAt: Date;
   orderId: string;
+  tip?: number;
+  discount?: number;
 }
 
 const OrderSchema: Schema = new Schema({

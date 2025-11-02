@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Facebook, Instagram, Mail, Link as LinkIcon, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,7 +74,7 @@ ${currentUrl}
       onClick: (e) => {
         e.preventDefault();
         navigator.clipboard.writeText(getShareMessage());
-        alert('Message copié! Collez-le dans votre story ou publication Instagram.');
+        toast.success('Message copié! Collez-le dans votre story ou publication Instagram.');
       }
     },
     {

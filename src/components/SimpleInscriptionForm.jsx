@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -86,11 +87,18 @@ export default function SimpleInscriptionForm() {
       });
 
       if (response.ok) {
-        alert('Compte créé avec succès ! Vérifiez votre e-mail pour confirmer votre compte.');
-        router.push('/connexion');
+        // Store email in sessionStorage for email verification page
+        sessionStorage.setItem('pendingVerificationEmail', formData.email.toLowerCase().trim());
+        router.push('/email-verification');
       } else {
         const errorData = await response.json();
+        console.error('Registration error:', errorData);
         setErrorMessage(errorData.message || 'Erreur lors de la création du compte');
+        
+        // If it's an email already exists error, update the emailExists state
+        if (errorData.message?.includes('déjà utilisée') || errorData.message?.includes('already exists')) {
+          setEmailExists(true);
+        }
       }
     } catch (error) {
       console.error('Error:', error);

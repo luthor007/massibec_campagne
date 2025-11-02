@@ -1,5 +1,4 @@
-// pages/api/commandes/[orderId].ts
-
+// pages/api/commandes/[orderId].ts (consolidated into this route)
 import type { NextApiRequest, NextApiResponse } from 'next';
 import dbConnect from '../../../lib/mongodb';
 import Order from '../../../models/Order';
@@ -98,18 +97,23 @@ export default async function handler(
       // Delete the order using _id
       await Order.findByIdAndDelete(id);
 
-      // Send deletion email
-      await sendDeletionEmail({
-        to: order.customerEmail,
-        subject: `Suppression de votre commande - Commande #${order.orderId}`,
-        firstName: order.customerName,
-        storeName: store.name,
-        orderId: order.orderId,
-        deletionDate: new Date().toLocaleDateString('fr-FR'),
-        sellerName: user.name,
-        sellerPhone: user.parentInfo?.telephone || 'Non fourni',
-        sellerEmail: user.email,
-      });
+      // Send deletion email (don't fail if email sending fails)
+      try {
+        await sendDeletionEmail({
+          to: order.customerEmail,
+          subject: `Suppression de votre commande - Commande #${order.orderId}`,
+          firstName: order.customerName,
+          storeName: store.name,
+          orderId: order.orderId,
+          deletionDate: new Date().toLocaleDateString('fr-FR'),
+          sellerName: user.name,
+          sellerPhone: user.parentInfo?.telephone || 'Non fourni',
+          sellerEmail: user.email,
+        });
+      } catch (emailError: any) {
+        // Log the email error but don't fail the request
+        console.error('Erreur lors de l\'envoi de l\'email de suppression:', emailError);
+      }
 
       res.status(200).json({ message: 'Commande supprimée avec succès.' });
     } catch (error: any) {

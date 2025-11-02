@@ -1,19 +1,55 @@
 import { useState, useEffect, useCallback } from 'react';
 
-export const useSchoolData = (userId) => {
+export const useSchoolData = (schoolIdOrUserId) => {
   const [school, setSchool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchSchoolData = useCallback(async () => {
-    if (!userId) return;
+  const fetchSchoolData = useCallback(async (forceRefresh = false) => {
+    // Always try to fetch, even if schoolIdOrUserId is undefined
+    // The API will find the school from user's associations if no schoolId is provided
+    // Only skip if explicitly set to empty string
+    if (schoolIdOrUserId === '') return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/school-info');
+      // If it looks like an ObjectId (24 hex chars), treat it as schoolId
+      // Otherwise, don't pass schoolId and let API find from user's associations
+      const isSchoolId = schoolIdOrUserId && /^[0-9a-fA-F]{24}$/.test(schoolIdOrUserId);
+      const queryParam = isSchoolId ? `schoolId=${schoolIdOrUserId}` : '';
+      const timestampParam = forceRefresh ? `t=${Date.now()}` : '';
+      const params = [queryParam, timestampParam].filter(Boolean).join('&');
+      
+      const url = params ? `/api/school-info?${params}` : '/api/school-info';
+      
+      const response = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
       if (!response.ok) {
+        // If 403 and we were using a schoolId, clear it and retry without schoolId
+        if (response.status === 403 && isSchoolId) {
+          console.log('403 Forbidden - invalid schoolId, retrying without schoolId parameter');
+          // Retry without schoolId to let API find from user associations
+          const retryUrl = forceRefresh ? `/api/school-info?t=${Date.now()}` : '/api/school-info';
+          const retryResponse = await fetch(retryUrl, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            setSchool(data);
+            return; // Success on retry
+          }
+        }
         throw new Error(`Failed to fetch school info: ${response.status}`);
       }
 
@@ -25,10 +61,10 @@ export const useSchoolData = (userId) => {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [schoolIdOrUserId]);
 
   const refreshSchoolData = useCallback(() => {
-    fetchSchoolData();
+    fetchSchoolData(true); // Force refresh with cache busting
   }, [fetchSchoolData]);
 
   useEffect(() => {

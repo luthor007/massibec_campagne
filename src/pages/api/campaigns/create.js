@@ -3,6 +3,8 @@ import School from '../../../models/School';
 import Campaign from '../../../models/Campaign';
 import User from '../../../models/User';
 import { getToken } from 'next-auth/jwt';
+import { generateCampaignCode } from '../../../utils/campaignHelpers';
+import { parseLocalDate } from '../../../utils/dateHelpers';
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
@@ -28,9 +30,15 @@ export default async function handler(req, res) {
         startDate,
         endDate,
         deliveryDate,
+        distributionStartHour,
+        distributionEndHour,
         financialGoal,
         customPrices,
-        profitSplits
+        profitSplits,
+        donationPresets,
+        donationSplit,
+        donationsForStudents,
+        donationsForSchool
       } = req.body;
 
       // Validate required fields
@@ -39,14 +47,19 @@ export default async function handler(req, res) {
       }
 
       // Validate dates
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const delivery = new Date(deliveryDate);
-      const today = new Date();
+      // Parse dates as local dates (YYYY-MM-DD format) to avoid timezone issues
+      const start = parseLocalDate(startDate);
+      const end = parseLocalDate(endDate);
+      const delivery = parseLocalDate(deliveryDate);
 
-      if (start <= today) {
-        return res.status(400).json({ message: 'La date de début doit être dans le futur' });
-      }
+      const startDateObj = start;
+      const endDateObj = end;
+      const deliveryDateObj = delivery;
+
+      // Normalize times for comparison
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      delivery.setHours(0, 0, 0, 0);
 
       if (end <= start) {
         return res.status(400).json({ message: 'La date de fin doit être après la date de début' });
@@ -67,18 +80,49 @@ export default async function handler(req, res) {
 
       // Create new campaign
       const newCampaignNumber = school.currentCampaignNumber + 1;
+      const campaignCode = generateCampaignCode(school.code, newCampaignNumber);
+      
+      // Generate automatic campaign name: "Nom Organisation - Mois Année"
+      const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
+                      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const startMonth = startDateObj.getMonth();
+      const startYear = startDateObj.getFullYear();
+      const campaignName = `${school.name} - ${months[startMonth]} ${startYear}`;
       
       const newCampaign = new Campaign({
+        name: campaignName,
         campaignNumber: newCampaignNumber,
         school: school._id,
-        startDate: start,
-        endDate: end,
-        deliveryDate: delivery,
+        campaignCode: campaignCode,
+        startDate: startDateObj, // Use original date objects, not normalized ones
+        endDate: endDateObj,
+        deliveryDate: deliveryDateObj,
+        distributionStartHour: distributionStartHour || '',
+        distributionEndHour: distributionEndHour || '',
         isActive: false, // Will be activated after approval
         notes: `Campagne créée le ${new Date().toLocaleDateString('fr-CA')}`,
         profitSplitType: 'absolute', // Always absolute values now
         customPrices: customPrices || [],
         profitSplits: profitSplits || [],
+        donationsForStudents: donationsForStudents || {
+          enabled: true,
+          presets: [0, 2, 5],
+          splitConfig: {
+            studentAccount: 60.0,
+            studentCash: 40.0
+          }
+        },
+        donationsForSchool: donationsForSchool || {
+          enabled: true,
+          presets: [0, 2, 5]
+        },
+        // Legacy fields for backward compatibility
+        donationPresets: donationPresets || [0, 2, 5],
+        donationSplit: donationSplit || {
+          studentCash: 50.0,
+          studentSchoolAccount: 16.7,
+          schoolProject: 33.3
+        },
         financialGoal: parseFloat(financialGoal),
         status: 'pending_approval' // Pending Massibec approval
       });
@@ -93,7 +137,11 @@ export default async function handler(req, res) {
 
       res.status(201).json({ 
         message: 'Campagne créée avec succès. En attente d\'approbation de Massibec.',
-        campaign: newCampaign
+        campaign: {
+          ...newCampaign.toObject(),
+          campaignCode: campaignCode
+        },
+        campaignCode: campaignCode
       });
 
     } catch (error) {

@@ -2,6 +2,7 @@
 
 import dbConnect from '../../lib/mongodb';
 import User from '../../models/User';
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
@@ -30,12 +31,19 @@ export default async function handler(req, res) {
       user.verificationTokenExpires = undefined;
       await user.save();
 
-      // Optionally, you can redirect the user to a success page or send a response
-      // For example, redirect to a frontend page:
-      res.redirect(`${process.env.NEXTAUTH_URL}/email-verified`);
+      // Generate a temporary login token for automatic sign-in
+      const loginToken = crypto.randomBytes(32).toString('hex');
+      const loginTokenExpires = Date.now() + 5 * 60 * 1000; // Valid for 5 minutes
+      
+      // Store the login token in the user record temporarily
+      user.loginToken = loginToken;
+      user.loginTokenExpires = loginTokenExpires;
+      user.loginTokenUsed = 0; // Initialize use counter
+      await user.save();
 
-      // Or send a JSON response:
-      // res.status(200).json({ message: 'Votre adresse e-mail a été vérifiée avec succès.' });
+      // Redirect to email-verified page with the login token and user name
+      const userName = encodeURIComponent(user.name);
+      res.redirect(`${process.env.NEXTAUTH_URL}/email-verified?token=${loginToken}&userId=${user._id}&name=${userName}`);
     } catch (error) {
       console.error('Error during email verification:', error);
       res.status(500).json({ message: 'Erreur interne du serveur.' });

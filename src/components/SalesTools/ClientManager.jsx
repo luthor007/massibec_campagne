@@ -1,5 +1,6 @@
 // components/SalesTools/ClientManager.jsx
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
 
   const addClient = async () => {
     if (!newClient.name || !newClient.email) {
-      alert('Le nom et l\'email sont requis');
+      toast.error('Le nom et l\'email sont requis');
       return;
     }
 
@@ -62,11 +63,11 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
         onRefresh();
       } else {
         const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        toast.error(`Erreur: ${error.message}`);
       }
     } catch (error) {
       console.error('Error adding client:', error);
-      alert('Erreur lors de l\'ajout du client');
+      toast.error('Erreur lors de l\'ajout du client');
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +75,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
 
   const updateClient = async () => {
     if (!editingClient.name || !editingClient.email) {
-      alert('Le nom et l\'email sont requis');
+      toast.error('Le nom et l\'email sont requis');
       return;
     }
 
@@ -92,11 +93,11 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
         onRefresh();
       } else {
         const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        toast.error(`Erreur: ${error.message}`);
       }
     } catch (error) {
       console.error('Error updating client:', error);
-      alert('Erreur lors de la mise à jour du client');
+      toast.error('Erreur lors de la mise à jour du client');
     } finally {
       setIsLoading(false);
     }
@@ -114,11 +115,11 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
         onRefresh();
       } else {
         const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        toast.error(`Erreur: ${error.message}`);
       }
     } catch (error) {
       console.error('Error deleting client:', error);
-      alert('Erreur lors de la suppression du client');
+      toast.error('Erreur lors de la suppression du client');
     } finally {
       setIsLoading(false);
     }
@@ -227,7 +228,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
       } else if (file.name.endsWith('.csv')) {
         contacts = parseCSV(content);
       } else {
-        alert('Format de fichier non supporté. Utilisez .vcf, .vcard ou .csv');
+        toast.error('Format de fichier non supporté. Utilisez .vcf, .vcard ou .csv');
         return;
       }
 
@@ -236,7 +237,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
         setSelectedContacts(contacts.map((_, index) => index));
         setShowImportDialog(true);
       } else {
-        alert('Aucun contact valide trouvé dans le fichier');
+        toast.error('Aucun contact valide trouvé dans le fichier');
       }
     };
 
@@ -245,7 +246,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
 
   const importSelectedContacts = async () => {
     if (selectedContacts.length === 0) {
-      alert('Veuillez sélectionner au moins un contact');
+      toast.error('Veuillez sélectionner au moins un contact');
       return;
     }
 
@@ -272,10 +273,10 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
       setImportedContacts([]);
       setSelectedContacts([]);
       onRefresh();
-      alert(`${selectedContacts.length} contact(s) importé(s) avec succès!`);
+      toast.success(`${selectedContacts.length} contact(s) importé(s) avec succès!`);
     } catch (error) {
       console.error('Error importing contacts:', error);
-      alert('Erreur lors de l\'importation des contacts');
+      toast.error('Erreur lors de l\'importation des contacts');
     } finally {
       setIsImporting(false);
     }

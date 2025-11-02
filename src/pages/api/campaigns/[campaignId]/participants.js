@@ -2,7 +2,9 @@ import dbConnect from '../../../../lib/mongodb';
 import School from '../../../../models/School';
 import User from '../../../../models/User';
 import Order from '../../../../models/Order';
+import Campaign from '../../../../models/Campaign';
 import { getToken } from 'next-auth/jwt';
+import { getCampaignDataWithFallback, calculateOrderProfitsDetailed } from '../../../../utils/campaignHelpers';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -24,19 +26,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'ID de campagne requis' });
     }
 
-    // Find the school that owns this campaign
-    const school = await School.findOne({
-      'campaigns._id': campaignId
-    });
-
-    if (!school) {
+    // Find the campaign with populated school
+    const campaign = await Campaign.findById(campaignId).populate('school', 'name');
+    
+    if (!campaign) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    // Check if user is school manager for this school
+    // Check if user is school manager
     const user = await User.findById(token.sub);
     if (!user || user.role !== 'school_manager') {
       return res.status(401).json({ message: 'Non autorisé' });
+    }
+
+    // Get school
+    const school = await School.findById(campaign.school._id || campaign.school);
+    
+    if (!school) {
+      return res.status(404).json({ message: 'École non trouvée' });
     }
 
     // Verify user belongs to this school
@@ -44,25 +51,24 @@ export default async function handler(req, res) {
       return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
     }
 
-    // Find the campaign
-    const campaign = school.campaigns.id(campaignId);
-    if (!campaign) {
-      return res.status(404).json({ message: 'Campagne non trouvée' });
-    }
+    // Get campaign data with fallback
+    const { campaign: campaignData, fallbackSplit } = await getCampaignDataWithFallback(
+      school._id, 
+      school, 
+      campaignId
+    );
+
+    // Get all users enrolled in this campaign (students AND school_managers who joined)
+    const participants = await User.find({
+      'campaigns.campaignId': campaignId
+      // Remove role filter to include school_managers who joined their own campaign
+    }).lean();
 
     // Get all orders for this campaign
     const orders = await Order.find({
-      campaignId: campaignId,
-      school: school.name
+      campaignId: campaignId
     }).lean();
 
-    // Get unique participants and their details
-    const participantIds = [...new Set(orders.map(order => order.user.toString()))];
-    
-    const participants = await User.find({
-      _id: { $in: participantIds },
-      role: 'student'
-    }).lean();
 
     // Calculate participant statistics
     const participantsWithStats = participants.map(participant => {
@@ -75,13 +81,56 @@ export default async function handler(req, res) {
         return sum + order.products.reduce((orderSum, product) => orderSum + product.quantity, 0);
       }, 0);
 
+      // Calculate profits
+      let totalStudentCashBenefit = 0;
+      let totalStudentSchoolAccountBenefit = 0;
+      let totalSchoolBenefit = 0;
+      let totalRaffleBenefit = 0;
+      let totalTips = 0;
+      
+      // Separate donation breakdown
+      let totalStudentDonationBenefit = 0;
+      let totalSchoolDonationBenefit = 0;
+
+      participantOrders.forEach(order => {
+        const profits = calculateOrderProfitsDetailed(order, campaignData, fallbackSplit);
+        totalStudentCashBenefit += profits.totalStudentCashBenefit;
+        totalStudentSchoolAccountBenefit += profits.totalStudentSchoolAccountBenefit;
+        totalSchoolBenefit += profits.totalOrganizationBenefit;
+        totalRaffleBenefit += profits.totalRaffleBenefit;
+        totalTips += order.tip || 0;
+        
+        // Add donation breakdown if available
+        if (order.tipBreakdown) {
+          totalStudentDonationBenefit += (order.tipBreakdown.studentCash || 0) + (order.tipBreakdown.studentSchoolAccount || 0);
+          totalSchoolDonationBenefit += order.tipBreakdown.schoolProject || 0;
+        }
+      });
+
       const goal = participant.objectifPersonnel || 1000;
       const progress = goal > 0 ? Math.round((totalSales / goal) * 100) : 0;
+
+      // Handle both students and school_managers
+      // For students, use parentInfo; for school_managers, use their own name/info
+      const isStudent = participant.role === 'student';
+      const parentName = isStudent 
+        ? (participant.parentInfo ? 
+            `${participant.parentInfo.prenomParent} ${participant.parentInfo.nomParent}` : 
+            'N/A')
+        : participant.name; // For school_managers, use their own name
+      const parentPhone = isStudent
+        ? (participant.parentInfo?.telephone || 'N/A')
+        : (participant.schoolManagerInfo?.telephone || 
+           participant.schoolManagerInfo?.cellulaire || 
+           'N/A');
 
       return {
         _id: participant._id,
         name: participant.name,
         email: participant.email,
+        role: participant.role, // Include role to distinguish in UI if needed
+        parentName: parentName,
+        parentPhone: parentPhone,
         totalSales,
         totalUnits,
         goal,
@@ -89,7 +138,21 @@ export default async function handler(req, res) {
         orderCount: participantOrders.length,
         lastOrderDate: participantOrders.length > 0 
           ? Math.max(...participantOrders.map(o => new Date(o.createdAt).getTime()))
-          : null
+          : null,
+        // Profit breakdown
+        studentCashBenefit: totalStudentCashBenefit,
+        studentSchoolAccountBenefit: totalStudentSchoolAccountBenefit,
+        studentBenefit: totalStudentCashBenefit + totalStudentSchoolAccountBenefit + totalTips,
+        schoolBenefit: totalSchoolBenefit,
+        raffleBenefit: totalRaffleBenefit,
+        tips: totalTips,
+        // New breakdown structure
+        studentProfit: totalStudentCashBenefit + totalStudentSchoolAccountBenefit,
+        studentDonation: totalStudentDonationBenefit,
+        studentTotal: totalStudentCashBenefit + totalStudentSchoolAccountBenefit + totalStudentDonationBenefit,
+        schoolProfit: totalSchoolBenefit,
+        schoolDonation: totalSchoolDonationBenefit,
+        schoolTotal: totalSchoolBenefit + totalSchoolDonationBenefit
       };
     });
 
@@ -102,7 +165,9 @@ export default async function handler(req, res) {
         _id: campaign._id,
         campaignNumber: campaign.campaignNumber,
         status: campaign.status,
-        financialGoal: campaign.financialGoal
+        financialGoal: campaign.financialGoal,
+        name: campaign.name,
+        campaignCode: campaign.campaignCode
       }
     });
 

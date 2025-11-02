@@ -7,8 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getTerminology } from '@/utils/organizationHelpers';
 
 const SchoolInfo = ({ school }) => {
+  // Get terminology based on organization type
+  const organizationType = school?.organizationType || 'school';
+  const terminology = getTerminology(organizationType);
   const { toast } = useToast();
   const [currentSchool, setCurrentSchool] = useState(school);
   const [isSaving, setIsSaving] = useState(false);
@@ -51,7 +55,7 @@ const SchoolInfo = ({ school }) => {
 
       toast({
         title: "Succès",
-        description: "Informations de l'école mises à jour avec succès",
+        description: `Informations de ${terminology.organization === 'école' ? "l'" : "l'"}${terminology.organization} mises à jour avec succès`,
       });
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
@@ -72,7 +76,7 @@ const SchoolInfo = ({ school }) => {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-4">Informations de l'école</h3>
+        <h3 className="text-lg font-semibold mb-4">Informations de {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization}</h3>
         
         {/* Display Mode */}
         <div className="bg-gray-50 p-4 rounded-lg space-y-4">
@@ -99,7 +103,7 @@ const SchoolInfo = ({ school }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="name">Nom de l'école</Label>
+              <Label htmlFor="name">Nom de {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization}</Label>
               <Input
                 type="text"
                 id="name"

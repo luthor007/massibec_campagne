@@ -27,8 +27,8 @@ export const useCampaigns = (userId) => {
     }
   }, [userId]);
 
-  const refreshCampaigns = useCallback(() => {
-    fetchCampaigns();
+  const refreshCampaigns = useCallback(async () => {
+    return await fetchCampaigns();
   }, [fetchCampaigns]);
 
   useEffect(() => {

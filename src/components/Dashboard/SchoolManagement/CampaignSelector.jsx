@@ -63,13 +63,13 @@ const CampaignSelector = ({ campaigns, selectedCampaign, onSelect, loading }) =>
         <TrendingUp className="h-6 w-6 text-white" />
       </div>
       <div className="flex-1">
-        <Select value={selectedCampaign?._id || ''} onValueChange={onSelect}>
+        <Select value={selectedCampaign?._id?.toString() || ''} onValueChange={onSelect}>
           <SelectTrigger className="w-full h-12 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white shadow-sm hover:shadow-md">
             <SelectValue placeholder="Sélectionner une campagne" />
           </SelectTrigger>
           <SelectContent className="rounded-xl border-2 border-gray-200 shadow-lg">
             {campaigns.map((campaign) => (
-              <SelectItem key={campaign._id} value={campaign._id} className="rounded-lg hover:bg-blue-50 focus:bg-blue-50">
+              <SelectItem key={campaign._id?.toString() || campaign._id} value={campaign._id?.toString() || campaign._id} className="rounded-lg hover:bg-blue-50 focus:bg-blue-50">
                 <div className="flex items-center justify-between w-full py-2">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-gradient-to-r from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">

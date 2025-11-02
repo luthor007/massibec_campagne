@@ -44,7 +44,7 @@ export default function WelcomeModal({ isOpen, onClose, onCreateCampaign }) {
               </li>
               <li className="flex items-center">
                 <Users className="w-4 h-4 mr-2 text-blue-600" />
-                La répartition des profits (étudiant/école/tirage)
+                La répartition des profits (participant/organisation/tirage)
               </li>
             </ul>
           </div>

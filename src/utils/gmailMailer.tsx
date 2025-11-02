@@ -16,15 +16,10 @@ import * as ResendMailer from './resendMailer';
 
 // Import SendGrid implementations
 import * as SendGridMailer from './sendgridMailer';
+import { SendEmailParams as SharedSendEmailParams, ProductItemEmail } from './emailTypes';
 
 // Interfaces (existing)
-interface ProductItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  price: number;
-  amount: string;
-}
+type ProductItem = ProductItemEmail;
 
 interface SendDeletionEmailParams {
   to: string;
@@ -63,29 +58,7 @@ interface SendSaleNotificationEmailParams {
   orderDate: string;
 }
 
-interface SendEmailParams {
-  to: string;
-  cc?: string;
-  from?: string;
-  subject: string;
-  firstName: string;
-  customerEmail: string;
-  storeName: string;
-  hoursAvailable: string;
-  products: ProductItem[];
-  totalAmount: number;
-  tip: number;
-  autoDeposit: boolean;
-  orderId: string;
-  orderDate: string;
-  orderDeadline: string;
-  deliveryDate: string;
-  deliveryLocation: string;
-  deliveryCity: string;
-  sellerName: string;
-  sellerPhone: string;
-  sellerEmail: string;
-}
+type SendEmailParams = SharedSendEmailParams;
 
 interface SendPasswordResetEmailParams {
   to: string;
@@ -105,6 +78,7 @@ interface SendStudentOrderEmailParams {
   totalAmount: number;
   amountPaid: number;
   paymentInstructions: string;
+  organizationType?: string; // New field for dynamic terminology
 }
 
 interface SendVerificationEmailParams {
@@ -117,7 +91,7 @@ interface SendVerificationEmailParams {
 
 // Création du transporteur SMTP avec Nodemailer
 // Supporte Gmail, Outlook/Microsoft 365, Resend, et SendGrid
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'sendgrid';
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'gmail';
 
 let transporterConfig: any;
 
@@ -379,6 +353,7 @@ const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams
         totalAmount={totalAmount}
         amountPaid={amountPaid}
         paymentInstructions={paymentInstructions}
+        organizationType={params.organizationType || 'school'}
       />
     );
 
@@ -511,7 +486,12 @@ const sendEmail = async (params: SendEmailParams) => {
     return ResendMailer.sendEmail(params);
   } else if (EMAIL_PROVIDER === 'sendgrid') {
     console.log('📧 Using SendGrid for email');
-    return SendGridMailer.sendEmail(params);
+    try {
+      return await SendGridMailer.sendEmail(params);
+    } catch (err: any) {
+      console.warn('SendGrid sendEmail failed, falling back to Gmail:', err?.response?.body || err?.message);
+      return sendEmailViaGmail(params);
+    }
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for email`);
     return sendEmailViaGmail(params);
@@ -543,7 +523,12 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
     return ResendMailer.sendStudentOrderEmail(params);
   } else if (EMAIL_PROVIDER === 'sendgrid') {
     console.log('📧 Using SendGrid for student order email');
-    return SendGridMailer.sendStudentOrderEmail(params);
+    try {
+      return await SendGridMailer.sendStudentOrderEmail(params);
+    } catch (err: any) {
+      console.warn('SendGrid sendStudentOrderEmail failed, falling back to Gmail:', err?.response?.body || err?.message);
+      return sendStudentOrderEmailViaGmail(params);
+    }
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for student order email`);
     return sendStudentOrderEmailViaGmail(params);
@@ -559,7 +544,12 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
     return ResendMailer.sendSaleNotificationEmail(params);
   } else if (EMAIL_PROVIDER === 'sendgrid') {
     console.log('📧 Using SendGrid for sale notification email');
-    return SendGridMailer.sendSaleNotificationEmail(params);
+    try {
+      return await SendGridMailer.sendSaleNotificationEmail(params);
+    } catch (err: any) {
+      console.warn('SendGrid sendSaleNotificationEmail failed, falling back to Gmail:', err?.response?.body || err?.message);
+      return sendSaleNotificationEmailViaGmail(params);
+    }
   } else {
     console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for sale notification email`);
     return sendSaleNotificationEmailViaGmail(params);

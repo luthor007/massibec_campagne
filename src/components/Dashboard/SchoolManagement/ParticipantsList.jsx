@@ -4,6 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { 
   Users, 
   DollarSign, 
@@ -14,12 +22,17 @@ import {
   Mail,
   Phone
 } from 'lucide-react';
+import { getTerminology } from '@/utils/organizationHelpers';
 
-const ParticipantsList = ({ campaign, onRefresh }) => {
+const ParticipantsList = ({ campaign, onRefresh, school }) => {
+  // Get terminology based on organization type
+  const organizationType = school?.organizationType || campaign?.organizationType || 'school';
+  const terminology = getTerminology(organizationType);
   const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'totalSales', direction: 'desc' });
 
   const fetchParticipants = async () => {
     if (!campaign?._id) return;
@@ -34,6 +47,8 @@ const ParticipantsList = ({ campaign, onRefresh }) => {
       }
 
       const data = await response.json();
+      console.log('Participants API response:', data);
+      console.log('First participant data:', data.participants?.[0]);
       setParticipants(data.participants || []);
     } catch (err) {
       console.error('Error fetching participants:', err);
@@ -70,8 +85,51 @@ const ParticipantsList = ({ campaign, onRefresh }) => {
 
   const filteredParticipants = participants.filter(participant =>
     participant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    participant.email.toLowerCase().includes(searchTerm.toLowerCase())
+    participant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (participant.parentName && participant.parentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (participant.parentPhone && participant.parentPhone.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Sort participants
+  const sortedParticipants = [...filteredParticipants].sort((a, b) => {
+    let aValue, bValue;
+    
+    switch (sortConfig.key) {
+      case 'name':
+        aValue = a.name.toLowerCase();
+        bValue = b.name.toLowerCase();
+        break;
+      case 'totalSales':
+        aValue = a.totalSales;
+        bValue = b.totalSales;
+        break;
+      case 'totalUnits':
+        aValue = a.totalUnits;
+        bValue = b.totalUnits;
+        break;
+      case 'orderCount':
+        aValue = a.orderCount;
+        bValue = b.orderCount;
+        break;
+      case 'progress':
+        aValue = a.progress;
+        bValue = b.progress;
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
 
   if (loading) {
     return (
@@ -130,14 +188,14 @@ const ParticipantsList = ({ campaign, onRefresh }) => {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
-          placeholder="Rechercher par nom ou email..."
+          placeholder="Rechercher par nom, email, parent ou téléphone..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
         />
       </div>
 
-      {/* Participants Grid */}
+      {/* Participants Table */}
       {filteredParticipants.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -146,69 +204,102 @@ const ParticipantsList = ({ campaign, onRefresh }) => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredParticipants.map((participant) => (
-            <Card key={participant._id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{participant.name}</CardTitle>
-                  <Badge variant="outline">
-                    #{participant._id.slice(-4)}
-                  </Badge>
-                </div>
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <div className="flex items-center space-x-1">
-                    <Mail className="h-3 w-3" />
-                    <span className="truncate">{participant.email}</span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Sales Stats */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Ventes totales</span>
-                    <span className="font-semibold text-green-600">
-                      {formatCurrency(participant.totalSales)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Unités vendues</span>
-                    <span className="font-medium">{participant.totalUnits}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Commandes</span>
-                    <span className="font-medium">{participant.orderCount}</span>
-                  </div>
-                </div>
-
-                {/* Goal Progress */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Objectif personnel</span>
-                    <span className="text-sm font-medium">
-                      {formatCurrency(participant.goal)}
-                    </span>
-                  </div>
-                  <Progress value={Math.min(participant.progress, 100)} className="h-2" />
-                  <div className="flex justify-between items-center text-xs text-gray-500">
-                    <span>{participant.progress}% de l'objectif</span>
-                    <span>
-                      {participant.progress >= 100 ? '🎉 Atteint!' : 'En cours'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Last Activity */}
-                <div className="pt-2 border-t">
-                  <div className="flex justify-between items-center text-xs text-gray-500">
-                    <span>Dernière commande</span>
-                    <span>{formatDate(participant.lastOrderDate)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="border rounded-lg overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead className="font-semibold">Rang</TableHead>
+                <TableHead 
+                  className="font-semibold cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('name')}
+                >
+                  {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </TableHead>
+                <TableHead className="font-semibold">Parent</TableHead>
+                <TableHead className="font-semibold">Téléphone</TableHead>
+                <TableHead 
+                  className="font-semibold text-right cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('totalSales')}
+                >
+                  Ventes Total {sortConfig.key === 'totalSales' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </TableHead>
+                <TableHead className="font-semibold text-right text-green-600">Profit {terminology.participant}</TableHead>
+                <TableHead className="font-semibold text-right text-orange-600">Dons {terminology.participant}</TableHead>
+                <TableHead className="font-semibold text-right text-blue-700">Total {terminology.participant}</TableHead>
+                <TableHead className="font-semibold text-right text-blue-600">Profit {terminology.organization}</TableHead>
+                <TableHead className="font-semibold text-right text-purple-600">Dons {terminology.organization}</TableHead>
+                <TableHead className="font-semibold text-right text-indigo-600">Total {terminology.organization}</TableHead>
+                <TableHead 
+                  className="font-semibold text-right cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('totalUnits')}
+                >
+                  Unités {sortConfig.key === 'totalUnits' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </TableHead>
+                <TableHead 
+                  className="font-semibold text-right cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('orderCount')}
+                >
+                  Cmd {sortConfig.key === 'orderCount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </TableHead>
+                <TableHead 
+                  className="font-semibold text-center cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('progress')}
+                >
+                  Progression {sortConfig.key === 'progress' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedParticipants.map((participant, index) => (
+                <TableRow key={participant._id} className="hover:bg-gray-50">
+                  <TableCell className="font-medium">
+                    <Badge variant="outline">#{index + 1}</Badge>
+                  </TableCell>
+                  <TableCell className="font-medium">{participant.name}</TableCell>
+                  <TableCell className="text-sm text-gray-700">
+                    {participant.parentName || 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-700">
+                    {participant.parentPhone || 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-green-600">
+                    {formatCurrency(participant.totalSales)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-green-600">
+                    {formatCurrency(participant.studentProfit || 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-orange-600">
+                    {formatCurrency(participant.studentDonation || 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-blue-700">
+                    {formatCurrency(participant.studentTotal || 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-blue-600">
+                    {formatCurrency(participant.schoolProfit || 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-purple-600">
+                    {formatCurrency(participant.schoolDonation || 0)}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-indigo-600">
+                    {formatCurrency(participant.schoolTotal || 0)}
+                  </TableCell>
+                  <TableCell className="text-right">{participant.totalUnits}</TableCell>
+                  <TableCell className="text-right">{participant.orderCount}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center space-x-2">
+                      <Progress 
+                        value={Math.min(participant.progress, 100)} 
+                        className="h-2 flex-1" 
+                      />
+                      <span className="text-xs text-gray-600 min-w-[50px]">
+                        {participant.progress}%
+                      </span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 

@@ -22,6 +22,18 @@ module.exports = {
     				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
     				border: 'hsl(var(--sidebar-border))',
     				ring: 'hsl(var(--sidebar-ring))'
+    			},
+    			popover: {
+    				DEFAULT: 'hsl(var(--popover-background))',
+    				foreground: 'hsl(var(--popover-foreground))'
+    			},
+    			accent: {
+    				DEFAULT: 'hsl(var(--accent-background))',
+    				foreground: 'hsl(var(--accent-foreground))'
+    			},
+    			muted: {
+    				DEFAULT: 'hsl(var(--muted-background))',
+    				foreground: 'hsl(var(--muted-foreground))'
     			}
     		},
 			// Mobile-friendly spacing with safe areas

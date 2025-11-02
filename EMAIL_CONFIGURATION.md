@@ -99,9 +99,8 @@ Tous les emails sont envoyés depuis : **`Campagne Massibec <commande@massibec.c
    - À: client
    - CC: vendeur
 
-4. **Confirmation de commande à Massibec**
+4. **Confirmation de commande au vendeur**
    - À: vendeur
-   - CC: facturation@massibec.com
    - Contient l'adresse et la date de livraison
 
 5. **Réinitialisation de mot de passe**
@@ -161,9 +160,3 @@ Dans les logs du serveur, vous devriez voir :
 - Le fichier principal est `src/utils/gmailMailer.tsx` (nom historique, mais supporte tous les providers)
 - La configuration est détectée automatiquement via `EMAIL_PROVIDER`
 - Tous les templates d'email sont dans `src/components/`
-
-
-
-
-
-

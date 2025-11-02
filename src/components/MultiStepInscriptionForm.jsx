@@ -6,9 +6,11 @@ import { useRouter } from 'next/router'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight, CheckCircle, AlertCircle } from 'lucide-react'
+import { useToast } from "@/hooks/use-toast"
 
 export default function MultiStepInscriptionForm() {
   const router = useRouter()
+  const { toast } = useToast()
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -23,27 +25,16 @@ export default function MultiStepInscriptionForm() {
     motDePasse: '',
     confirmationMotDePasse: '',
     
-    // Step 2: School Info
-    schoolCode: '',
-    objectifPersonnel: '',
-    
-    // Step 3: Parent Info
+    // Step 2: Parent Info
     nomParent: '',
     prenomParent: '',
-    adresse: '',
-    app: '',
-    ville: '',
-    province: 'QC',
-    codePostal: '',
     telephone: ''
   })
 
-  const [school, setSchool] = useState(null)
 
   const steps = [
     { id: 1, title: 'Informations de base' },
-    { id: 2, title: 'École & Objectif' },
-    { id: 3, title: 'Informations parent' }
+    { id: 2, title: 'Informations parent' }
   ]
 
   const handleChange = (e) => {
@@ -110,18 +101,7 @@ export default function MultiStepInscriptionForm() {
         return true
         
       case 2:
-        if (!formData.schoolCode || !formData.objectifPersonnel) {
-          setErrorMessage('Veuillez remplir tous les champs obligatoires')
-          return false
-        }
-        if (!school) {
-          setErrorMessage('Code d\'école invalide')
-          return false
-        }
-        return true
-        
-      case 3:
-        if (!formData.nomParent || !formData.prenomParent || !formData.adresse || !formData.ville || !formData.province || !formData.codePostal || !formData.telephone) {
+        if (!formData.nomParent || !formData.prenomParent || !formData.telephone) {
           setErrorMessage('Veuillez remplir tous les champs obligatoires')
           return false
         }
@@ -136,6 +116,15 @@ export default function MultiStepInscriptionForm() {
     if (validateStep(currentStep)) {
       setErrorMessage('')
       setCurrentStep(prev => Math.min(prev + 1, steps.length))
+    } else {
+      // Add visual feedback for validation errors
+      const button = document.querySelector('button[type="button"]');
+      if (button) {
+        button.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          button.style.transform = '';
+        }, 150);
+      }
     }
   }
 
@@ -144,32 +133,11 @@ export default function MultiStepInscriptionForm() {
     setErrorMessage('')
   }
 
-  // Fetch school data
-  useEffect(() => {
-    const fetchSchool = async () => {
-      if (formData.schoolCode) {
-        try {
-          const response = await fetch(`/api/school-from-code?code=${formData.schoolCode}`)
-          if (response.ok) {
-            const schoolData = await response.json()
-            setSchool(schoolData)
-          } else {
-            setSchool(null)
-          }
-        } catch (error) {
-          console.error('Error fetching school:', error)
-          setSchool(null)
-        }
-      }
-    }
-
-    fetchSchool()
-  }, [formData.schoolCode])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!validateStep(3)) return
+    if (!validateStep(2)) return
     
     setIsSubmitting(true)
     setErrorMessage('')
@@ -182,23 +150,29 @@ export default function MultiStepInscriptionForm() {
           name: `${formData.prenom} ${formData.nom}`,
           email: formData.email,
           password: formData.motDePasse,
-          schoolId: school._id,
-          objectifPersonnel: parseInt(formData.objectifPersonnel),
           parentInfo: {
             nomParent: formData.nomParent,
             prenomParent: formData.prenomParent,
-            adresse: formData.adresse,
-            app: formData.app,
-            ville: formData.ville,
-            province: formData.province,
-            codePostal: formData.codePostal,
             telephone: formData.telephone,
           }
         }),
       })
 
       if (response.ok) {
-        router.push('/email-verification')
+        // Store email in sessionStorage for cross-device verification detection
+        sessionStorage.setItem('pendingVerificationEmail', formData.email);
+        
+        // Show success message
+        toast({
+          title: "🎉 Inscription réussie !",
+          description: "Vérifiez votre email pour confirmer votre compte.",
+          duration: 5000,
+        });
+        
+        // Redirect to verification page
+        setTimeout(() => {
+          router.push('/email-verification');
+        }, 2000);
       } else {
         const errorData = await response.json()
         throw new Error(errorData.message || 'Erreur lors de l\'inscription')
@@ -225,6 +199,11 @@ export default function MultiStepInscriptionForm() {
             <div className="text-center mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">Créer votre compte</h2>
               <p className="text-gray-600">Commençons par vos informations de base</p>
+              <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-700">
+                  <strong>💡 Astuce :</strong> Vous pourrez rejoindre une campagne de financement après votre inscription !
+                </p>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -239,10 +218,10 @@ export default function MultiStepInscriptionForm() {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    className={`w-full py-4 px-4 border-2 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 ${
                       emailExists ? 'border-red-300 bg-red-50' : 
                       formData.email && !emailExists ? 'border-green-300 bg-green-50' : 
-                      'border-gray-300'
+                      'border-gray-300 hover:border-gray-400'
                     }`}
                     placeholder="votre@email.com"
                     required
@@ -276,7 +255,7 @@ export default function MultiStepInscriptionForm() {
                     value={formData.prenom}
                     onChange={handleChange}
                     placeholder="Votre prénom"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full py-4 px-4 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 hover:border-gray-400"
                     required
                   />
                 </div>
@@ -291,7 +270,7 @@ export default function MultiStepInscriptionForm() {
                     value={formData.nom}
                     onChange={handleChange}
                     placeholder="Votre nom"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full py-4 px-4 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 hover:border-gray-400"
                     required
                   />
                 </div>
@@ -351,76 +330,13 @@ export default function MultiStepInscriptionForm() {
             className="space-y-6"
           >
             <div className="text-center mb-8">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Votre école</h2>
-              <p className="text-gray-600">Indiquez votre école et votre objectif personnel</p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="schoolCode" className="block text-sm font-medium text-gray-700 mb-1">
-                  Code d'identification de l'école
-                </Label>
-                <Input
-                  type="text"
-                  id="schoolCode"
-                  name="schoolCode"
-                  value={formData.schoolCode}
-                  onChange={handleChange}
-                  placeholder="Entrez le code fourni par votre école"
-                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-                {school && (
-                  <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-sm text-green-700">
-                      <strong>École trouvée:</strong> {school.name}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <Label htmlFor="objectifPersonnel" className="block text-sm font-medium text-gray-700 mb-1">
-                  Objectif personnel de vente
-                </Label>
-                <Select value={formData.objectifPersonnel} onValueChange={(value) => setFormData(prev => ({ ...prev, objectifPersonnel: value }))}>
-                  <SelectTrigger className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <SelectValue placeholder="Sélectionnez votre objectif" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10 produits</SelectItem>
-                    <SelectItem value="15">15 produits</SelectItem>
-                    <SelectItem value="20">20 produits</SelectItem>
-                    <SelectItem value="25">25 produits</SelectItem>
-                    <SelectItem value="30">30 produits</SelectItem>
-                    <SelectItem value="35">35 produits</SelectItem>
-                    <SelectItem value="40">40 produits</SelectItem>
-                    <SelectItem value="45">45 produits</SelectItem>
-                    <SelectItem value="50">50 produits</SelectItem>
-                    <SelectItem value="60">60 produits</SelectItem>
-                    <SelectItem value="70">70 produits</SelectItem>
-                    <SelectItem value="80">80 produits</SelectItem>
-                    <SelectItem value="90">90 produits</SelectItem>
-                    <SelectItem value="100">100 produits</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </motion.div>
-        )
-
-      case 3:
-        return (
-          <motion.div
-            key="step3"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="space-y-6"
-          >
-            <div className="text-center mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-2">Informations parent</h2>
               <p className="text-gray-600">Dernière étape ! Informations du parent responsable</p>
+              <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                <p className="text-sm text-green-700">
+                  <strong>🎉 Presque terminé !</strong> Après cette étape, vous pourrez rejoindre une campagne de financement et commencer à vendre.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -436,7 +352,7 @@ export default function MultiStepInscriptionForm() {
                     value={formData.prenomParent}
                     onChange={handleChange}
                     placeholder="Prénom du parent"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full py-4 px-4 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 hover:border-gray-400"
                     required
                   />
                 </div>
@@ -451,116 +367,26 @@ export default function MultiStepInscriptionForm() {
                     value={formData.nomParent}
                     onChange={handleChange}
                     placeholder="Nom du parent"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full py-4 px-4 border-2 border-gray-300 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 hover:border-gray-400"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="adresse" className="block text-sm font-medium text-gray-700 mb-1">
-                  Adresse
+                <Label htmlFor="telephone" className="block text-sm font-medium text-gray-700 mb-1">
+                  Téléphone
                 </Label>
                 <Input
-                  type="text"
-                  id="adresse"
-                  name="adresse"
-                  value={formData.adresse}
+                  type="tel"
+                  id="telephone"
+                  name="telephone"
+                  value={formData.telephone}
                   onChange={handleChange}
-                  placeholder="Numéro et nom de rue"
+                  placeholder="(514) 123-4567"
                   className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="app" className="block text-sm font-medium text-gray-700 mb-1">
-                    Appartement
-                  </Label>
-                  <Input
-                    type="text"
-                    id="app"
-                    name="app"
-                    value={formData.app}
-                    onChange={handleChange}
-                    placeholder="Apt, suite, etc."
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="ville" className="block text-sm font-medium text-gray-700 mb-1">
-                    Ville
-                  </Label>
-                  <Input
-                    type="text"
-                    id="ville"
-                    name="ville"
-                    value={formData.ville}
-                    onChange={handleChange}
-                    placeholder="Ville"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="province" className="block text-sm font-medium text-gray-700 mb-1">
-                    Province
-                  </Label>
-                  <Select value={formData.province} onValueChange={(value) => setFormData(prev => ({ ...prev, province: value }))}>
-                    <SelectTrigger className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                      <SelectValue placeholder="Province" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="QC">Québec</SelectItem>
-                      <SelectItem value="ON">Ontario</SelectItem>
-                      <SelectItem value="BC">Colombie-Britannique</SelectItem>
-                      <SelectItem value="AB">Alberta</SelectItem>
-                      <SelectItem value="MB">Manitoba</SelectItem>
-                      <SelectItem value="SK">Saskatchewan</SelectItem>
-                      <SelectItem value="NS">Nouvelle-Écosse</SelectItem>
-                      <SelectItem value="NB">Nouveau-Brunswick</SelectItem>
-                      <SelectItem value="NL">Terre-Neuve-et-Labrador</SelectItem>
-                      <SelectItem value="PE">Île-du-Prince-Édouard</SelectItem>
-                      <SelectItem value="YT">Yukon</SelectItem>
-                      <SelectItem value="NT">Territoires du Nord-Ouest</SelectItem>
-                      <SelectItem value="NU">Nunavut</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="codePostal" className="block text-sm font-medium text-gray-700 mb-1">
-                    Code postal
-                  </Label>
-                  <Input
-                    type="text"
-                    id="codePostal"
-                    name="codePostal"
-                    value={formData.codePostal}
-                    onChange={handleChange}
-                    placeholder="A1A 1A1"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="telephone" className="block text-sm font-medium text-gray-700 mb-1">
-                    Téléphone
-                  </Label>
-                  <Input
-                    type="tel"
-                    id="telephone"
-                    name="telephone"
-                    value={formData.telephone}
-                    onChange={handleChange}
-                    placeholder="(555) 123-4567"
-                    className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
               </div>
             </div>
           </motion.div>
@@ -572,34 +398,55 @@ export default function MultiStepInscriptionForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-white">
-      <div className="w-full max-w-md">
-        {/* Simple Progress */}
-        <div className="mb-8">
-          <div className="flex justify-center space-x-2 mb-4">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="w-full max-w-2xl">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
+        >
+        {/* Enhanced Progress */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white">
+          <div className="text-center mb-4">
+            <h1 className="text-2xl font-bold mb-2">Inscription Étudiant</h1>
+            <p className="text-blue-100">Rejoignez votre campagne de financement en quelques étapes</p>
+          </div>
+          <div className="flex justify-center space-x-3 mb-4">
             {steps.map((step, index) => (
               <div
                 key={step.id}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  currentStep >= step.id ? 'bg-blue-500' : 'bg-gray-200'
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  index + 1 <= currentStep 
+                    ? 'bg-white shadow-lg' 
+                    : 'bg-white/30'
                 }`}
               />
             ))}
           </div>
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-blue-100">
             Étape {currentStep} sur {steps.length}
           </p>
         </div>
+        
+        <div className="p-8">
 
         {/* Error Message */}
         {errorMessage && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {errorMessage}
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-gradient-to-r from-red-50 to-pink-50 border-l-4 border-red-500 rounded-lg shadow-sm"
+          >
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-red-500 mr-3 flex-shrink-0" />
+              <p className="text-red-700 font-medium">{errorMessage}</p>
+            </div>
+          </motion.div>
         )}
 
         {/* Form Content */}
-        <form onSubmit={currentStep === 3 ? handleSubmit : (e) => e.preventDefault()}>
+        <form onSubmit={currentStep === 2 ? handleSubmit : (e) => e.preventDefault()}>
           <AnimatePresence mode="wait">
             {renderStepContent()}
           </AnimatePresence>
@@ -607,23 +454,33 @@ export default function MultiStepInscriptionForm() {
 
         {/* Simple Navigation */}
         <div className="mt-8">
-          {currentStep < 3 ? (
+          {currentStep < 2 ? (
             <Button
               type="button"
               onClick={nextStep}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
             >
               Continuer
-              <ChevronRight className="ml-2 h-4 w-4" />
+              <ChevronRight className="ml-2 h-5 w-5" />
             </Button>
           ) : (
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium disabled:opacity-50"
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:transform-none"
               onClick={handleSubmit}
             >
-              {isSubmitting ? 'Inscription en cours...' : 'Finaliser l\'inscription'}
+              {isSubmitting ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Inscription en cours...
+                </div>
+              ) : (
+                <div className="flex items-center justify-center">
+                  <CheckCircle className="mr-2 h-5 w-5" />
+                  Finaliser l'inscription
+                </div>
+              )}
             </Button>
           )}
           
@@ -637,6 +494,8 @@ export default function MultiStepInscriptionForm() {
             </button>
           </p>
         </div>
+        </div>
+        </motion.div>
       </div>
     </div>
   )

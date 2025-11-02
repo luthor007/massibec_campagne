@@ -24,10 +24,9 @@ Migration complète du système d'email vers SendGrid Web API avec gestion dynam
 - **De:** (Nom du parent - Campagne (nom école)) commande@massibec.com
 - **Objet:** (Commande #1)(Montant), pour (Nom du client), de (Nom du Parent) - Campagne (Nom école)
 
-### 4. Courriel de confirmation d'une commande à Massibec
+### 4. Courriel de confirmation d'une commande au vendeur
 
 - **À:** vendeur@xyz.com
-- **CC:** facturation@massibec.com
 - **De:** (Campagne Massibec) commande@massibec.com
 - **Objet:** (Commande #1) -(Montant)- de: (Nom du parent) - nom école - Pour: Massibec
 - **Texte:** La distribution se fera à (Adresse de l'école) le (date de livraison).

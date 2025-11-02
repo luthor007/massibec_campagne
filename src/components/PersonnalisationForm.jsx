@@ -1,19 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
+import { Toggle } from "@/components/ui/toggle"
 import { getSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { motion } from 'framer-motion'
 import BankGuides from '../components/BankGuides'
+import OnboardingTooltip from './Dashboard/OnboardingTooltip'
+import useOnboarding from '../hooks/useOnboarding'
 
-import { Save, Percent } from 'lucide-react'
+import { Save, Percent, CheckCircle2, XCircle } from 'lucide-react'
 export default function PersonnalisationForm() {
   const [isHovered, setIsHovered] = useState(false)
   const [user, setUser] = useState();
   const [formData, setFormData] = useState({
+    nomBoutique: '',
+    description: '',
+    hoursAvailable: '',
     autoDeposit: true, // Default to true
     discountEnabled: true, // Default to true
   });
@@ -21,6 +27,27 @@ export default function PersonnalisationForm() {
 
   const [dateDeLivraison, setDateDeLivraison] = useState('');
   const [showEmailExample, setShowEmailExample] = useState(false);
+  
+  // Onboarding state
+  const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
+  const [currentOnboardingStep, setCurrentOnboardingStep] = useState(null);
+  const [tooltipTarget, setTooltipTarget] = useState(null);
+  
+  // Refs for tooltip positioning
+  const nomBoutiqueRef = useRef(null);
+  const descriptionRef = useRef(null);
+  const autoDepositRef = useRef(null);
+  const discountRef = useRef(null);
+  const submitRef = useRef(null);
+  
+  // Use onboarding hook
+  const {
+    progress,
+    currentStep,
+    isLoading: onboardingLoading,
+    markStepComplete,
+    getStepContent
+  } = useOnboarding();
 
   // Fetch Store Data
   useEffect(() => {
@@ -69,6 +96,7 @@ export default function PersonnalisationForm() {
           ...prevData,
           nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
           hoursAvailable: prevData.hoursAvailable || '',
+          description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et contactez-moi pour connaître les modalités de récupération de vos produits. 🙏 Merci pour votre soutien et bon appétit !`,
         }))
       }
     }
@@ -76,9 +104,9 @@ export default function PersonnalisationForm() {
     fetchUserAndDate()
   }, [])
 
-  // Update description when delivery date is available (only if no custom description exists)
+  // Update description when delivery date is available (set default description if none exists)
   useEffect(() => {
-    if (dateDeLivraison && !formData.description) {
+    if (dateDeLivraison && (!formData.description || formData.description.trim() === '')) {
       const formatDate = (dateString) => {
         if (!dateString) return 'la date de livraison'
         const date = new Date(dateString)
@@ -89,14 +117,108 @@ export default function PersonnalisationForm() {
         })
       }
       
-      const newDescription = `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`
+      const defaultDescription = `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`
       
       setFormData(prevData => ({
         ...prevData,
-        description: newDescription
+        description: defaultDescription
       }))
     }
   }, [dateDeLivraison, formData.description])
+
+  // Onboarding logic for personalization form
+  useEffect(() => {
+    if (!onboardingLoading && currentStep?.key === 'personalizedStore') {
+      setCurrentOnboardingStep(currentStep);
+      setShowOnboardingTooltip(true);
+      
+      // Start with the first field (nomBoutique)
+      setTooltipTarget(nomBoutiqueRef.current);
+    } else {
+      setShowOnboardingTooltip(false);
+    }
+  }, [currentStep, onboardingLoading]);
+
+  // Onboarding handlers
+  const handleOnboardingNext = async () => {
+    if (currentOnboardingStep?.key === 'personalizedStore') {
+      // Move to next field in the personalization form
+      if (tooltipTarget === nomBoutiqueRef.current) {
+        setTooltipTarget(descriptionRef.current);
+      } else if (tooltipTarget === descriptionRef.current) {
+        setTooltipTarget(autoDepositRef.current);
+      } else if (tooltipTarget === autoDepositRef.current) {
+        setTooltipTarget(discountRef.current);
+      } else if (tooltipTarget === discountRef.current) {
+        setTooltipTarget(submitRef.current);
+      } else if (tooltipTarget === submitRef.current) {
+        // Complete the personalization step
+        const success = await markStepComplete('personalizedStore', true);
+        if (success) {
+          setShowOnboardingTooltip(false);
+        }
+      }
+    }
+  };
+
+  const handleOnboardingSkip = async () => {
+    if (currentOnboardingStep?.key === 'personalizedStore') {
+      const success = await markStepComplete('personalizedStore', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  };
+
+  const handleOnboardingClose = () => {
+    setShowOnboardingTooltip(false);
+  };
+
+  // Get onboarding content for personalization fields
+  const getPersonalizationStepContent = () => {
+    if (tooltipTarget === nomBoutiqueRef.current) {
+      return {
+        title: "Nom de votre boutique",
+        message: "Entrez le nom qui apparaîtra sur votre boutique.",
+        tip: null,
+        stats: null,
+        benefit: null
+      };
+    } else if (tooltipTarget === descriptionRef.current) {
+      return {
+        title: "Description de votre boutique",
+        message: "Décrivez vos produits et votre cause.",
+        tip: null,
+        stats: null,
+        benefit: null
+      };
+    } else if (tooltipTarget === autoDepositRef.current) {
+      return {
+        title: "Dépôts automatiques",
+        message: "Activez si votre banque accepte les dépôts Interac automatiques.",
+        tip: null,
+        stats: null,
+        benefit: null
+      };
+    } else if (tooltipTarget === discountRef.current) {
+      return {
+        title: "Réductions automatiques",
+        message: "Offrez 5% de rabais dès 6 produits. Réduit votre profit mais booste les ventes.",
+        tip: null,
+        stats: null,
+        benefit: null
+      };
+    } else if (tooltipTarget === submitRef.current) {
+      return {
+        title: "Enregistrer",
+        message: "Cliquez pour sauvegarder votre boutique.",
+        tip: null,
+        stats: null,
+        benefit: null
+      };
+    }
+    return {};
+  };
 
   // Helper function to get discount suggestion
   const getDiscountSuggestion = () => {
@@ -138,17 +260,27 @@ export default function PersonnalisationForm() {
 
         const data = await response.json();
         console.log(data)
-        alert('Personnalisation enregistrée avec succès!');
+        
+        // Mark personalization step as complete
+        await markStepComplete('personalizedStore', true);
+        
+        toast.success('Personnalisation enregistrée avec succès!');
 
         // Rediriger vers la page de la boutique après la personnalisation réussie
+        // et marquer automatiquement l'étape visitedStore comme complétée
         router.push(data.storeUrl);
+        
+        // Marquer visitedStore comme complété après un court délai pour s'assurer que la page est chargée
+        setTimeout(async () => {
+          await markStepComplete('visitedStore', true);
+        }, 1000);
       } else {
         const error = await response.json();
         throw new Error(error.message || 'Erreur lors de la personnalisation');
       }
     } catch (error) {
       console.error('Erreur:', error);
-      alert('Une erreur est survenue lors de l\'enregistrement de la personnalisation');
+      toast.error('Une erreur est survenue lors de l\'enregistrement de la personnalisation');
     }
   };
 
@@ -277,9 +409,22 @@ const EmailExample = () => {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-10 pb-8">
-        <div className="space-y-2">
-          <Label htmlFor="nomBoutique"><strong>Nom de la boutique:</strong></Label>
+      <form onSubmit={handleSubmit} className="space-y-8 pb-8">
+        <motion.div 
+          ref={nomBoutiqueRef}
+          className="space-y-2"
+          animate={tooltipTarget === nomBoutiqueRef.current ? {
+            scale: [1, 1.02, 1],
+          } : {}}
+          transition={{
+            duration: 2,
+            repeat: tooltipTarget === nomBoutiqueRef.current ? Infinity : 0,
+            ease: "easeInOut"
+          }}
+        >
+          <Label htmlFor="nomBoutique" className="text-sm font-semibold text-gray-700">
+            Nom de la boutique
+          </Label>
           <Input
             type="text"
             id="nomBoutique"
@@ -287,28 +432,46 @@ const EmailExample = () => {
             value={formData.nomBoutique}
             onChange={handleChange}
             required
+            className={`mt-1 ${tooltipTarget === nomBoutiqueRef.current ? 'ring-4 ring-blue-500 border-blue-500' : ''}`}
+            placeholder="Entrez le nom de votre boutique"
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="description"><strong>Description:</strong></Label>
+        </motion.div>
+        
+        <motion.div 
+          ref={descriptionRef}
+          className="space-y-2"
+          animate={tooltipTarget === descriptionRef.current ? {
+            scale: [1, 1.02, 1],
+          } : {}}
+          transition={{
+            duration: 2,
+            repeat: tooltipTarget === descriptionRef.current ? Infinity : 0,
+            ease: "easeInOut"
+          }}
+        >
+          <Label htmlFor="description" className="text-sm font-semibold text-gray-700">
+            Description
+          </Label>
           <Textarea
             id="description"
             name="description"
             value={formData.description}
             onChange={handleChange}
             required
-            rows={4}
+            rows={6}
+            className={`mt-1 ${tooltipTarget === descriptionRef.current ? 'ring-4 ring-blue-500 border-blue-500' : ''}`}
+            placeholder="Décrivez vos produits et votre cause..."
           />
           {getDiscountSuggestion() && (
-            <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm">
               <p className="text-sm text-yellow-800">{getDiscountSuggestion()}</p>
             </div>
           )}
-        </div>
+        </motion.div>
         {/* Tip for Automatic Deposits */}
-        <div className="mt-4 p-4 border border-blue-300 rounded-md bg-blue-50">
-          <p>
-            Pensez à configurer vos dépôts automatiques pour faciliter la gestion de vos fonds. 
+        <div className="mt-4 p-4 border border-blue-200 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 shadow-sm">
+          <p className="text-sm text-blue-900">
+            💡 Pensez à configurer vos dépôts automatiques pour faciliter la gestion de vos fonds. 
             Vous pouvez le faire avec les guides ci-dessous.
           </p>
         </div>
@@ -316,82 +479,131 @@ const EmailExample = () => {
       {/* Bank Guides Component */}
       <BankGuides />
 
-      <div className="space-y-4 p-6 border-2 border-gray-300 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 shadow-md">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Label htmlFor="autoDeposit" className="text-base font-semibold text-gray-800">
+      <motion.div 
+        ref={autoDepositRef}
+        className="space-y-4 p-6 border-2 border-gray-200 rounded-xl bg-gradient-to-br from-gray-50 to-white shadow-sm hover:shadow-md transition-shadow duration-200"
+        animate={tooltipTarget === autoDepositRef.current ? {
+          scale: [1, 1.02, 1],
+        } : {}}
+        transition={{
+          duration: 2,
+          repeat: tooltipTarget === autoDepositRef.current ? Infinity : 0,
+          ease: "easeInOut"
+        }}
+      >
+        <div className={`flex items-center justify-between gap-4 ${tooltipTarget === autoDepositRef.current ? 'ring-4 ring-blue-500 rounded-lg p-2 -m-2' : ''}`}>
+          <div className="space-y-1 flex-1">
+            <Label htmlFor="autoDeposit" className="text-base font-semibold text-gray-900">
               Dépôts automatiques
             </Label>
             <p className="text-sm text-gray-600">
-             Mon compte bancaire est configuré pour recevoir les dépôts automatiques.
+              Mon compte bancaire est configuré pour recevoir les dépôts automatiques.
             </p>
           </div>
-          <div className="flex items-center space-x-3">
-            <span className={`text-sm font-medium ${!formData.autoDeposit ? 'text-gray-600' : 'text-gray-400'}`}>
-              Non
-            </span>
-            <Switch
-              id="autoDeposit"
-              checked={formData.autoDeposit}
-              onCheckedChange={(checked) => setFormData({ ...formData, autoDeposit: checked })}
-              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
-            />
-            <span className={`text-sm font-medium ${formData.autoDeposit ? 'text-green-600' : 'text-gray-400'}`}>
-              Oui
-            </span>
-          </div>
+          <Toggle
+            id="autoDeposit"
+            pressed={formData.autoDeposit}
+            onPressedChange={(pressed) => setFormData({ ...formData, autoDeposit: pressed })}
+            aria-label="Activer les dépôts automatiques"
+            size="sm"
+            variant="outline"
+            className="data-[state=on]:bg-green-500 data-[state=on]:text-white data-[state=on]:border-green-600 data-[state=off]:bg-gray-200 data-[state=off]:text-gray-700 data-[state=off]:border-gray-300 min-w-[100px] h-10"
+          >
+            {formData.autoDeposit ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Oui
+              </>
+            ) : (
+              <>
+                <XCircle className="w-4 h-4 mr-2" />
+                Non
+              </>
+            )}
+          </Toggle>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="space-y-4 p-6 border-2 border-blue-300 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 shadow-md">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Label htmlFor="discountEnabled" className="text-base font-semibold text-blue-800 flex items-center gap-2">
+      <motion.div 
+        ref={discountRef}
+        className="space-y-4 p-6 border-2 border-blue-200 rounded-xl bg-gradient-to-br from-blue-50 to-white shadow-sm hover:shadow-md transition-shadow duration-200"
+        animate={tooltipTarget === discountRef.current ? {
+          scale: [1, 1.02, 1],
+        } : {}}
+        transition={{
+          duration: 2,
+          repeat: tooltipTarget === discountRef.current ? Infinity : 0,
+          ease: "easeInOut"
+        }}
+      >
+        <div className={`flex items-center justify-between gap-4 ${tooltipTarget === discountRef.current ? 'ring-4 ring-blue-500 rounded-lg p-2 -m-2' : ''}`}>
+          <div className="space-y-1 flex-1">
+            <Label htmlFor="discountEnabled" className="text-base font-semibold text-blue-900 flex items-center gap-2">
               <Percent className="h-5 w-5" />
               Réductions automatiques
             </Label>
-            <p className="text-sm text-blue-600">
+            <p className="text-sm text-blue-700">
               {formData.discountEnabled 
                 ? "5% de réduction dès 6 produits commandés" 
                 : "Les réductions sont désactivées pour cette boutique"}
             </p>
           </div>
-          <div className="flex items-center space-x-3">
-            <span className={`text-sm font-medium ${!formData.discountEnabled ? 'text-gray-600' : 'text-gray-400'}`}>
-              Non
-            </span>
-            <Switch
-              id="discountEnabled"
-              checked={formData.discountEnabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, discountEnabled: checked })}
-              className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-300"
-            />
-            <span className={`text-sm font-medium ${formData.discountEnabled ? 'text-green-600' : 'text-gray-400'}`}>
-              Oui
-            </span>
-          </div>
+          <Toggle
+            id="discountEnabled"
+            pressed={formData.discountEnabled}
+            onPressedChange={(pressed) => setFormData({ ...formData, discountEnabled: pressed })}
+            aria-label="Activer les réductions automatiques"
+            size="sm"
+            variant="outline"
+            className="data-[state=on]:bg-green-500 data-[state=on]:text-white data-[state=on]:border-green-600 data-[state=off]:bg-gray-200 data-[state=off]:text-gray-700 data-[state=off]:border-gray-300 min-w-[100px] h-10"
+          >
+            {formData.discountEnabled ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Oui
+              </>
+            ) : (
+              <>
+                <XCircle className="w-4 h-4 mr-2" />
+                Non
+              </>
+            )}
+          </Toggle>
         </div>
-      </div>
+      </motion.div>
 
         <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
->
-      <Button
-        variant="default"
-        size="lg"
-        type="submit"
-        className={`
-          relative overflow-hidden transition-all duration-300 ease-out
-          transform hover:scale-105 hover:shadow-lg
-          bg-gradient-to-r from-blue-500 to-indigo-600
-          text-white font-semibold py-3 px-6 rounded-full
-          focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
-        `}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
+          ref={submitRef}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ 
+            opacity: 1, 
+            y: 0,
+            scale: tooltipTarget === submitRef.current ? [1, 1.05, 1] : 1
+          }}
+          transition={{ 
+            duration: 0.5,
+            scale: {
+              duration: 2,
+              repeat: tooltipTarget === submitRef.current ? Infinity : 0,
+              ease: "easeInOut"
+            }
+          }}
+        >
+          <Button
+            variant="default"
+            size="lg"
+            type="submit"
+            className={`
+              relative overflow-hidden transition-all duration-300 ease-out
+              transform hover:scale-105 hover:shadow-lg
+              bg-gradient-to-r from-blue-500 to-indigo-600
+              text-white font-semibold py-3 px-6 rounded-full
+              focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
+              ${tooltipTarget === submitRef.current ? 'ring-4 ring-blue-500' : ''}
+            `}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
         <motion.span
           className="relative z-10 flex items-center space-x-2"
           animate={{ x: isHovered ? 5 : 0 }}
@@ -410,6 +622,26 @@ const EmailExample = () => {
       </Button>
     </motion.div>
       </form>
+
+      {/* Onboarding Tooltip */}
+      {showOnboardingTooltip && currentOnboardingStep && tooltipTarget && (
+        <OnboardingTooltip
+          isVisible={showOnboardingTooltip}
+          position="right"
+          title={getPersonalizationStepContent().title}
+          message={getPersonalizationStepContent().message}
+          tip={getPersonalizationStepContent().tip}
+          stats={getPersonalizationStepContent().stats}
+          benefit={getPersonalizationStepContent().benefit}
+          onNext={handleOnboardingNext}
+          onSkip={handleOnboardingSkip}
+          onClose={handleOnboardingClose}
+          currentStep={currentOnboardingStep.order}
+          totalSteps={6}
+          showCelebration={false}
+          targetElement={tooltipTarget}
+        />
+      )}
 
       <p>Voici un exemple de courriel qui sera envoyé à vos clients lorsqu'ils auront commandé:</p><br/>
       {/* Bouton pour afficher le popup */}

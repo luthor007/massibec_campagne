@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { Form } from '@/components/ui/form'
@@ -102,7 +103,7 @@ const ProductForm = ({ product = {}, onSave }) => {
     e.preventDefault()
 
     if (!formData.name || !formData.description || !formData.image) {
-      alert('Please fill in all required fields.')
+      toast.error('Please fill in all required fields.')
       return
     }
 
@@ -124,11 +125,11 @@ const ProductForm = ({ product = {}, onSave }) => {
       }
 
       const savedProduct = await response.json()
-      alert('Product saved successfully!')
+      toast.success('Product saved successfully!')
       onSave(savedProduct)
     } catch (error) {
       console.error('Error saving product:', error)
-      alert(`Error: ${error.message}`)
+      toast.error(`Error: ${error.message}`)
     }
   }
 

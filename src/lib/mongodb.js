@@ -3,10 +3,6 @@ import mongoose from 'mongoose';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!MONGODB_URI) {
-  throw new Error('Veuillez définir l\'URI MongoDB dans les variables d\'environnement.');
-}
-
 let cached = global.mongoose;
 
 if (!cached) {
@@ -16,6 +12,11 @@ if (!cached) {
 async function dbConnect() {
   if (cached.conn) {
     return cached.conn;
+  }
+
+  // Only validate environment when actually attempting to connect
+  if (!MONGODB_URI) {
+    throw new Error('Veuillez définir l\'URI MongoDB dans les variables d\'environnement.');
   }
 
   if (!cached.promise) {

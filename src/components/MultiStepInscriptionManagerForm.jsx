@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -153,8 +154,9 @@ export default function MultiStepInscriptionManagerForm() {
 
       if (response.ok) {
         const data = await response.json()
-        alert('Inscription réussie ! Vérifiez votre e-mail pour confirmer votre compte.')
-        router.push('/connexion')
+        // Store email in sessionStorage for email verification page
+        sessionStorage.setItem('pendingVerificationEmail', formData.email);
+        router.push('/email-verification')
       } else {
         const errorData = await response.json()
         setErrorMessage(errorData.message || 'Erreur lors de l\'inscription')

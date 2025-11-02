@@ -22,6 +22,8 @@ export default function ProductCard({ product }) {
 
     localStorage.setItem('cartItems', JSON.stringify(cartItems))
     window.dispatchEvent(new Event('storage'))
+    // Notify onboarding flow that an item was added
+    window.dispatchEvent(new CustomEvent('itemAddedToCart'))
 
     setTimeout(() => setIsAdding(false), 500)
   }
@@ -52,7 +54,8 @@ export default function ProductCard({ product }) {
         </CardContent>
         <CardFooter className="p-3 sm:p-4 pt-0">
           <Button 
-            className="w-full relative overflow-hidden transition-all duration-300 ease-out transform hover:scale-105 hover:shadow-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 sm:py-3 px-4 sm:px-6 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 text-sm sm:text-base" 
+            className="w-full relative overflow-hidden transition-all duration-300 ease-out transform hover:scale-105 hover:shadow-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-2 sm:py-3 px-4 sm:px-6 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75 text-sm sm:text-base"
+            data-testid="add-to-cart"
             onClick={addToCart} 
             disabled={isAdding}
           >

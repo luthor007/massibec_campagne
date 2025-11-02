@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,7 +110,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
       case 'completed':
         return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Terminée</Badge>;
       case 'pending_school_approval':
-        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">En attente école</Badge>;
+        return <Badge className="bg-orange-100 text-orange-800 border-orange-200">En attente organisation</Badge>;
       default:
         return <Badge variant="outline">Inconnu</Badge>;
     }
@@ -126,7 +127,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
     
     // Validate financial goal
     if (!financialGoalValue || financialGoalValue === '' || isNaN(parseFloat(financialGoalValue))) {
-      alert('L\'objectif financier est requis et doit être un nombre valide');
+      toast.error('L\'objectif financier est requis et doit être un nombre valide');
       setIsSaving(false);
       return;
     }
@@ -170,11 +171,11 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
         }
       } else {
         const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        toast.error(`Erreur: ${error.message}`);
       }
     } catch (error) {
       console.error('Error updating campaign:', error);
-      alert('Erreur lors de la sauvegarde');
+      toast.error('Erreur lors de la sauvegarde');
     } finally {
       setIsSaving(false);
     }
@@ -196,11 +197,11 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
           c._id === selectedCampaignId ? { ...c, ...updatedCampaign.campaign } : c
         ));
       } else {
-        alert('Erreur lors de la modification du verrouillage');
+        toast.error('Erreur lors de la modification du verrouillage');
       }
     } catch (error) {
       console.error('Error toggling lock:', error);
-      alert('Une erreur est survenue');
+      toast.error('Une erreur est survenue');
     } finally {
       setIsTogglingLock(false);
     }
@@ -229,11 +230,11 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
         }
       } else {
         const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        toast.error(`Erreur: ${error.message}`);
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Erreur lors de la mise à jour du statut');
+      toast.error('Erreur lors de la mise à jour du statut');
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -249,7 +250,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-500">Aucune campagne disponible pour cette école.</p>
+          <p className="text-gray-500">Aucune campagne disponible pour cette organisation.</p>
         </CardContent>
       </Card>
     );

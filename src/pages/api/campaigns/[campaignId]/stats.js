@@ -73,14 +73,23 @@ export default async function handler(req, res) {
       sellerStats[userId].orderCount += 1;
     });
 
-    const topSellers = Object.values(sellerStats)
+    // Get top sellers and fetch their names
+    const topSellersUnsorted = Object.values(sellerStats)
       .sort((a, b) => b.totalSales - a.totalSales)
-      .slice(0, 3)
-      .map(seller => ({
-        userId: seller.userId,
-        totalSales: seller.totalSales,
-        orderCount: seller.orderCount
-      }));
+      .slice(0, 3);
+
+    // Fetch user names for top sellers
+    const topSellers = await Promise.all(
+      topSellersUnsorted.map(async (seller) => {
+        const user = await User.findById(seller.userId);
+        return {
+          userId: seller.userId,
+          userName: user ? user.name : 'Utilisateur inconnu',
+          totalSales: seller.totalSales,
+          orderCount: seller.orderCount
+        };
+      })
+    );
 
     // Calculate goal progress
     const goalProgress = campaign.financialGoal > 0 

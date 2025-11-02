@@ -1,0 +1,36 @@
+/* Dashboard specific styles */
+.dashboard-dropdown-content {
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  border-radius: 0.5rem !important;
+}
+
+.dashboard-dropdown-item {
+  background-color: white !important;
+  color: #111827 !important;
+}
+
+.dashboard-dropdown-item:hover {
+  background-color: #f9fafb !important;
+}
+
+.dashboard-dropdown-separator {
+  background-color: #e5e7eb !important;
+}
+
+.dashboard-card {
+  background-color: white !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06) !important;
+}
+
+.dashboard-button {
+  background-color: white !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
+}
+
+.dashboard-button:hover {
+  background-color: #f9fafb !important;
+}

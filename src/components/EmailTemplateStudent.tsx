@@ -18,7 +18,7 @@ interface EmailTemplateProps {
     amount: string;
   }[];
   totalAmount: number;
-  tip: number;
+  tip?: number;
   autoDeposit: boolean;
   orderId: string;
   orderDate: string;
@@ -34,7 +34,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
   deliveryDate,
   products,
   totalAmount,
-  tip,
+  tip = 0,
   autoDeposit,
   orderId,
   orderDate,
@@ -76,7 +76,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
             <tr key={index}>
               <td style={{ border: '1px solid #ddd', padding: '8px' }}>{item.productName}</td>
               <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>{item.quantity}</td>
-              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>${item.price.toFixed(2)}</td>
+              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>${(item.price || 0).toFixed(2)}</td>
               <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>${item.amount}</td>
             </tr>
           ))}

@@ -6,7 +6,7 @@ import CheckoutForm from './CheckoutForm'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Progress } from '@/components/ui/progress' // Ensure this component exists and is correctly implemented
 
-export default function Cart({ id }) {
+export default function Cart({ id, campaignId, schoolId }) {
   const [items, setItems] = useState([])
   const [showCheckout, setShowCheckout] = useState(false)
   const [discount, setDiscount] = useState(0)
@@ -84,6 +84,10 @@ export default function Cart({ id }) {
   // Handle Checkout Modal
   const handleCheckout = useCallback(() => {
     setShowCheckout(true)
+    // Notify onboarding flow that checkout opened
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('checkoutOpened'))
+    }
   }, [])
 
   // Remove a Specific Item
@@ -240,7 +244,8 @@ export default function Cart({ id }) {
             <span>{discountedTotal.toFixed(2)}$</span>
           </div>
           <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg" 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg cart-checkout-button" 
+            data-testid="checkout-button"
             onClick={handleCheckout}
           >
             Passer la commande
@@ -253,6 +258,8 @@ export default function Cart({ id }) {
           items={items}
           onClose={() => setShowCheckout(false)}
           removeAllItem={removeAllItems}
+          campaignId={campaignId}
+          schoolId={schoolId}
           className="sm:max-h-600px"
         />
       )}

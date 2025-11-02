@@ -1,6 +1,7 @@
 import dbConnect from '../../lib/mongodb';
 import User from '../../models/User';
 import School from '../../models/School';
+import SchoolManager from '../../models/SchoolManager';
 import Product from '../../models/Product';
 import { sendVerificationEmail } from '../../utils/gmailMailer';
 import bcrypt from 'bcryptjs';
@@ -96,7 +97,9 @@ export default async function handler(req, res) {
         ville,
         codePostal,
         adresse,
-        momentPourJoindre
+        momentPourJoindre,
+        preferredPaymentMethod,
+        deliveryInstructions
       } = req.body;
 
       // Get logo filename if uploaded
@@ -112,7 +115,7 @@ export default async function handler(req, res) {
       const sanitizedEmail = sanitizeString(email);
       const sanitizedSchoolManagerInfo = {
         titreOuFonction: sanitizeString(titreOuFonction),
-        organisme: organisme,
+        organisme: organisme, // Will be sanitized later
         ville: sanitizeString(ville),
         codePostal: sanitizeString(codePostal),
         telephone: sanitizeString(telephone),
@@ -127,19 +130,59 @@ export default async function handler(req, res) {
         });
       }
 
+      // Additional validation for string fields
+      const sanitizedOrganisme = sanitizeString(organisme);
+      const sanitizedAddress = sanitizeString(adresse);
+      
+      if (!sanitizedOrganisme || sanitizedOrganisme.trim().length === 0 || sanitizedOrganisme.length > 200) {
+        return res.status(400).json({ 
+          message: 'Le nom de l\'école doit contenir entre 1 et 200 caractères' 
+        });
+      }
+      
+      if (!sanitizedAddress || sanitizedAddress.trim().length === 0 || sanitizedAddress.length > 200) {
+        return res.status(400).json({ 
+          message: 'L\'adresse doit contenir entre 1 et 200 caractères' 
+        });
+      }
+
       // Create a new School (without initial campaign)
       const newSchool = new School({
-        name: sanitizeString(organisme),
-        address: sanitizeString(adresse),
-        ville: sanitizeString(ville),
-        codePostal: sanitizeString(codePostal),
+        name: sanitizedOrganisme.trim(),
+        address: sanitizedAddress.trim(),
+        ville: sanitizeString(ville).trim(),
+        codePostal: sanitizeString(codePostal).trim(),
         logo: logoFilename, // Add logo filename
+        telephone: sanitizeString(telephoneEcole) || sanitizeString(telephone) || '', // Use school phone or owner phone
+        email: sanitizeString(emailEcole) || sanitizedEmail, // Use school email or owner email
+        preferredPaymentMethod: sanitizeString(preferredPaymentMethod), // Add preferred payment method
+        deliveryInstructions: sanitizeString(deliveryInstructions), // Add delivery instructions
         currentCampaignNumber: 0, // No campaigns initially
         campaigns: [], // Empty campaigns array
         approved: false
       });
 
-      await newSchool.save();
+      // Save with error handling for encoding issues
+      try {
+        await newSchool.save();
+      } catch (saveError) {
+        console.error('Error saving school:', saveError);
+        
+        if (saveError.message && saveError.message.includes('Invalid UTF-8')) {
+          return res.status(400).json({ 
+            message: 'Les données contiennent des caractères invalides. Veuillez utiliser uniquement des caractères de texte standard.' 
+          });
+        }
+        
+        return res.status(500).json({ 
+          message: 'Erreur lors de la création de l\'école. Veuillez vérifier que toutes les données sont valides.' 
+        });
+      }
+
+      console.log('School created with contact info:', {
+        telephone: newSchool.telephone,
+        email: newSchool.email
+      });
 
       // Update schoolManagerInfo with the school ID
       sanitizedSchoolManagerInfo.organisme = newSchool._id;
@@ -162,20 +205,24 @@ export default async function handler(req, res) {
       // Save the user in the database
       await newUser.save();
 
-      // Create a new product for each isDefault product in my db and copy them but assign them the school that have just been created
-      const defaultProducts = await Product.find({ isDefault: true });
-      defaultProducts.forEach(async (product) => {
-        const newProduct = new Product({
-          name: product.name,
-          description: product.description,
-          price: product.price,
-          cost: product.cost,
-          image: product.image,
-          isDefault: false,
-          school: newSchool._id,
-        });
-        await newProduct.save();
+      // Create SchoolManager record to make this user the owner
+      const schoolManager = new SchoolManager({
+        school: newSchool._id,
+        user: newUser._id,
+        role: 'owner',
+        invitedBy: newUser._id, // Self-invited as the creator
+        status: 'active'
       });
+      await schoolManager.save();
+
+      console.log('SchoolManager created:', {
+        schoolId: newSchool._id,
+        userId: newUser._id,
+        role: 'owner'
+      });
+
+      // Products are now universal and shared across all schools
+      // No need to create duplicate products for each school
 
       const verificationUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${verificationToken}`;
       

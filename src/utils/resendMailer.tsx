@@ -8,6 +8,7 @@ import EmailDeletionTemplate from '../components/EmailDeletionTemplate';
 import StudentOrderEmailTemplate from '../components/StudentOrderEmailTemplate';
 import PasswordResetEmailTemplate from '../components/PasswordResetEmailTemplate';
 import EmailTemplateStudent from '../components/EmailTemplateStudent';
+import { SendEmailParams as EmailTypesParams, ProductItemEmail } from './emailTypes';
 
 // Initialize Resend
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -21,15 +22,7 @@ const getFromName = () => {
   return process.env.GMAIL_FROM_NAME || 'Massibec Financement';
 };
 
-// Interfaces (matching gmailMailer interfaces)
-interface ProductItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  price: number;
-  amount: string;
-}
-
+// Local interfaces
 interface SendDeletionEmailParams {
   to: string;
   subject: string;
@@ -67,29 +60,8 @@ interface SendSaleNotificationEmailParams {
   orderDate: string;
 }
 
-interface SendEmailParams {
-  to: string;
-  cc?: string;
-  from?: string;
-  subject: string;
-  firstName: string;
-  customerEmail: string;
-  storeName: string;
-  hoursAvailable: string;
-  products: ProductItem[];
-  totalAmount: number;
-  tip: number;
-  autoDeposit: boolean;
-  orderId: string;
-  orderDate: string;
-  orderDeadline: string;
-  deliveryDate: string;
-  deliveryLocation: string;
-  deliveryCity: string;
-  sellerName: string;
-  sellerPhone: string;
-  sellerEmail: string;
-}
+// Use shared SendEmailParams interface
+type SendEmailParams = EmailTypesParams;
 
 interface SendPasswordResetEmailParams {
   to: string;
@@ -104,11 +76,12 @@ interface SendStudentOrderEmailParams {
   email: string;
   phoneNumber: string;
   schoolName: string;
-  products: ProductItem[];
+  products: ProductItemEmail[];
   totalUnits: number;
   totalAmount: number;
   amountPaid: number;
   paymentInstructions: string;
+  organizationType?: string; // New field for dynamic terminology
 }
 
 interface SendVerificationEmailParams {
@@ -214,7 +187,10 @@ const sendEmail = async (params: SendEmailParams) => {
     hoursAvailable,
     products,
     totalAmount,
-    tip,
+    tip = 0,
+    studentDonation = 0,
+    schoolDonation = 0,
+    studentDonationSplit,
     autoDeposit,
     orderId,
     orderDate,
@@ -238,6 +214,9 @@ const sendEmail = async (params: SendEmailParams) => {
         products={products}
         totalAmount={totalAmount}
         tip={tip}
+        studentDonation={studentDonation}
+        schoolDonation={schoolDonation}
+        studentDonationSplit={studentDonationSplit}
         autoDeposit={autoDeposit}
         orderId={orderId}
         orderDate={orderDate}
@@ -365,6 +344,7 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
         totalAmount={totalAmount}
         amountPaid={amountPaid}
         paymentInstructions={paymentInstructions}
+        organizationType={params.organizationType || 'school'}
       />
     );
 

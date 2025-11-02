@@ -17,24 +17,15 @@ export default async function handler(req, res) {
       await dbConnect();
 
       // Destructure and sanitize the fields from the request body
-      const { name, email, password, schoolId, objectifPersonnel, parentInfo } = req.body;
+      const { name, email, password, parentInfo } = req.body;
 
-      // Verify that the school exists and is approved/active
-      const school = await School.findById(schoolId);
-      if (!school) {
-        return res.status(404).json({ message: 'École non trouvée.' });
-      }
-
-      if (school.status !== 'approved') {
-        return res.status(403).json({ 
-          message: 'Cette école n\'est pas approuvée. Veuillez contacter l\'administrateur.' 
-        });
+      // Validate required fields
+      if (!name || !email || !password || !parentInfo) {
+        return res.status(400).json({ message: 'Tous les champs sont requis' });
       }
 
       const sanitizedName = sanitizeString(name);
       const sanitizedEmail = sanitizeString(email);
-      const sanitizedSchool = schoolId;
-      const sanitizedObjectifPersonnel = objectifPersonnel;
 
       // Hash the password
       const hashedPassword = bcrypt.hashSync(password, 10);
@@ -48,20 +39,19 @@ export default async function handler(req, res) {
         name: sanitizedName,
         email: sanitizedEmail,
         password: hashedPassword,
-        school: sanitizedSchool,
-        objectifPersonnel: sanitizedObjectifPersonnel,
         role: 'student',
         verificationToken: verificationToken,
         verificationTokenExpires: verificationTokenExpires,
         parentInfo: {
           nomParent: sanitizeString(parentInfo.nomParent),
           prenomParent: sanitizeString(parentInfo.prenomParent),
-          adresse: sanitizeString(parentInfo.adresse),
-          app: sanitizeString(parentInfo.app),
-          ville: sanitizeString(parentInfo.ville),
-          province: sanitizeString(parentInfo.province),
-          codePostal: sanitizeString(parentInfo.codePostal),
           telephone: sanitizeString(parentInfo.telephone),
+          // Address fields are optional and not required for registration
+          adresse: parentInfo.adresse ? sanitizeString(parentInfo.adresse) : undefined,
+          app: parentInfo.app ? sanitizeString(parentInfo.app) : undefined,
+          ville: parentInfo.ville ? sanitizeString(parentInfo.ville) : undefined,
+          province: parentInfo.province ? sanitizeString(parentInfo.province) : undefined,
+          codePostal: parentInfo.codePostal ? sanitizeString(parentInfo.codePostal) : undefined,
         }
       });
 
@@ -74,10 +64,10 @@ export default async function handler(req, res) {
       // Confirmation d'inscription du vendeur (étudiant)
       // À: parent
       // De: Campagne Massibec <commande@massibec.com>
-      // Objet: Inscription (nom du parent) - Campagne (nom école) - Massibec
+      // Objet: Inscription (nom du parent) - Massibec
       await sendVerificationEmail({
         to: sanitizedEmail,
-        subject: `Inscription (${parentFullName}) - Campagne (${school.name}) - Massibec`,
+        subject: `Inscription (${parentFullName}) - Massibec`,
         firstName: sanitizeString(parentInfo.prenomParent),
         verificationUrl,
       });
@@ -86,6 +76,8 @@ export default async function handler(req, res) {
       res.status(201).json({ message: 'Utilisateur créé avec succès' });
     } catch (error) {
       console.error('Error during registration:', error);
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
       
       // Check if it's a duplicate email error
       if (error.code === 11000 && error.keyPattern?.email) {
@@ -94,7 +86,11 @@ export default async function handler(req, res) {
           code: 'DUPLICATE_EMAIL'
         });
       } else {
-        res.status(400).json({ message: 'Erreur lors de l\'inscription' });
+        res.status(400).json({ 
+          message: 'Erreur lors de l\'inscription',
+          error: error.message,
+          details: error.errors || 'No additional details'
+        });
       }
     }
   } else {

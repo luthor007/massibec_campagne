@@ -7,20 +7,26 @@ import Link from 'next/link'
 export default function Personnalisation() {
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader>
+      <div className="max-w-4xl mx-auto pt-8 px-4 pb-8">
+        <Card className="shadow-lg border-0">
+          <CardHeader className="space-y-4 pb-6">
             {/* Back arrow to go back to the dashboard */}
-            <Link href="/dashboard" passHref>
-
-                <ArrowLeft className="mr-2 h-5 w-5" />
-                Retour au tableau de bord
-
+            <Link 
+              href="/dashboard" 
+              passHref
+              className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Retour au tableau de bord
             </Link>
-            <CardTitle className="text-2xl">Personnaliser ma boutique</CardTitle>
-            <CardDescription>Adaptez l&apos;apparence de votre boutique à votre image</CardDescription>
+            <div className="space-y-2">
+              <CardTitle className="text-3xl font-bold text-gray-900">Personnaliser ma boutique</CardTitle>
+              <CardDescription className="text-base text-gray-600">
+                Adaptez l&apos;apparence de votre boutique à votre image
+              </CardDescription>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <PersonnalisationForm />
           </CardContent>
         </Card>

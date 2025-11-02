@@ -1,6 +1,7 @@
 // src/pages/dashboard-manager.jsx
 
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { signOut } from 'next-auth/react';
 import {
   BarChart,
@@ -86,7 +87,6 @@ import {
   Copy,
   Check
 } from 'lucide-react';
-import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 
 
@@ -287,17 +287,17 @@ const handleCopy = (code) => {
 
       if (response.ok) {
         const result = await response.json();
-        alert('Campagne créée avec succès! En attente d\'approbation de Massibec.');
+        toast.success('Campagne créée avec succès! En attente d\'approbation de Massibec.');
         setActiveTab('campaigns');
         // Refresh school data
         window.location.reload();
       } else {
         const errorData = await response.json();
-        alert(`Erreur: ${errorData.message}`);
+        toast.error(`Erreur: ${errorData.message}`);
       }
     } catch (error) {
       console.error('Error creating campaign:', error);
-      alert('Une erreur est survenue lors de la création de la campagne');
+      toast.error('Une erreur est survenue lors de la création de la campagne');
     } finally {
       setIsCreatingCampaign(false);
     }
@@ -376,35 +376,36 @@ const handleCopy = (code) => {
 
   const handleDeleteAccount = async () => {
     if (process.env.NODE_ENV !== 'development') {
-      alert('Cette fonctionnalité n\'est disponible qu\'en mode développement');
+      toast.info('Cette fonctionnalité n\'est disponible qu\'en mode développement');
       return;
     }
 
-    const confirmed = window.confirm(
-      'Êtes-vous sûr de vouloir supprimer votre compte et toutes les données associées ? Cette action est irréversible.'
-    );
-
-    if (!confirmed) return;
-
-    try {
-      const response = await fetch('/api/delete-account', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
+    toast("Êtes-vous sûr de vouloir supprimer votre compte ?", {
+      description: "Cette action est irréversible.",
+      action: {
+        label: "Supprimer",
+        onClick: async () => {
+          try {
+            const response = await fetch('/api/deleteAccount', { method: 'DELETE' });
+            if (response.ok) {
+              toast.success('Compte supprimé avec succès. Vous allez être redirigé.');
+              await signOut({ redirect: false });
+              window.location.href = '/';
+            } else {
+              const errorData = await response.json();
+              throw new Error(errorData.message || "Erreur lors de la suppression du compte");
+            }
+          } catch (error) {
+            console.error("Erreur:", error);
+            toast.error(`Erreur: ${error.message}`);
+          }
         },
-      });
-
-      if (response.ok) {
-        alert('Compte supprimé avec succès. Vous allez être redirigé.');
-        window.location.href = '/';
-      } else {
-        const error = await response.json();
-        alert(`Erreur: ${error.message}`);
-      }
-    } catch (error) {
-      console.error('Error deleting account:', error);
-      alert('Erreur lors de la suppression du compte');
-    }
+      },
+      cancel: {
+        label: "Annuler",
+        onClick: () => {},
+      },
+    });
   };
 
   if (!school || !participants) {

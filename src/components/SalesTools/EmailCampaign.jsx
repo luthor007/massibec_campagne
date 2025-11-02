@@ -1,5 +1,6 @@
 // components/SalesTools/EmailCampaign.jsx
 import React, { useState } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,12 +38,12 @@ export default function EmailCampaign({ selectedClients, storeId, onSuccess }) {
 
   const sendEmailCampaign = async () => {
     if (selectedClients.length === 0) {
-      alert('Veuillez sélectionner au moins un client');
+      toast.error('Veuillez sélectionner au moins un client');
       return;
     }
 
     if (!subject || !emailTemplate) {
-      alert('Le sujet et le message sont requis');
+      toast.error('Le sujet et le message sont requis');
       return;
     }
 
@@ -62,16 +63,16 @@ export default function EmailCampaign({ selectedClients, storeId, onSuccess }) {
       const data = await response.json();
       
       if (response.ok) {
-        alert(data.message);
+        toast.success(data.message);
         setSubject('');
         setEmailTemplate('');
         if (onSuccess) onSuccess();
       } else {
-        alert(`Erreur: ${data.message}`);
+        toast.error(`Erreur: ${data.message}`);
       }
     } catch (error) {
       console.error('Error sending emails:', error);
-      alert('Erreur lors de l\'envoi des emails');
+      toast.error('Erreur lors de l\'envoi des emails');
     } finally {
       setIsSending(false);
     }

@@ -2,13 +2,19 @@ import mongoose from 'mongoose';
 
 const CampaignSchema = new mongoose.Schema({
   // Basic campaign info
+  name: { type: String, trim: true, maxlength: 200 }, // Nom de la campagne (ex: "École Primaire - Janvier 2025")
   campaignNumber: { type: Number, required: true },
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
+  campaignCode: { type: String, required: true, unique: true }, // Format: {SCHOOL_CODE}-C{CAMPAIGN_NUMBER}
   
   // Campaign dates
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
   deliveryDate: { type: Date },
+  
+  // Distribution hours
+  distributionStartHour: { type: String, trim: true }, // Hour when distribution starts (e.g., "10h00")
+  distributionEndHour: { type: String, trim: true }, // Hour when distribution ends (e.g., "15h00")
   
   // Campaign status
   isActive: { type: Boolean, default: false },
@@ -37,10 +43,26 @@ const CampaignSchema = new mongoose.Schema({
   // Profit splits per product for this campaign
   profitSplits: [{
     productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    school: { type: Number, default: 0.75 },
-    student: { type: Number, default: 2.00 },
-    raffle: { type: Number, default: 0.25 }
+    studentCash: { type: Number, default: 1.00 }, // Profit étudiant comptant ($)
+    studentSchoolAccount: { type: Number, default: 1.00 }, // Profit étudiant via compte scolaire ($)
+    schoolProject: { type: Number, default: 0.75 }, // Profit projet école ($)
+    raffle: { type: Number, default: 0.25 } // Profit tirage ($)
   }],
+  
+  // Donation configuration for students
+  donationsForStudents: {
+    enabled: { type: Boolean, default: true },
+    presets: { type: [Number], default: [0, 2, 5] },
+    splitConfig: {
+      studentAccount: { type: Number, default: 60.0 }, // %
+      studentCash: { type: Number, default: 40.0 }     // %
+    }
+  },
+  // Donation configuration for school
+  donationsForSchool: {
+    enabled: { type: Boolean, default: true },
+    presets: { type: [Number], default: [0, 2, 5] }
+  },
   
   // Approval workflow
   approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -66,6 +88,7 @@ CampaignSchema.index({ school: 1, campaignNumber: 1 }, { unique: true });
 CampaignSchema.index({ school: 1, isActive: 1 });
 CampaignSchema.index({ status: 1 });
 CampaignSchema.index({ startDate: 1, endDate: 1 });
+CampaignSchema.index({ campaignCode: 1 }, { unique: true }); // Fast lookup for campaign codes
 
 // Virtual for campaign duration
 CampaignSchema.virtual('duration').get(function() {

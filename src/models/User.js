@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
-import School from './School'
-import Order from './Order'
+import School from './School.js'
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
@@ -9,23 +8,34 @@ const UserSchema = new mongoose.Schema({
   role: { type: String, enum: ['student', 'school_manager'], required: true }, // Define role
 
 
-  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: Order}],
+  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order'}],
   orderCounter: { type: Number, default: 0 }, // Initialize counter to 0
 
 
-  // Fields for students
+  // Fields for students - Legacy field (keep for backward compatibility)
   school: {
     type: mongoose.Schema.Types.ObjectId,
     ref: School,
-    required: function () {
-      return this.role === 'student';
-    },
+    required: false, // Make optional for new multi-campaign system
   },
+  
+  // New multi-campaign fields
+  campaigns: [{
+    campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', required: true },
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
+    joinedAt: { type: Date, default: Date.now },
+    objectifPersonnel: { type: Number },
+    isActive: { type: Boolean, default: true }
+  }],
+  
+  activeCampaignId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Campaign'
+  },
+  // Legacy objectifPersonnel field (keep for backward compatibility)
   objectifPersonnel: {
     type: Number,
-    required: function () {
-      return this.role === 'student';
-    },
+    required: false, // Make optional for new multi-campaign system
   },
   emailVerified: {
     type: Boolean,
@@ -36,6 +46,16 @@ const UserSchema = new mongoose.Schema({
   },
   verificationTokenExpires: {
     type: Date,
+  },
+  loginToken: {
+    type: String,
+  },
+  loginTokenExpires: {
+    type: Date,
+  },
+  loginTokenUsed: {
+    type: Number,
+    default: 0,
   },
   profileCompleted: { type: Boolean, default: false },
   profileCompletionPercentage: { type: Number, default: 0 },
@@ -52,31 +72,12 @@ const UserSchema = new mongoose.Schema({
         return this.role === 'student';
       },
     },
-    adresse: {
-      type: String,
-      required: function () {
-        return this.role === 'student';
-      },
-    },
-    app: { type: String },
-    ville: {
-      type: String,
-      required: function () {
-        return this.role === 'student';
-      },
-    },
-    province: {
-      type: String,
-      required: function () {
-        return this.role === 'student';
-      },
-    },
-    codePostal: {
-      type: String,
-      required: function () {
-        return this.role === 'student';
-      },
-    },
+    // Address fields removed - not needed as delivery is always at school
+    adresse: { type: String }, // Optional, kept for backward compatibility
+    app: { type: String }, // Optional
+    ville: { type: String }, // Optional, kept for backward compatibility
+    province: { type: String }, // Optional
+    codePostal: { type: String }, // Optional
     telephone: {
       type: String,
       required: function () {
@@ -102,12 +103,25 @@ const UserSchema = new mongoose.Schema({
     momentPourJoindre: { type: String, required: function () { return this.role === 'school_manager'; } }
   },
   store: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
+  
+  // Onboarding progress tracking
+  onboardingProgress: {
+    joinedCampaign: { type: Boolean, default: false },
+    personalizedStore: { type: Boolean, default: false },
+    visitedStore: { type: Boolean, default: false },
+    viewedOrders: { type: Boolean, default: false },
+    viewedStats: { type: Boolean, default: false },
+    viewedTools: { type: Boolean, default: false },
+    completedAt: { type: Date }
+  }
 });
 
 // Ensure that either 'student' or 'school_manager' fields are valid
 UserSchema.path('role').validate(function (value) {
   if (value === 'student') {
-    return !!this.school && !!this.objectifPersonnel && !!this.parentInfo;
+    // For students, require parentInfo (always required)
+    // School and objectifPersonnel are optional for new multi-campaign system
+    return !!this.parentInfo;
   }
   if (value === 'school_manager') {
     return !!this.schoolManagerInfo && 

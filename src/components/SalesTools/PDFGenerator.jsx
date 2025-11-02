@@ -1,5 +1,6 @@
 // components/SalesTools/PDFGenerator.jsx
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,34 +12,24 @@ import QRCode from 'qrcode';
 
 export default function PDFGenerator({ storeInfo }) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [customMessage, setCustomMessage] = useState('Bonjour! Je participe a une campagne de financement pour soutenir mon projet.\n\nChaque commande compte et fait une vraie difference. Merci de votre soutien et de votre générosité!');
+  // Default message matches ShareSection message from boutique
+  const defaultStoreMessage = `🎉 Bonjour chers amis !
+Je participe à la campagne de financement de l'école de mon enfant avec les produits Massibec.
+Vous pouvez commander en ligne leurs délicieux pâtés à la viande et au poulet (exclusifs aux campagnes de financement) ainsi que leurs fameuses tartes.
+
+👉 Une partie des profits va pour les activités scolaires de l'école et une autre directement aux activités pour mon enfant.
+👉 Paiements simples et sécuritaires par Interac.
+👉 Profitez d'un rabais de 5 % à l'achat de 6 produits.
+
+Merci de communiquer avec moi pour prévoir la livraison, puis passez votre commande directement sur ma boutique :`;
+  const [customMessage, setCustomMessage] = useState(defaultStoreMessage);
   const [customName, setCustomName] = useState('');
-  const [discountEnabled, setDiscountEnabled] = useState(true);
 
   useEffect(() => {
     if (storeInfo?.name) {
       setCustomName(storeInfo.name);
     }
   }, [storeInfo]);
-
-  // Fetch store data to get discount setting
-  useEffect(() => {
-    const fetchStoreData = async () => {
-      if (storeInfo?.storeId) {
-        try {
-          const response = await fetch(`/api/stores/${storeInfo.storeId}`);
-          if (response.ok) {
-            const data = await response.json();
-            setDiscountEnabled(data.discountEnabled !== false);
-          }
-        } catch (error) {
-          console.error('Error fetching store data for PDF:', error);
-        }
-      }
-    };
-
-    fetchStoreData();
-  }, [storeInfo?.storeId]);
 
   const loadImage = (src) => {
     return new Promise((resolve, reject) => {
@@ -53,7 +44,7 @@ export default function PDFGenerator({ storeInfo }) {
   // Helper function to detect mobile browsers
   const isMobileBrowser = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-           (navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
+           (!!navigator.maxTouchPoints && navigator.maxTouchPoints > 2 && /MacIntel/.test(navigator.platform));
   };
 
   // Helper function to download PDF with mobile support
@@ -81,10 +72,10 @@ export default function PDFGenerator({ storeInfo }) {
         setTimeout(() => URL.revokeObjectURL(url), 100);
         
         // Show success message for mobile users
-        alert('PDF téléchargé! Vérifiez vos téléchargements ou votre dossier de fichiers.');
+        toast.success('PDF téléchargé! Vérifiez vos téléchargements ou votre dossier de fichiers.');
       } catch (error) {
         console.error('Mobile download failed:', error);
-        alert('Erreur lors du téléchargement. Essayez d\'ouvrir dans Chrome ou Safari.');
+        toast.error('Erreur lors du téléchargement. Essayez d\'ouvrir dans Chrome ou Safari.');
       }
     } else {
       // For desktop browsers, use standard method
@@ -113,7 +104,7 @@ export default function PDFGenerator({ storeInfo }) {
 
   const generatePDF = async () => {
     if (!storeInfo) {
-      alert('Informations de la boutique non disponibles');
+      toast.error('Informations de la boutique non disponibles');
       return;
     }
 
@@ -252,8 +243,8 @@ export default function PDFGenerator({ storeInfo }) {
       const qrX = 25;
       const qrY = yPos + (sectionHeight - qrSize) / 2;
       
-      const storeUrl = `${window.location.origin}/boutique/${storeInfo.storeId}`;
-      const qrCodeDataUrl = await QRCode.toDataURL(storeUrl, {
+      const boutiqueUrl = `${window.location.origin}/boutique/${storeInfo.storeId}`;
+      const qrCodeDataUrl = await QRCode.toDataURL(boutiqueUrl, {
         width: 400,
         margin: 1,
         color: {
@@ -298,22 +289,24 @@ export default function PDFGenerator({ storeInfo }) {
           messageY += 5;
         }
       });
-      
-      // Add discount message at bottom (only if enabled)
-      if (discountEnabled) {
-        yPos += 20;
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.setTextColor(60, 60, 60);
-        pdf.text('💡 Réduction automatique: 5% dès 6 produits commandés!', pageWidth / 2, yPos, { align: 'center' });
-      }
+
+      // Add store URL and closing message at the bottom
+      messageY += 10;
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text(boutiqueUrl, textAreaX, messageY, { maxWidth: textAreaWidth });
+      messageY += 8;
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('🙏 Merci pour votre soutien et votre participation !', textAreaX, messageY, { maxWidth: textAreaWidth });
 
       // Save PDF with mobile-friendly method
       const fileName = `affiche-${storeInfo.name || 'boutique'}.pdf`;
       downloadPDF(pdf, fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Erreur lors de la generation du PDF');
+      toast.error('Erreur lors de la generation du PDF');
     } finally {
       setIsGenerating(false);
     }
@@ -396,14 +389,14 @@ export default function PDFGenerator({ storeInfo }) {
             )}
           </Button>
           
-          {isMobileBrowser() && (
+          {isMobileBrowser() ? (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-xs text-blue-800">
                 <span className="font-semibold">📱 Sur mobile:</span> Le PDF sera téléchargé dans votre dossier de fichiers. 
                 Vérifiez l'application Fichiers ou Téléchargements.
               </p>
             </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 

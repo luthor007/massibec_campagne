@@ -3,31 +3,63 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Toggle } from '@/components/ui/toggle';
+import { Badge } from '@/components/ui/badge';
 import { 
   Plus, 
   Calendar,
   DollarSign,
   Percent,
   Target,
-  Package
+  Package,
+  X,
+  Settings
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import ParentLetterModal from './ParentLetterModal';
+import { getTerminology } from '@/utils/organizationHelpers';
 
 const CampaignCreator = ({ onCampaignCreated, school }) => {
+  // Get terminology based on organization type
+  const organizationType = school?.organizationType || 'school';
+  const terminology = getTerminology(organizationType);
   const [formData, setFormData] = useState({
     startDate: '',
     endDate: '',
     deliveryDate: '',
-    financialGoal: ''
+    financialGoal: '',
+    distributionStartHour: '',
+    distributionEndHour: ''
   });
   const [creating, setCreating] = useState(false);
   const [products, setProducts] = useState([]);
   const [customPrices, setCustomPrices] = useState({});
   const [profitSplits, setProfitSplits] = useState({});
+  
+  // Student donations configuration
+  const [studentDonationsEnabled, setStudentDonationsEnabled] = useState(true);
+  const [studentDonationPresets, setStudentDonationPresets] = useState([0, 5, 10, 20]);
+  const [studentDonationSplit, setStudentDonationSplit] = useState({
+    studentAccount: 60.0,
+    studentCash: 40.0
+  });
+  
+  // School donations configuration
+  const [schoolDonationsEnabled, setSchoolDonationsEnabled] = useState(true);
+  const [schoolDonationPresets, setSchoolDonationPresets] = useState([0, 5, 10, 20]);
+  
   const [showParentLetterModal, setShowParentLetterModal] = useState(false);
   const [createdCampaign, setCreatedCampaign] = useState(null);
+  
+  // Global profit settings
+  const [globalProfitSettings, setGlobalProfitSettings] = useState({
+    profitPerProduct: 3.00, // Default profit per product
+    studentCash: 1.00, // Absolute value for student cash ($)
+    studentSchoolAccount: 1.00, // Absolute value for student school account ($)
+    schoolProject: 0.75, // Absolute value for school project ($)
+    raffle: 0.25 // Absolute value for raffle ($)
+  });
 
   // Load products on component mount
   useEffect(() => {
@@ -45,10 +77,11 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
           const initialProfitSplits = {};
           productsData.forEach(product => {
             initialPrices[product.id] = product.price;
-            // Default profit splits: $0.75 for school, $2.00 for student, $0.25 for raffle
+            // Default profit splits: $1.00 for student cash, $1.00 for student school account, $0.75 for school project, $0.25 for raffle
             initialProfitSplits[product.id] = {
-              school: 0.75,
-              student: 2.00,
+              studentCash: 1.00,
+              studentSchoolAccount: 1.00,
+              schoolProject: 0.75,
               raffle: 0.25
             };
           });
@@ -88,62 +121,207 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
     }));
   };
 
+  // Handle global profit settings changes
+  const handleGlobalProfitSettingsChange = (field, value) => {
+    setGlobalProfitSettings(prev => ({
+      ...prev,
+      [field]: parseFloat(value) || 0
+    }));
+  };
+
+  // Apply global profit settings to all products
+  const applyGlobalProfitSettings = () => {
+    const newCustomPrices = { ...customPrices };
+    const newProfitSplits = { ...profitSplits };
+
+    products.forEach(product => {
+      const desiredProfit = globalProfitSettings.profitPerProduct;
+      const sellingPrice = (product.cost || 0) + desiredProfit;
+
+      // Update custom price
+      newCustomPrices[product.id] = parseFloat(sellingPrice.toFixed(2));
+
+      // Use absolute values from global settings
+      newProfitSplits[product.id] = {
+        studentCash: globalProfitSettings.studentCash,
+        studentSchoolAccount: globalProfitSettings.studentSchoolAccount,
+        schoolProject: globalProfitSettings.schoolProject,
+        raffle: globalProfitSettings.raffle
+      };
+    });
+
+    setCustomPrices(newCustomPrices);
+    setProfitSplits(newProfitSplits);
+    toast.success('Répartition des profits appliquée à tous les produits');
+  };
+
+  // Student donation handlers
+  const handleStudentDonationPresetChange = (index, value) => {
+    const newPresets = [...studentDonationPresets];
+    newPresets[index] = parseFloat(value) || 0;
+    setStudentDonationPresets(newPresets);
+  };
+
+  const addStudentDonationPreset = () => {
+    if (studentDonationPresets.length < 6) {
+      setStudentDonationPresets([...studentDonationPresets, 0]);
+    }
+  };
+
+  const removeStudentDonationPreset = (index) => {
+    if (studentDonationPresets.length > 2) {
+      const newPresets = studentDonationPresets.filter((_, i) => i !== index);
+      setStudentDonationPresets(newPresets);
+    }
+  };
+
+  const handleStudentDonationSplitChange = (type, value) => {
+    setStudentDonationSplit(prev => ({
+      ...prev,
+      [type]: parseFloat(value) || 0
+    }));
+  };
+
+  // School donation handlers
+  const handleSchoolDonationPresetChange = (index, value) => {
+    const newPresets = [...schoolDonationPresets];
+    newPresets[index] = parseFloat(value) || 0;
+    setSchoolDonationPresets(newPresets);
+  };
+
+  const addSchoolDonationPreset = () => {
+    if (schoolDonationPresets.length < 6) {
+      setSchoolDonationPresets([...schoolDonationPresets, 0]);
+    }
+  };
+
+  const removeSchoolDonationPreset = (index) => {
+    if (schoolDonationPresets.length > 2) {
+      const newPresets = schoolDonationPresets.filter((_, i) => i !== index);
+      setSchoolDonationPresets(newPresets);
+    }
+  };
+
+  // Import date helpers
+  const getTodayDateString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Calculate minimum delivery date (3 weeks after end date)
+  const getMinDeliveryDate = () => {
+    if (!formData.endDate) {
+      return '';
+    }
+    
+    const endDate = new Date(formData.endDate + 'T00:00:00');
+    const threeWeeksInMillis = 21 * 24 * 60 * 60 * 1000;
+    const minDeliveryDate = new Date(endDate.getTime() + threeWeeksInMillis);
+    
+    const year = minDeliveryDate.getFullYear();
+    const month = String(minDeliveryDate.getMonth() + 1).padStart(2, '0');
+    const day = String(minDeliveryDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const validateForm = () => {
     const { startDate, endDate, deliveryDate, financialGoal } = formData;
+    console.log('Validating form:', formData);
     
     if (!startDate || !endDate || !deliveryDate || !financialGoal) {
+      console.log('Missing required fields:', { startDate, endDate, deliveryDate, financialGoal });
       toast.error('Tous les champs sont requis');
       return false;
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const delivery = new Date(deliveryDate);
+    // Parse dates as local dates (YYYY-MM-DD format) to avoid timezone issues
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    const delivery = new Date(deliveryDate + 'T00:00:00');
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+    
+    // Also normalize start date for comparison
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    delivery.setHours(0, 0, 0, 0);
 
-    if (start <= today) {
-      toast.error('La date de début doit être dans le futur');
-      return false;
-    }
+    console.log('Date validation:', { start, end, delivery });
 
     if (end <= start) {
+      console.log('End date validation failed: end <= start', { end, start });
       toast.error('La date de fin doit être après la date de début');
       return false;
     }
 
     const threeWeeksInMillis = 21 * 24 * 60 * 60 * 1000;
-    if (delivery.getTime() - end.getTime() < threeWeeksInMillis) {
+    const timeDiff = delivery.getTime() - end.getTime();
+    console.log('Delivery date validation:', { timeDiff, threeWeeksInMillis, required: timeDiff >= threeWeeksInMillis });
+    if (timeDiff < threeWeeksInMillis) {
+      console.log('Delivery date validation failed');
       toast.error('La date de livraison doit être au moins 3 semaines après la fin de la campagne');
       return false;
     }
 
-    if (parseFloat(financialGoal) <= 0) {
+    const financialGoalValue = parseFloat(financialGoal);
+    console.log('Financial goal validation:', { financialGoalValue });
+    if (financialGoalValue <= 0 || isNaN(financialGoalValue)) {
+      console.log('Financial goal validation failed');
       toast.error('L\'objectif financier doit être supérieur à 0');
       return false;
     }
 
-    if (formData.profitSplitType === 'percentage') {
-      const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
-      if (Math.abs(total - 100) > 0.01) {
-        toast.error('La répartition des profits doit totaliser 100%');
-        return false;
+    // Validate distribution hours if provided
+    if (formData.distributionStartHour && formData.distributionEndHour) {
+      const startMatch = formData.distributionStartHour.match(/(\d{2})h(\d{2})/);
+      const endMatch = formData.distributionEndHour.match(/(\d{2})h(\d{2})/);
+      
+      console.log('Distribution hours validation:', { 
+        distributionStartHour: formData.distributionStartHour, 
+        distributionEndHour: formData.distributionEndHour,
+        startMatch, 
+        endMatch 
+      });
+      
+      if (startMatch && endMatch) {
+        const startMinutes = parseInt(startMatch[1]) * 60 + parseInt(startMatch[2]);
+        const endMinutes = parseInt(endMatch[1]) * 60 + parseInt(endMatch[2]);
+        
+        console.log('Distribution hours comparison:', { startMinutes, endMinutes, valid: endMinutes > startMinutes });
+        
+        if (endMinutes <= startMinutes) {
+          console.log('Distribution hours validation failed');
+          toast.error('L\'heure de fin doit être après l\'heure de début');
+          return false;
+        }
       }
     }
 
+    console.log('All validations passed!');
     return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('Form submitted!', formData);
     
-    if (!validateForm()) return;
-
+    if (!validateForm()) {
+      console.log('Validation failed');
+      return;
+    }
+    
+    console.log('Validation passed, creating campaign...');
     setCreating(true);
     try {
       const campaignData = {
         startDate: formData.startDate,
         endDate: formData.endDate,
         deliveryDate: formData.deliveryDate,
+        distributionStartHour: formData.distributionStartHour,
+        distributionEndHour: formData.distributionEndHour,
         financialGoal: parseFloat(formData.financialGoal),
         customPrices: Object.entries(customPrices).map(([productId, price]) => ({
           productId,
@@ -151,10 +329,20 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
         })),
         profitSplits: Object.entries(profitSplits).map(([productId, splits]) => ({
           productId,
-          school: splits.school === '' ? 0.75 : (splits.school || 0.75),
-          student: splits.student === '' ? 2.00 : (splits.student || 2.00),
+          studentCash: splits.studentCash === '' ? 1.00 : (splits.studentCash || 1.00),
+          studentSchoolAccount: splits.studentSchoolAccount === '' ? 1.00 : (splits.studentSchoolAccount || 1.00),
+          schoolProject: splits.schoolProject === '' ? 0.75 : (splits.schoolProject || 0.75),
           raffle: splits.raffle === '' ? 0.25 : (splits.raffle || 0.25)
-        }))
+        })),
+        donationsForStudents: {
+          enabled: studentDonationsEnabled,
+          presets: studentDonationPresets,
+          splitConfig: studentDonationSplit
+        },
+        donationsForSchool: {
+          enabled: schoolDonationsEnabled,
+          presets: schoolDonationPresets
+        }
       };
 
       const response = await fetch('/api/campaigns/create', {
@@ -178,7 +366,9 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
           startDate: '',
           endDate: '',
           deliveryDate: '',
-          financialGoal: ''
+          financialGoal: '',
+          distributionStartHour: '',
+          distributionEndHour: ''
         });
         setCustomPrices({});
         setProfitSplits({});
@@ -186,12 +376,20 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
         // Notify parent component
         onCampaignCreated && onCampaignCreated(result.campaign);
       } else {
-        const errorData = await response.json();
-        toast.error(errorData.message || 'Erreur lors de la création de la campagne');
+        let errorMessage = 'Erreur lors de la création de la campagne';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('Campaign creation error:', errorData);
+        } catch (e) {
+          console.error('Error parsing error response:', e);
+          errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+        }
+        toast.error(errorMessage);
       }
     } catch (error) {
       console.error('Error creating campaign:', error);
-      toast.error('Erreur lors de la création de la campagne');
+      toast.error(`Erreur lors de la création de la campagne: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setCreating(false);
     }
@@ -224,14 +422,14 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="startDate" className="text-sm font-medium text-gray-700">Date de début *</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => handleInputChange('startDate', e.target.value)}
-                  className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-                  required
-                />
+        <Input
+          id="startDate"
+          type="date"
+          value={formData.startDate}
+          onChange={(e) => handleInputChange('startDate', e.target.value)}
+          className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+          required
+        />
               </div>
               <div>
                 <Label htmlFor="endDate" className="text-sm font-medium text-gray-700">Date de fin *</Label>
@@ -251,12 +449,82 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                   type="date"
                   value={formData.deliveryDate}
                   onChange={(e) => handleInputChange('deliveryDate', e.target.value)}
+                  min={getMinDeliveryDate()}
                   className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Doit être au moins 3 semaines après la fin de la campagne
                 </p>
+              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                Indiquez les heures pendant lesquelles les {terminology.participants} pourront venir chercher leurs commandes.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="distributionStartHour" className="text-sm font-medium text-gray-700">Heure de début de distribution</Label>
+                  <Select
+                    value={formData.distributionStartHour || ''}
+                    onValueChange={(value) => handleInputChange('distributionStartHour', value)}
+                  >
+                    <SelectTrigger className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200">
+                      <SelectValue placeholder="Sélectionnez une heure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 60 }, (_, i) => {
+                        const totalMinutes = (i * 15) + (7 * 60); // From 7h00 to 21h45 (15-minute intervals)
+                        const hour = Math.floor(totalMinutes / 60);
+                        const minutes = totalMinutes % 60;
+                        const hourStr = hour < 10 ? `0${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}` : `${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}`;
+                        return (
+                          <SelectItem key={hourStr} value={hourStr}>
+                            {hourStr}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="distributionEndHour" className="text-sm font-medium text-gray-700">Heure de fin de distribution</Label>
+                  <Select
+                    value={formData.distributionEndHour || ''}
+                    onValueChange={(value) => handleInputChange('distributionEndHour', value)}
+                  >
+                    <SelectTrigger className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200">
+                      <SelectValue placeholder="Sélectionnez une heure" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 60 }, (_, i) => {
+                        const totalMinutes = (i * 15) + (7 * 60); // From 7h00 to 21h45 (15-minute intervals)
+                        const hour = Math.floor(totalMinutes / 60);
+                        const minutes = totalMinutes % 60;
+                        const hourStr = hour < 10 ? `0${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}` : `${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}`;
+                        
+                        // Only show times after the start hour (at least 15 minutes later)
+                        if (formData.distributionStartHour) {
+                          const startMatch = formData.distributionStartHour.match(/(\d{2})h(\d{2})/);
+                          if (startMatch) {
+                            const startHour = parseInt(startMatch[1]);
+                            const startMinutes = parseInt(startMatch[2]);
+                            const startTotalMinutes = startHour * 60 + startMinutes;
+                            
+                            // Only show if at least 15 minutes after start
+                            if (totalMinutes <= startTotalMinutes) {
+                              return null;
+                            }
+                          }
+                        }
+                        
+                        return (
+                          <SelectItem key={hourStr} value={hourStr}>
+                            {hourStr}
+                          </SelectItem>
+                        );
+                      }).filter(Boolean)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -303,6 +571,112 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                 <p className="text-sm text-gray-600">
                   Personnalisez les prix de vente pour chaque produit. Ces prix seront utilisés lors de la vente.
                 </p>
+                
+                {/* Profit Split Templates and Global Controls */}
+                <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base font-semibold text-blue-900 flex items-center gap-2">
+                      <Settings className="w-4 h-4" />
+                      Répartition des profits - Contrôles globaux
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-gray-700">
+                      Définissez un profit total par produit et sa répartition, puis appliquez-le à tous les produits.
+                    </p>
+
+                    {/* Global Profit per Product */}
+                    <div>
+                      <Label htmlFor="globalProfitPerProduct" className="text-sm font-medium text-gray-700">
+                        Profit total par produit ($)
+                      </Label>
+                      <Input
+                        id="globalProfitPerProduct"
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        value={globalProfitSettings.profitPerProduct}
+                        onChange={(e) => handleGlobalProfitSettingsChange('profitPerProduct', e.target.value)}
+                        className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+
+                    {/* Global Profit Distribution Ratios */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium text-gray-700">Répartition du profit ($):</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="globalStudentCash" className="text-xs text-gray-600">
+                            {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} comptant ($)
+                          </Label>
+                          <Input
+                            id="globalStudentCash"
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={globalProfitSettings.studentCash}
+                            onChange={(e) => handleGlobalProfitSettingsChange('studentCash', e.target.value)}
+                            className="mt-1 text-sm border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="globalStudentSchoolAccount" className="text-xs text-gray-600">
+                            {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} compte {terminology.organization} ($)
+                          </Label>
+                          <Input
+                            id="globalStudentSchoolAccount"
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={globalProfitSettings.studentSchoolAccount}
+                            onChange={(e) => handleGlobalProfitSettingsChange('studentSchoolAccount', e.target.value)}
+                            className="mt-1 text-sm border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="globalSchoolProject" className="text-xs text-gray-600">
+                            Projet {terminology.organizationLabel} ($)
+                          </Label>
+                          <Input
+                            id="globalSchoolProject"
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={globalProfitSettings.schoolProject}
+                            onChange={(e) => handleGlobalProfitSettingsChange('schoolProject', e.target.value)}
+                            className="mt-1 text-sm border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="globalRaffle" className="text-xs text-gray-600">
+                            Tirage ($)
+                          </Label>
+                          <Input
+                            id="globalRaffle"
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={globalProfitSettings.raffle}
+                            onChange={(e) => handleGlobalProfitSettingsChange('raffle', e.target.value)}
+                            className="mt-1 text-sm border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 pt-2 border-t border-blue-200">
+                        Total distribué: ${(globalProfitSettings.studentCash + globalProfitSettings.studentSchoolAccount + globalProfitSettings.schoolProject + globalProfitSettings.raffle).toFixed(2)}
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={applyGlobalProfitSettings}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Appliquer cette répartition à tous les produits
+                    </Button>
+                  </CardContent>
+                </Card>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  {products.map((product) => {
@@ -359,7 +733,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                                <Input
                                  id={`price-${product.id}`}
                                  type="number"
-                                 step="0.01"
+                                 step="0.25"
                                  min="0"
                                  value={sellingPrice}
                                  onChange={(e) => handlePriceChange(product.id, e.target.value)}
@@ -380,57 +754,72 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                            <div className="mt-3 pt-3 border-t border-gray-200">
                              <h4 className="text-xs font-semibold text-gray-700 mb-2">Répartition des profits:</h4>
                              <div className="space-y-2">
-                               <div className="flex items-center space-x-2">
-                                 <Label htmlFor={`student-${product.id}`} className="text-xs text-gray-600 w-16">
-                                   Étudiant:
+                               <div className="flex items-center gap-2">
+                                 <Label htmlFor={`studentCash-${product.id}`} className="text-xs text-gray-600 w-20">
+                                   {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} comptant:
                                  </Label>
                                  <Input
-                                   id={`student-${product.id}`}
+                                   id={`studentCash-${product.id}`}
                                    type="number"
-                                   step="0.01"
+                                   step="0.25"
                                    min="0"
-                                   value={profitSplits[product.id]?.student ?? 2.00}
-                                   onChange={(e) => handleProfitSplitChange(product.id, 'student', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200"
+                                   value={profitSplits[product.id]?.studentCash ?? 1.00}
+                                   onChange={(e) => handleProfitSplitChange(product.id, 'studentCash', e.target.value)}
+                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200 flex-1"
                                  />
                                </div>
-                               <div className="flex items-center space-x-2">
+                               <div className="flex items-center gap-2">
+                                 <Label htmlFor={`studentSchoolAccount-${product.id}`} className="text-xs text-gray-600 w-20">
+                                   {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} compte {terminology.organization}:
+                                 </Label>
+                                 <Input
+                                   id={`studentSchoolAccount-${product.id}`}
+                                   type="number"
+                                   step="0.25"
+                                   min="0"
+                                   value={profitSplits[product.id]?.studentSchoolAccount ?? 1.00}
+                                   onChange={(e) => handleProfitSplitChange(product.id, 'studentSchoolAccount', e.target.value)}
+                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200 flex-1"
+                                 />
+                               </div>
+                               <div className="flex items-center gap-2">
                                  <Label htmlFor={`school-${product.id}`} className="text-xs text-gray-600 w-16">
-                                   École:
+                                   {terminology.organizationLabel}:
                                  </Label>
                                  <Input
                                    id={`school-${product.id}`}
                                    type="number"
-                                   step="0.01"
+                                   step="0.25"
                                    min="0"
-                                   value={profitSplits[product.id]?.school ?? 0.75}
-                                   onChange={(e) => handleProfitSplitChange(product.id, 'school', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all duration-200"
+                                   value={profitSplits[product.id]?.schoolProject ?? 0.75}
+                                   onChange={(e) => handleProfitSplitChange(product.id, 'schoolProject', e.target.value)}
+                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all duration-200 flex-1"
                                  />
                                </div>
-                               <div className="flex items-center space-x-2">
+                               <div className="flex items-center gap-2">
                                  <Label htmlFor={`raffle-${product.id}`} className="text-xs text-gray-600 w-16">
                                    Tirage:
                                  </Label>
                                  <Input
                                    id={`raffle-${product.id}`}
                                    type="number"
-                                   step="0.01"
+                                   step="0.25"
                                    min="0"
                                    value={profitSplits[product.id]?.raffle ?? 0.25}
                                    onChange={(e) => handleProfitSplitChange(product.id, 'raffle', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-purple-500 focus:ring-1 focus:ring-purple-200 transition-all duration-200"
+                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-purple-500 focus:ring-1 focus:ring-purple-200 transition-all duration-200 flex-1"
                                  />
                                </div>
                                
                                {/* Profit Distribution Summary */}
                                <div className="mt-2 pt-2 border-t border-gray-100">
                                  {(() => {
-                                   const splits = profitSplits[product.id] || { student: 2.00, school: 0.75, raffle: 0.25 };
-                                   const studentValue = splits.student === '' ? 0 : (splits.student || 0);
-                                   const schoolValue = splits.school === '' ? 0 : (splits.school || 0);
+                                   const splits = profitSplits[product.id] || { studentCash: 1.00, studentSchoolAccount: 1.00, schoolProject: 0.75, raffle: 0.25 };
+                                   const studentCashValue = splits.studentCash === '' ? 0 : (splits.studentCash || 0);
+                                   const studentSchoolAccountValue = splits.studentSchoolAccount === '' ? 0 : (splits.studentSchoolAccount || 0);
+                                   const schoolValue = splits.schoolProject === '' ? 0 : (splits.schoolProject || 0);
                                    const raffleValue = splits.raffle === '' ? 0 : (splits.raffle || 0);
-                                   const totalDistributed = studentValue + schoolValue + raffleValue;
+                                   const totalDistributed = studentCashValue + studentSchoolAccountValue + schoolValue + raffleValue;
                                    const remaining = profit - totalDistributed;
                                    
                                    return (
@@ -466,12 +855,246 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
             </CardContent>
           </Card>
 
+          {/* Student Donations Configuration */}
+          <Card className="lg:col-span-2 hover:shadow-lg transition-shadow duration-200 border-0 shadow-md">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2 text-blue-900">
+                  <DollarSign className="h-5 w-5" />
+                  <span>Dons pour les {terminology.participantsLabel.charAt(0).toUpperCase() + terminology.participantsLabel.slice(1)}</span>
+                </CardTitle>
+                <Toggle
+                  pressed={studentDonationsEnabled}
+                  onPressedChange={setStudentDonationsEnabled}
+                  aria-label={`Activer les dons pour les ${terminology.participants}`}
+                  size="sm"
+                  variant="outline"
+                  className="data-[state=on]:bg-green-500 data-[state=on]:text-white data-[state=off]:bg-gray-200 data-[state=off]:text-gray-700 min-w-16"
+                >
+                  {studentDonationsEnabled ? 'Activé' : 'Désactivé'}
+                </Toggle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!studentDonationsEnabled && (
+                <p className="text-sm text-gray-500">Cette section est désactivée. Les dons pour les {terminology.participants} ne seront pas affichés au checkout.</p>
+              )}
+              {studentDonationsEnabled && (
+                <div className="space-y-6">
+                  <p className="text-sm text-gray-600">
+                    Les clients pourront ajouter un don pour soutenir les {terminology.participants} de {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization}.
+                  </p>
+
+                  {/* Student Donation Presets */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      Montants de dons disponibles:
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {studentDonationPresets.map((preset, index) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={preset}
+                            onChange={(e) => handleStudentDonationPresetChange(index, e.target.value)}
+                            className="w-20 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">$</span>
+                          {studentDonationPresets.length > 2 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeStudentDonationPreset(index)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      {studentDonationPresets.length < 6 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addStudentDonationPreset}
+                          className="h-8 px-3"
+                        >
+                          + Ajouter
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Les clients pourront choisir parmi ces montants ou entrer un montant personnalisé.
+                    </p>
+                  </div>
+
+                  {/* Student Donation Split */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      Répartition des dons {terminology.participants} (en pourcentage):
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="student-donation-account" className="text-sm text-gray-600">
+                          Compte Scolaire:
+                        </Label>
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            id="student-donation-account"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={studentDonationSplit.studentAccount}
+                            onChange={(e) => handleStudentDonationSplitChange('studentAccount', e.target.value)}
+                            className="text-sm"
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="student-donation-cash" className="text-sm text-gray-600">
+                          Comptant (étudiant):
+                        </Label>
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            id="student-donation-cash"
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={studentDonationSplit.studentCash}
+                            onChange={(e) => handleStudentDonationSplitChange('studentCash', e.target.value)}
+                            className="text-sm"
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Student Donation Split Preview */}
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                      <h5 className="text-sm font-semibold text-blue-800 mb-2">Aperçu - Don de 10$:</h5>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="text-center">
+                          <div className="text-blue-600 font-semibold">
+                            ${((10 * studentDonationSplit.studentAccount) / 100).toFixed(2)}
+                          </div>
+                          <div className="text-gray-600">Compte Scolaire</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-green-600 font-semibold">
+                            ${((10 * studentDonationSplit.studentCash) / 100).toFixed(2)}
+                          </div>
+                          <div className="text-gray-600">Comptant</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-center">
+                        <span className="text-xs text-gray-500">
+                          Total: {studentDonationSplit.studentAccount + studentDonationSplit.studentCash}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* School Donations Configuration */}
+          <Card className="lg:col-span-2 hover:shadow-lg transition-shadow duration-200 border-0 shadow-md">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2 text-green-900">
+                  <Target className="h-5 w-5" />
+                  <span>Dons pour {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organizationLabel}</span>
+                </CardTitle>
+                <Toggle
+                  pressed={schoolDonationsEnabled}
+                  onPressedChange={setSchoolDonationsEnabled}
+                  aria-label={`Activer les dons pour ${terminology.organization === 'école' ? "l'" : "l'"}${terminology.organization}`}
+                  size="sm"
+                  variant="outline"
+                  className="data-[state=on]:bg-green-500 data-[state=on]:text-white data-[state=off]:bg-gray-200 data-[state=off]:text-gray-700 min-w-16"
+                >
+                  {schoolDonationsEnabled ? 'Activé' : 'Désactivé'}
+                </Toggle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!schoolDonationsEnabled && (
+                <p className="text-sm text-gray-500">Cette section est désactivée. Les dons pour {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization} ne seront pas affichés au checkout.</p>
+              )}
+              {schoolDonationsEnabled && (
+                <div className="space-y-6">
+                  <p className="text-sm text-gray-600">
+                    Les clients pourront ajouter un don pour soutenir {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization} et ses projets.
+                  </p>
+
+                  {/* School Donation Presets */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      Montants de dons disponibles:
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {schoolDonationPresets.map((preset, index) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={preset}
+                            onChange={(e) => handleSchoolDonationPresetChange(index, e.target.value)}
+                            className="w-20 text-sm"
+                          />
+                          <span className="text-sm text-gray-500">$</span>
+                          {schoolDonationPresets.length > 2 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeSchoolDonationPreset(index)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                      {schoolDonationPresets.length < 6 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addSchoolDonationPreset}
+                          className="h-8 px-3"
+                        >
+                          + Ajouter
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Les clients pourront choisir parmi ces montants ou entrer un montant personnalisé.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
 
         <div className="flex justify-center pt-8">
           <Button 
             type="submit" 
             disabled={creating}
+            onClick={(e) => {
+              console.log('Button clicked!', e);
+            }}
             className={`
               relative px-8 py-4 text-lg font-semibold rounded-xl
               bg-gradient-to-r from-blue-600 to-blue-700 

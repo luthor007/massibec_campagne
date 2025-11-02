@@ -20,11 +20,29 @@ export const authOptions = {
           throw new Error('EMAIL_NOT_FOUND');
         }
         
+        // Check if this is an auto-login attempt with a magic token
+        if (credentials.password === 'MAGIC_LOGIN_TOKEN' && credentials.loginToken) {
+          // Verify the login token
+          if (user.loginToken && user.loginToken === credentials.loginToken && 
+              user.loginTokenExpires && user.loginTokenExpires > Date.now()) {
+            // Don't clear the token immediately - allow multiple devices to use it within expiration window
+            // The token will expire naturally after 5 minutes
+            // Note: We increment a use counter to track usage
+            user.loginTokenUsed = (user.loginTokenUsed || 0) + 1;
+            await user.save();
+            
+            return { id: user._id, email: user.email, school: user.school, name: user.name, role: user.role, telephone: user.parentInfo?.telephone, schoolManagerInfo: user.schoolManagerInfo, emailVerified: user.emailVerified };
+          } else {
+            throw new Error('INVALID_LOGIN_TOKEN');
+          }
+        }
+        
+        // Normal password login
         if (!bcrypt.compareSync(credentials.password, user.password)) {
           throw new Error('INVALID_PASSWORD');
         }
         
-        return { id: user._id, email: user.email, school: user.school, name: user.name, role: user.role, telephone: user.parentInfo.telephone, schoolManagerInfo: user.schoolManagerInfo, emailVerified: user.emailVerified }; // Role included
+        return { id: user._id, email: user.email, school: user.school, name: user.name, role: user.role, telephone: user.parentInfo?.telephone, schoolManagerInfo: user.schoolManagerInfo, emailVerified: user.emailVerified }; // Role included
       }
     })
   ],

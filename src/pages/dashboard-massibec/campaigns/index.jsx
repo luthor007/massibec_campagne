@@ -1,172 +1,82 @@
 import React, { useState, useEffect } from 'react';
-import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
+import DashboardLayout from '../../../components/Dashboard/DashboardLayout';
+import SupplierCampaignManager from '../../../components/Dashboard/Supplier/SupplierCampaignManager';
+import { useSupplierSchools } from '../../../hooks/useSupplierSchools';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  CheckCircle,
-  XCircle,
-  Clock,
   Calendar,
-  DollarSign,
-  Users,
-  Building,
-  LogOut,
-  Eye,
-  Check,
-  X,
-  Percent,
-  Edit,
-  Lock,
-  Unlock
+  RefreshCw,
+  TrendingUp
 } from 'lucide-react';
 
-export default function MassibecCampaigns() {
+const CampaignsPage = () => {
   const router = useRouter();
-  const { data: session } = useSession();
-  const [campaigns, setCampaigns] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCampaign, setSelectedCampaign] = useState(null);
-  const [isApproving, setIsApproving] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingCampaign, setEditingCampaign] = useState(null);
-  const [isTogglingLock, setIsTogglingLock] = useState(false);
+  const { data: session, status } = useSession();
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [allCampaigns, setAllCampaigns] = useState([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(true);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  
+  const { schools, loading: schoolsLoading, refreshSchools } = useSupplierSchools();
 
-  // Fetch pending campaigns
   useEffect(() => {
-    const fetchCampaigns = async () => {
-      try {
-        const response = await fetch('/api/massibec/campaigns');
-        if (response.ok) {
-          const data = await response.json();
-          setCampaigns(data);
-        }
-      } catch (error) {
-        console.error('Error fetching campaigns:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (session) {
-      fetchCampaigns();
-    }
-  }, [session]);
-
-  // Handle Logout
-  const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push('/');
-  };
-
-  // Handle Update Campaign
-  const handleUpdateCampaign = async (e) => {
-    e.preventDefault();
+    if (status === 'loading') return;
     
-    const formData = new FormData(e.target);
-    const updateData = {
-      startDate: formData.get('startDate'),
-      endDate: formData.get('endDate'),
-      deliveryDate: formData.get('deliveryDate'),
-      financialGoal: formData.get('financialGoal'),
-      profitSplitType: formData.get('profitSplitType'),
-      studentBenefit: formData.get('studentBenefit'),
-      organizationBenefit: formData.get('organizationBenefit'),
-      raffleBenefit: formData.get('raffleBenefit'),
-      reason: formData.get('reason')
-    };
+    if (!session) {
+      router.push('/connexion');
+      return;
+    }
+    
+    // Vérifier si l'utilisateur a le rôle fournisseur
+    if (session.user.role !== 'fournisseur') {
+      router.push('/dashboard');
+      return;
+    }
+    
+    fetchAllCampaigns();
+  }, [session, status, router]);
 
+  const fetchAllCampaigns = async () => {
+    setLoadingCampaigns(true);
     try {
-      const response = await fetch(`/api/massibec/campaigns/${editingCampaign._id}/modify`, {
-        method: 'POST',
+      // Use the Massibec campaigns API endpoint that gets all campaigns
+      const response = await fetch('/api/massibec/campaigns', {
+        cache: 'no-store',
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
-      });
-
-      if (response.ok) {
-        // Handle custom pricing if set
-        const customPriceAll = formData.get('customPriceAll');
-        if (customPriceAll && parseFloat(customPriceAll) > 0) {
-          // Fetch all products for this school to set uniform pricing
-          const productsResponse = await fetch(`/api/products?schoolId=${editingCampaign.school._id}`);
-          if (productsResponse.ok) {
-            const productsData = await productsResponse.json();
-            const products = productsData.products || productsData;
-            
-            const customPrices = products.map(product => ({
-              productId: product.id,
-              price: parseFloat(customPriceAll)
-            }));
-
-            await fetch(`/api/campaigns/${editingCampaign._id}/custom-prices`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ customPrices }),
-            });
-          }
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
-
-        alert('Modifications proposées avec succès!');
-        setShowEditModal(false);
-        // Refresh campaigns
-        window.location.reload();
+      });
+      
+      if (response.ok) {
+        const campaigns = await response.json();
+        setAllCampaigns(campaigns);
       } else {
-        const error = await response.json();
-        alert(`Erreur: ${error.message}`);
+        console.error('Error fetching campaigns:', response.statusText);
+        setAllCampaigns([]);
       }
     } catch (error) {
-      console.error('Error updating campaign:', error);
-      alert('Erreur lors de la proposition de modifications');
+      console.error('Erreur lors de la récupération des campagnes:', error);
+      setAllCampaigns([]);
+    } finally {
+      setLoadingCampaigns(false);
     }
   };
 
-  // Handle Campaign Approval
-  const handleApproveCampaign = async (campaignId) => {
-    setIsApproving(true);
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: '' });
+    }, 3000);
+  };
+
+  const handleApproveCampaign = async (campaign) => {
     try {
-      const response = await fetch(`/api/massibec/campaigns/${campaignId}/approve`, {
+      const response = await fetch(`/api/campaigns/${campaign._id}/approve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -174,66 +84,43 @@ export default function MassibecCampaigns() {
       });
 
       if (response.ok) {
-        // Refresh campaigns list
-        const updatedResponse = await fetch('/api/massibec/campaigns');
-        if (updatedResponse.ok) {
-          const data = await updatedResponse.json();
-          setCampaigns(data);
-        }
-        setSelectedCampaign(null);
+        showNotification('Campagne approuvée avec succès!', 'success');
+        fetchAllCampaigns();
       } else {
-        alert('Erreur lors de l\'approbation de la campagne');
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
       }
     } catch (error) {
       console.error('Error approving campaign:', error);
-      alert('Une erreur est survenue');
-    } finally {
-      setIsApproving(false);
+      showNotification('Erreur lors de l\'approbation de la campagne', 'error');
     }
   };
 
-  // Handle Campaign Rejection
-  const handleRejectCampaign = async (campaignId) => {
-    if (!rejectionReason.trim()) {
-      alert('Veuillez fournir une raison pour le rejet');
-      return;
-    }
-
-    setIsRejecting(true);
+  const handleRejectCampaign = async (campaign) => {
     try {
-      const response = await fetch(`/api/massibec/campaigns/${campaignId}/reject`, {
+      const response = await fetch(`/api/campaigns/${campaign._id}/reject`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ reason: rejectionReason }),
       });
 
       if (response.ok) {
-        // Refresh campaigns list
-        const updatedResponse = await fetch('/api/massibec/campaigns');
-        if (updatedResponse.ok) {
-          const data = await updatedResponse.json();
-          setCampaigns(data);
-        }
-        setSelectedCampaign(null);
-        setRejectionReason('');
+        showNotification('Campagne rejetée avec succès!', 'success');
+        fetchAllCampaigns();
       } else {
-        alert('Erreur lors du rejet de la campagne');
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
       }
     } catch (error) {
       console.error('Error rejecting campaign:', error);
-      alert('Une erreur est survenue');
-    } finally {
-      setIsRejecting(false);
+      showNotification('Erreur lors du rejet de la campagne', 'error');
     }
   };
 
-  // Handle Lock Toggle
-  const handleToggleLock = async (campaignId, lockType) => {
-    setIsTogglingLock(true);
+  const handleUnapproveCampaign = async (campaign) => {
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/toggle-${lockType}-lock`, {
+      const response = await fetch(`/api/massibec/campaigns/${campaign._id}/unapprove`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -241,557 +128,142 @@ export default function MassibecCampaigns() {
       });
 
       if (response.ok) {
-        // Refresh campaigns list
-        const updatedResponse = await fetch('/api/massibec/campaigns');
-        if (updatedResponse.ok) {
-          const data = await updatedResponse.json();
-          setCampaigns(data);
-        }
+        showNotification('Campagne désapprouvée avec succès!', 'success');
+        fetchAllCampaigns();
       } else {
-        alert('Erreur lors de la modification du verrouillage');
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
       }
     } catch (error) {
-      console.error('Error toggling lock:', error);
-      alert('Une erreur est survenue');
-    } finally {
-      setIsTogglingLock(false);
+      console.error('Error unapproving campaign:', error);
+      showNotification('Erreur lors de la désapprobation de la campagne', 'error');
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'pending_approval':
-        return <Badge className="bg-yellow-500">En attente</Badge>;
-      case 'approved':
-        return <Badge className="bg-green-500">Approuvée</Badge>;
-      case 'rejected':
-        return <Badge className="bg-red-500">Rejetée</Badge>;
-      case 'active':
-        return <Badge className="bg-blue-500">Active</Badge>;
-      case 'completed':
-        return <Badge className="bg-gray-500">Terminée</Badge>;
-      case 'pending_school_approval':
-        return <Badge className="bg-orange-500">En attente école</Badge>;
-      default:
-        return <Badge variant="outline">Inconnu</Badge>;
+  const handleEditCampaign = (campaign) => {
+    // TODO: Implémenter l'édition de campagne
+    console.log('Éditer campagne:', campaign.nomCampagne);
+  };
+
+  const handleLockCampaign = async (campaign) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaign._id}/lock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ locked: true }),
+      });
+
+      if (response.ok) {
+        showNotification('Campagne verrouillée avec succès!', 'success');
+        fetchAllCampaigns();
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error locking campaign:', error);
+      showNotification('Erreur lors du verrouillage de la campagne', 'error');
     }
   };
 
-  if (loading) {
+  const handleUnlockCampaign = async (campaign) => {
+    try {
+      const response = await fetch(`/api/campaigns/${campaign._id}/lock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ locked: false }),
+      });
+
+      if (response.ok) {
+        showNotification('Campagne déverrouillée avec succès!', 'success');
+        fetchAllCampaigns();
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error unlocking campaign:', error);
+      showNotification('Erreur lors du déverrouillage de la campagne', 'error');
+    }
+  };
+
+  const handleViewDetails = (campaign) => {
+    setSelectedCampaignId(campaign._id?.toString() || campaign._id);
+    console.log('Sélection de campagne:', campaign.nomCampagne);
+  };
+
+  const handleRefresh = () => {
+    fetchAllCampaigns();
+    refreshSchools();
+  };
+
+  // Show loading state while checking authentication
+  if (status === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg text-gray-700">Chargement des campagnes...</p>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <p className="ml-2 text-gray-600">Chargement...</p>
+        </div>
+      </DashboardLayout>
     );
   }
 
+  // Don't render if not authenticated or wrong role
+  if (!session || session.user.role !== 'fournisseur') {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
-              <Avatar className="h-12 w-12 mr-4">
-                <AvatarFallback>M</AvatarFallback>
-              </Avatar>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Massibec - Gestion des Campagnes
-                </h1>
-                <p className="text-sm text-gray-500">
-                  Tableau de bord d'approbation
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" className="flex items-center" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" /> Déconnexion
+    <DashboardLayout>
+      {/* Notification */}
+      {notification.show && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+          notification.type === 'success' 
+            ? 'bg-green-100 text-green-800 border border-green-200' 
+            : 'bg-red-100 text-red-800 border border-red-200'
+        }`}>
+          {notification.message}
+        </div>
+      )}
+      
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Gestion des Campagnes</h1>
+            <p className="text-gray-600 mt-1">Gérez toutes les campagnes de toutes les écoles</p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualiser
             </Button>
           </div>
         </div>
-      </header>
 
-      {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-8">
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">En attente</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {campaigns.filter(c => c.status === 'pending_approval').length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Approuvées</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {campaigns.filter(c => c.status === 'approved' || c.status === 'active').length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Rejetées</CardTitle>
-                <XCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {campaigns.filter(c => c.status === 'rejected').length}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{campaigns.length}</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Campaigns Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Campagnes en attente d'approbation</CardTitle>
-              <CardDescription>
-                Gérez les demandes de campagnes des écoles
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {campaigns.length === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune campagne</h3>
-                  <p className="text-gray-500">
-                    Aucune campagne n'est en attente d'approbation.
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>École</TableHead>
-                        <TableHead>Campagne</TableHead>
-                        <TableHead>Dates</TableHead>
-                        <TableHead>Objectif</TableHead>
-                        <TableHead>Répartition</TableHead>
-                        <TableHead>Verrouillages</TableHead>
-                        <TableHead>Statut</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {campaigns.map((campaign) => (
-                        <TableRow key={campaign._id}>
-                          <TableCell>
-                            <div className="flex items-center">
-                              <Avatar className="h-8 w-8 mr-3">
-                                <AvatarFallback className="text-xs">
-                                  {campaign.school.name.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="font-medium">{campaign.school.name}</p>
-                                <p className="text-sm text-gray-500">{campaign.school.address}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">#{campaign.campaignNumber}</p>
-                              <p className="text-sm text-gray-500">
-                                {campaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <p>Début: {new Date(campaign.startDate).toLocaleDateString('fr-CA')}</p>
-                              <p>Fin: {new Date(campaign.endDate).toLocaleDateString('fr-CA')}</p>
-                              <p>Livraison: {new Date(campaign.deliveryDate).toLocaleDateString('fr-CA')}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center">
-                              <DollarSign className="h-4 w-4 mr-1 text-green-600" />
-                              {campaign.financialGoal?.toLocaleString() || '0'}$
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <p>Étudiant: {campaign.profitSplit?.studentBenefit || campaign.school?.split?.studentBenefit || 'N/A'}%</p>
-                              <p>Organisation: {campaign.profitSplit?.organizationBenefit || campaign.school?.split?.organizationBenefit || 'N/A'}%</p>
-                              <p>Tirage: {campaign.profitSplit?.raffleBenefit || campaign.school?.split?.raffleBenefit || 'N/A'}%</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col space-y-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleToggleLock(campaign._id, 'profit')}
-                                disabled={isTogglingLock}
-                                className={`text-xs ${campaign.profitSplitLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
-                              >
-                                {campaign.profitSplitLocked ? <Lock className="h-3 w-3 mr-1" /> : <Unlock className="h-3 w-3 mr-1" />}
-                                Profits
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleToggleLock(campaign._id, 'dates')}
-                                disabled={isTogglingLock}
-                                className={`text-xs ${campaign.datesLocked ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
-                              >
-                                {campaign.datesLocked ? <Lock className="h-3 w-3 mr-1" /> : <Unlock className="h-3 w-3 mr-1" />}
-                                Dates
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {getStatusBadge(campaign.status)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => {
-                                  setEditingCampaign(campaign);
-                                  setShowEditModal(true);
-                                }}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    onClick={() => setSelectedCampaign(campaign)}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-2xl">
-                                  <DialogHeader>
-                                    <DialogTitle>Détails de la Campagne</DialogTitle>
-                                    <DialogDescription>
-                                      Campagne #{selectedCampaign?.campaignNumber} - {selectedCampaign?.school.name}
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  {selectedCampaign && (
-                                    <div className="space-y-4">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                          <Label>École</Label>
-                                          <p className="font-medium">{selectedCampaign.school.name}</p>
-                                          <p className="text-sm text-gray-500">{selectedCampaign.school.address}</p>
-                                        </div>
-                                        <div>
-                                          <Label>Objectif financier</Label>
-                                          <p className="font-medium">{selectedCampaign.financialGoal?.toLocaleString() || '0'}$</p>
-                                        </div>
-                                      </div>
-                                      <div className="grid grid-cols-3 gap-4">
-                                        <div>
-                                          <Label>Date de début</Label>
-                                          <p>{new Date(selectedCampaign.startDate).toLocaleDateString('fr-CA')}</p>
-                                        </div>
-                                        <div>
-                                          <Label>Date de fin</Label>
-                                          <p>{new Date(selectedCampaign.endDate).toLocaleDateString('fr-CA')}</p>
-                                        </div>
-                                        <div>
-                                          <Label>Date de livraison</Label>
-                                          <p>{new Date(selectedCampaign.deliveryDate).toLocaleDateString('fr-CA')}</p>
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <Label>Répartition des profits</Label>
-                                        <div className="grid grid-cols-3 gap-4 mt-2">
-                                          <div className="p-3 bg-blue-50 rounded-lg">
-                                            <p className="text-sm text-blue-600">Étudiant</p>
-                                            <p className="font-semibold">{selectedCampaign.profitSplit.studentBenefit}%</p>
-                                          </div>
-                                          <div className="p-3 bg-green-50 rounded-lg">
-                                            <p className="text-sm text-green-600">Organisation</p>
-                                            <p className="font-semibold">{selectedCampaign.profitSplit.organizationBenefit}%</p>
-                                          </div>
-                                          <div className="p-3 bg-purple-50 rounded-lg">
-                                            <p className="text-sm text-purple-600">Tirage</p>
-                                            <p className="font-semibold">{selectedCampaign.profitSplit.raffleBenefit}%</p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      {selectedCampaign.rejectionReason && (
-                                        <div>
-                                          <Label>Raison du rejet</Label>
-                                          <p className="text-red-600">{selectedCampaign.rejectionReason}</p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  <DialogFooter>
-                                    {selectedCampaign?.status === 'pending_approval' && (
-                                      <>
-                                        <Button
-                                          variant="outline"
-                                          onClick={() => {
-                                            setRejectionReason('');
-                                            setSelectedCampaign(null);
-                                          }}
-                                        >
-                                          Fermer
-                                        </Button>
-                                        <Button
-                                          variant="destructive"
-                                          onClick={() => handleRejectCampaign(selectedCampaign._id)}
-                                          disabled={isRejecting}
-                                        >
-                                          {isRejecting ? 'Rejet...' : 'Rejeter'}
-                                        </Button>
-                                        <Button
-                                          onClick={() => handleApproveCampaign(selectedCampaign._id)}
-                                          disabled={isApproving}
-                                          className="bg-green-600 hover:bg-green-700"
-                                        >
-                                          {isApproving ? 'Appro...' : 'Approuver'}
-                                        </Button>
-                                      </>
-                                    )}
-                                    {selectedCampaign?.status !== 'pending_approval' && (
-                                      <Button
-                                        variant="outline"
-                                        onClick={() => setSelectedCampaign(null)}
-                                      >
-                                        Fermer
-                                      </Button>
-                                    )}
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-
-      {/* Edit Campaign Modal */}
-      {showEditModal && editingCampaign && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold">Modifier la Campagne #{editingCampaign.campaignNumber}</h3>
-              <Button
-                variant="outline"
-                onClick={() => setShowEditModal(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleUpdateCampaign(e);
-            }} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="editStartDate">Date de début</Label>
-                  <Input
-                    type="date"
-                    id="editStartDate"
-                    name="startDate"
-                    defaultValue={editingCampaign.startDate}
-                    required
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="editEndDate">Date de fin</Label>
-                  <Input
-                    type="date"
-                    id="editEndDate"
-                    name="endDate"
-                    defaultValue={editingCampaign.endDate}
-                    required
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="editDeliveryDate">Date de livraison</Label>
-                <Input
-                  type="date"
-                  id="editDeliveryDate"
-                  name="deliveryDate"
-                  defaultValue={editingCampaign.deliveryDate}
-                  required
-                  className="mt-1"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="editFinancialGoal">Objectif financier ($)</Label>
-                <Input
-                  type="number"
-                  id="editFinancialGoal"
-                  name="financialGoal"
-                  defaultValue={editingCampaign.financialGoal}
-                  required
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border border-blue-200">
-                <div className="flex items-center space-x-2 mb-4">
-                  <Percent className="h-5 w-5 text-blue-600" />
-                  <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="editProfitSplitType">Type de répartition</Label>
-                    <Select 
-                      defaultValue={editingCampaign.profitSplitType} 
-                      name="profitSplitType"
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Sélectionnez le type de répartition" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">
-                          <div className="flex items-center space-x-2">
-                            <Percent className="h-4 w-4" />
-                            <span>Pourcentage par produit</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="absolute">
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="h-4 w-4" />
-                            <span>Valeur absolue par produit</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
-                      <Input
-                        type="number"
-                        id="editStudentBenefit"
-                        name="studentBenefit"
-                        defaultValue={editingCampaign.profitSplit?.studentBenefit}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
-                      <Input
-                        type="number"
-                        id="editOrganizationBenefit"
-                        name="organizationBenefit"
-                        defaultValue={editingCampaign.profitSplit?.organizationBenefit}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
-                      <Input
-                        type="number"
-                        id="editRaffleBenefit"
-                        name="raffleBenefit"
-                        defaultValue={editingCampaign.profitSplit?.raffleBenefit}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 p-6 bg-gradient-to-br from-green-50 to-blue-50 rounded-xl border border-green-200">
-                <div className="flex items-center space-x-2 mb-4">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                  <h3 className="text-lg font-semibold text-green-900">Prix personnalisés</h3>
-                </div>
-                
-                <div className="text-sm text-green-700 mb-4">
-                  <p>Définissez des prix spécifiques pour cette campagne (ex: 10$ pour tous les produits).</p>
-                  <p>Laissez vide pour utiliser les prix par défaut.</p>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="customPriceAll">Prix uniforme pour tous les produits ($)</Label>
-                    <Input
-                      type="number"
-                      id="customPriceAll"
-                      name="customPriceAll"
-                      placeholder="Ex: 10.00"
-                      min="0"
-                      step="0.01"
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="modificationReason">Raison des modifications</Label>
-                <Textarea
-                  id="modificationReason"
-                  name="reason"
-                  placeholder="Expliquez pourquoi vous modifiez cette campagne..."
-                  className="mt-1"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowEditModal(false)}
-                >
-                  Annuler
-                </Button>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  Proposer les modifications
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+        {/* Campaign Manager */}
+        <SupplierCampaignManager 
+          campaigns={allCampaigns}
+          loading={loadingCampaigns}
+          onRefresh={handleRefresh}
+          onApprove={handleApproveCampaign}
+          onReject={handleRejectCampaign}
+          onUnapprove={handleUnapproveCampaign}
+          onEdit={handleEditCampaign}
+          onLock={handleLockCampaign}
+          onUnlock={handleUnlockCampaign}
+          onViewDetails={handleViewDetails}
+          selectedCampaignId={selectedCampaignId}
+        />
+      </div>
+    </DashboardLayout>
   );
-}
+};
+
+export default CampaignsPage;

@@ -1,5 +1,6 @@
 // pages/dashboard/vendre.jsx
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
@@ -114,7 +115,7 @@ export default function VendrePage() {
     
     // Ici on pourrait utiliser une librairie comme jsPDF pour générer le PDF
     console.log('Génération du PDF avec:', pdfContent);
-    alert('PDF généré ! (Fonctionnalité à implémenter avec jsPDF)');
+    toast.info('PDF généré ! (Fonctionnalité à implémenter avec jsPDF)');
   };
 
   const addClient = async () => {
@@ -150,7 +151,7 @@ export default function VendrePage() {
       });
       
       if (response.ok) {
-        alert('Emails envoyés avec succès !');
+        toast.success('Emails envoyés avec succès !');
         setSelectedClients([]);
         setEmailTemplate('');
       }
@@ -161,7 +162,7 @@ export default function VendrePage() {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert('Copié dans le presse-papiers !');
+    toast.success('Copié dans le presse-papiers !');
   };
 
   const socialTemplates = {

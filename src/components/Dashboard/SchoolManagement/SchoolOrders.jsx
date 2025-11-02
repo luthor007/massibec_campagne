@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { toast as sonnerToast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -88,6 +89,11 @@ const SchoolOrders = ({ schoolId, school }) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState(null);
 
+  const [showExpDialog, setShowExpDialog] = useState(false);
+  const [expNum, setExpNum] = useState('');
+  const [accumba, setAccumba] = useState('');
+  const [pendingExportCallback, setPendingExportCallback] = useState(null);
+  
   const [filters, setFilters] = useState({
     studentName: '',
     orderIdFrom: '',
@@ -504,9 +510,24 @@ const SchoolOrders = ({ schoolId, school }) => {
 
     if (!school.expNum || !school.accumba) {
       // Show dialog to collect missing information
-      const expNum = prompt('Please enter the Exp number for this school:');
-      const accumba = prompt('Please enter the Accumba number for this school:');
-      
+      setExpNum('');
+      setAccumba('');
+      setShowExpDialog(true);
+      // Store school reference for continuation
+      setPendingExportCallback(() => school);
+      return;
+    }
+    
+    await continueExport(school);
+  };
+
+  const handleExpDialogSubmit = async () => {
+    if (!expNum || !accumba) {
+      sonnerToast.error('Veuillez remplir tous les champs');
+      return;
+    }
+    
+    try {
       // Update school with new information
       await fetch(`/api/schools/${schoolId}`, {
         method: 'PATCH',
@@ -514,9 +535,23 @@ const SchoolOrders = ({ schoolId, school }) => {
         body: JSON.stringify({ expNum, accumba })
       });
       
+      // Get updated school data
+      const schoolResponse = await fetch(`/api/schools/${schoolId}`);
+      const school = await schoolResponse.json();
+      
       school.expNum = expNum;
       school.accumba = accumba;
+      setShowExpDialog(false);
+      
+      // Continue with export
+      await continueExport(school);
+      setPendingExportCallback(null);
+    } catch (error) {
+      sonnerToast.error('Erreur lors de la mise à jour des informations de l\'organisation');
     }
+  };
+
+  const continueExport = async (school) => {
 
     // Get EDI counter value for these orders
     const counterResponse = await fetch('/api/edi-counter', {
@@ -850,6 +885,43 @@ const SchoolOrders = ({ schoolId, school }) => {
           </Table>
         </div>
       )}
+      
+      {/* Dialog for Exp and Accumba numbers */}
+      <Dialog open={showExpDialog} onOpenChange={setShowExpDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Informations requises pour l'export</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="expNum">Numéro Exp</Label>
+              <Input
+                id="expNum"
+                value={expNum}
+                onChange={(e) => setExpNum(e.target.value)}
+                placeholder="Entrez le numéro Exp"
+              />
+            </div>
+            <div>
+              <Label htmlFor="accumba">Numéro Accumba</Label>
+              <Input
+                id="accumba"
+                value={accumba}
+                onChange={(e) => setAccumba(e.target.value)}
+                placeholder="Entrez le numéro Accumba"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end space-x-2 mt-4">
+            <Button variant="outline" onClick={() => setShowExpDialog(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleExpDialogSubmit}>
+              Confirmer
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 // components/CheckoutForm.jsx
 
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign } from 'lucide-react'
 
-export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
+export default function CheckoutForm({ total, onClose, items, removeAllItem, campaignId, schoolId }) {
   const [formData, setFormData] = useState({
     email: '',
     nom: '',
@@ -25,12 +26,37 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
   const [isLoadingOwner, setIsLoadingOwner] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
-  const [tipAmount, setTipAmount] = useState(0)
-  const [customTip, setCustomTip] = useState('')
+  
+  // Separate donation states
+  const [studentDonation, setStudentDonation] = useState(0)
+  const [customStudentDonation, setCustomStudentDonation] = useState('')
+  const [schoolDonation, setSchoolDonation] = useState(0)
+  const [customSchoolDonation, setCustomSchoolDonation] = useState('')
+  
   const [storeId, setStoreId] = useState()
   const [autoDeposit, setAutoDeposit] = useState()
+  const [campaign, setCampaign] = useState(null)
+  
+  // Use campaignId from props if available, otherwise fetch from store API
+  const [finalCampaignId, setFinalCampaignId] = useState(campaignId)
+  const [finalSchoolId, setFinalSchoolId] = useState(schoolId)
+  
+  // School and campaign data for distribution message
+  const [schoolAddress, setSchoolAddress] = useState('')
+  const [deliveryDate, setDeliveryDate] = useState('')
+  const [orderId, setOrderId] = useState('')
 
   const router = useRouter()
+
+  // Update finalCampaignId and finalSchoolId when props change
+  useEffect(() => {
+    if (campaignId) {
+      setFinalCampaignId(campaignId)
+    }
+    if (schoolId) {
+      setFinalSchoolId(schoolId)
+    }
+  }, [campaignId, schoolId])
 
   useEffect(() => {
     if (!router.isReady) return
@@ -54,6 +80,105 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
         setOwnerId(data.ownerId)
         setOwner(data.owner)
         setAutoDeposit(data.autoDeposit)
+        
+        // Use campaignId from props if available, otherwise use from API
+        if (campaignId) {
+          setFinalCampaignId(campaignId)
+        } else if (data.campaignId) {
+          setFinalCampaignId(data.campaignId)
+        }
+        
+        // Use schoolId from props if available, otherwise use from API
+        if (schoolId) {
+          setFinalSchoolId(schoolId)
+        } else if (data.ownerSchool) {
+          setFinalSchoolId(data.ownerSchool)
+        }
+        
+        // Use finalCampaignId (from props or API) to load campaign data for donations
+        const activeCampaignId = finalCampaignId || data.campaignId || null
+        
+        // If no campaignId yet, try to get from owner (fallback)
+        let campaignIdToLoad = activeCampaignId
+        if (!campaignIdToLoad && data.owner) {
+          // Try to get activeCampaignId from owner
+          if (data.owner.activeCampaignId) {
+            campaignIdToLoad = data.owner.activeCampaignId
+            // Update finalCampaignId for consistency
+            setFinalCampaignId(campaignIdToLoad)
+          } else if (data.owner.campaigns && data.owner.campaigns.length > 0) {
+            // Fallback: find active campaign from campaigns array
+            const activeCampaign = data.owner.campaigns.find(c => c.isActive) || data.owner.campaigns[0]
+            if (activeCampaign) {
+              campaignIdToLoad = activeCampaign.campaignId || activeCampaign._id
+              // Update finalCampaignId for consistency
+              setFinalCampaignId(campaignIdToLoad)
+            }
+          }
+        }
+        
+        if (campaignIdToLoad) {
+          try {
+            const campaignResponse = await fetch(`/api/campaigns/${campaignIdToLoad}`)
+            if (campaignResponse.ok) {
+              const campaignData = await campaignResponse.json()
+              // API returns { campaign: {...} }, so extract the campaign object
+              const campaign = campaignData.campaign || campaignData
+              // Ensure donations config has defaults if not set
+              if (campaign) {
+                campaign.donationsForStudents = campaign.donationsForStudents || {
+                  enabled: true,
+                  presets: [0, 5, 10, 20]
+                }
+                campaign.donationsForSchool = campaign.donationsForSchool || {
+                  enabled: true,
+                  presets: [0, 5, 10, 20]
+                }
+                // Ensure enabled is boolean (default to true if undefined)
+                if (campaign.donationsForStudents.enabled === undefined || campaign.donationsForStudents.enabled === null) {
+                  campaign.donationsForStudents.enabled = true
+                }
+                if (campaign.donationsForSchool.enabled === undefined || campaign.donationsForSchool.enabled === null) {
+                  campaign.donationsForSchool.enabled = true
+                }
+                // Ensure presets exist and are arrays
+                if (!campaign.donationsForStudents.presets || !Array.isArray(campaign.donationsForStudents.presets) || campaign.donationsForStudents.presets.length === 0) {
+                  campaign.donationsForStudents.presets = [0, 5, 10, 20]
+                }
+                if (!campaign.donationsForSchool.presets || !Array.isArray(campaign.donationsForSchool.presets) || campaign.donationsForSchool.presets.length === 0) {
+                  campaign.donationsForSchool.presets = [0, 5, 10, 20]
+                }
+                
+                // Store delivery date for distribution message
+                if (campaign.deliveryDate) {
+                  setDeliveryDate(campaign.deliveryDate);
+                }
+              }
+              setCampaign(campaign)
+              
+              // Fetch school address if we have schoolId
+              if (finalSchoolId) {
+                try {
+                  const schoolResponse = await fetch(`/api/schools/${finalSchoolId}`);
+                  if (schoolResponse.ok) {
+                    const schoolData = await schoolResponse.json();
+                    if (schoolData.address) {
+                      setSchoolAddress(schoolData.address);
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error fetching school address:', error);
+                }
+              }
+              console.log('Campaign loaded for donations:', campaign)
+              console.log('Donations enabled - Students:', campaign.donationsForStudents?.enabled, 'School:', campaign.donationsForSchool?.enabled)
+            }
+          } catch (error) {
+            console.error('Error fetching campaign:', error)
+          }
+        } else {
+          console.warn('No active campaign found for owner:', data.owner)
+        }
       } else {
         console.error('Erreur lors de la récupération des données de la boutique')
       }
@@ -68,30 +193,56 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleTipChange = (value) => {
+  // Student donation handlers
+  const handleStudentDonationChange = (value) => {
     if (value === 'custom') {
-      setTipAmount(parseFloat(customTip) || 0)
+      setStudentDonation(parseFloat(customStudentDonation) || 0)
     } else {
-      setTipAmount(parseFloat(value))
-      setCustomTip('')
+      setStudentDonation(parseFloat(value))
+      setCustomStudentDonation('')
     }
   }
 
-  const handleCustomTipChange = (e) => {
-    setCustomTip(e.target.value)
-    setTipAmount(parseFloat(e.target.value) || 0)
+  const handleCustomStudentDonationChange = (e) => {
+    setCustomStudentDonation(e.target.value)
+    setStudentDonation(parseFloat(e.target.value) || 0)
+  }
+
+  // School donation handlers
+  const handleSchoolDonationChange = (value) => {
+    if (value === 'custom') {
+      setSchoolDonation(parseFloat(customSchoolDonation) || 0)
+    } else {
+      setSchoolDonation(parseFloat(value))
+      setCustomSchoolDonation('')
+    }
+  }
+
+  const handleCustomSchoolDonationChange = (e) => {
+    setCustomSchoolDonation(e.target.value)
+    setSchoolDonation(parseFloat(e.target.value) || 0)
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (isSubmitting) return
     if (!owner || !owner._id) {
-      alert('Informations du propriétaire non disponibles. Veuillez réessayer plus tard.')
+      toast.error('Informations du propriétaire non disponibles. Veuillez réessayer plus tard.')
+      return
+    }
+
+    // Check if school or campaign is available
+    if (!finalSchoolId && !finalCampaignId) {
+      toast.error('Aucune école ou campagne associée à votre boutique. Veuillez vous assurer que vous êtes bien associé à une campagne active ou contactez le support.')
       return
     }
 
     console.log("----------OWNER FROM CHECKOUT----------")
     console.log(owner)
+    console.log("----------OWNER SCHOOL FROM CHECKOUT----------")
+    console.log(ownerSchool || finalSchoolId)
+    console.log("----------CAMPAIGN ID FROM CHECKOUT----------")
+    console.log(finalCampaignId)
 
     setIsSubmitting(true)
 
@@ -110,9 +261,11 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
         customerName: formData.nom,
         phoneNumber: formData.phoneNumber,
         storeId: storeId,
-        school: ownerSchool,
+        school: ownerSchool || finalSchoolId, // Use finalSchoolId if ownerSchool not set
+        campaignId: finalCampaignId, // Campaign-based: pass campaignId directly
         owner: owner,
-        tip: tipAmount,
+        studentDonation: studentDonation,
+        schoolDonation: schoolDonation,
         autoDeposit: autoDeposit,
       }
 
@@ -125,15 +278,26 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
       })
 
       if (response.ok) {
+        const responseData = await response.json();
+        const orderIdFromResponse = responseData.orderId || responseData.order?.orderId;
+        
         localStorage.removeItem('cartItems')
+        if (orderIdFromResponse) {
+          setOrderId(orderIdFromResponse);
+        }
         setIsSuccess(true)
+        
+        // Emit order success event for onboarding
+        window.dispatchEvent(new CustomEvent('orderSuccess', {
+          detail: { orderId: orderIdFromResponse }
+        }));
       } else {
         const errorData = await response.json()
         throw new Error(errorData.message || 'Erreur lors de la création de la commande')
       }
     } catch (error) {
       console.error('Erreur:', error)
-      alert(`Une erreur est survenue lors de la création de la commande: ${error.message}`)
+      toast.error(`Une erreur est survenue lors de la création de la commande: ${error.message}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -214,49 +378,92 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
 
             <Separator />
 
-            {/* Tip Section */}
-            <Card className="border-blue-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold text-blue-800">Ajouter un pourboire</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup onValueChange={handleTipChange} className="flex flex-wrap gap-4">
-                  {[0, 2, 5].map((amount) => (
-                    <div key={amount} className="flex items-center">
-                      <RadioGroupItem value={amount.toString()} id={`tip-${amount}`} className="peer sr-only" />
+            {/* Student Donations Section */}
+            {campaign?.donationsForStudents?.enabled && (
+              <Card className="border-blue-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg font-semibold text-blue-800">Don pour les Étudiants</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup onValueChange={handleStudentDonationChange} className="flex flex-wrap gap-4">
+                    {(campaign?.donationsForStudents?.presets || [0, 2, 5]).map((amount) => (
+                      <div key={amount} className="flex items-center">
+                        <RadioGroupItem value={amount.toString()} id={`student-donation-${amount}`} className="peer sr-only" />
+                        <Label
+                          htmlFor={`student-donation-${amount}`}
+                          className={`flex items-center justify-center px-4 py-2 text-sm font-medium border rounded-full cursor-pointer ${studentDonation === amount ? 'bg-blue-100 border-blue-500' : 'hover:bg-gray-100'}`}
+                        >
+                          {amount === 0 ? 'Pas de don' : `${amount}$`}
+                        </Label>
+                      </div>
+                    ))}
+                    {/* Custom Student Donation Option */}
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="custom" id="student-donation-custom" className="peer sr-only" />
                       <Label
-                        htmlFor={`tip-${amount}`}
-                        className={`flex items-center justify-center px-4 py-2 text-sm font-medium border rounded-full cursor-pointer ${tipAmount === amount ? 'bg-blue-100 border-blue-500' : 'hover:bg-gray-100'}`}
+                        htmlFor="student-donation-custom"
+                        className={`flex items-center justify-center px-4 py-2 text-sm font-medium border rounded-full cursor-pointer ${studentDonation === 'custom' ? 'bg-blue-100 border-blue-500' : 'hover:bg-gray-100'}`}
                       >
-                        {amount === 0 ? 'Pas de pourboire' : `${amount}$`}
+                        Personnalisé
                       </Label>
+                      <Input
+                        type="number"
+                        placeholder="Montant"
+                        value={customStudentDonation}
+                        onChange={handleCustomStudentDonationChange}
+                        className="w-24 text-sm px-2 py-1 border rounded"
+                      />
                     </div>
-                  ))}
-                  {/* Custom Tip Option */}
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="custom" id="tip-custom" className="peer sr-only" />
-                    <Label
-                      htmlFor="tip-custom"
-                      className={`flex items-center justify-center px-4 py-2 text-sm font-medium border rounded-full cursor-pointer ${tipAmount === 'custom' ? 'bg-blue-100 border-blue-500' : 'hover:bg-gray-100'}`}
-                    >
-                      Personnalisé
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="Montant"
-                      value={customTip}
-                      onChange={handleCustomTipChange}
-                      className="w-24 text-sm px-2 py-1 border rounded"
-                    />
-                  </div>
-                </RadioGroup>
-              </CardContent>
-            </Card>
+                  </RadioGroup>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* School Donations Section */}
+            {campaign?.donationsForSchool?.enabled && (
+              <Card className="border-green-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg font-semibold text-green-800">Don pour l'École</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup onValueChange={handleSchoolDonationChange} className="flex flex-wrap gap-4">
+                    {(campaign?.donationsForSchool?.presets || [0, 2, 5]).map((amount) => (
+                      <div key={amount} className="flex items-center">
+                        <RadioGroupItem value={amount.toString()} id={`school-donation-${amount}`} className="peer sr-only" />
+                        <Label
+                          htmlFor={`school-donation-${amount}`}
+                          className={`flex items-center justify-center px-4 py-2 text-sm font-medium border rounded-full cursor-pointer ${schoolDonation === amount ? 'bg-green-100 border-green-500' : 'hover:bg-gray-100'}`}
+                        >
+                          {amount === 0 ? 'Pas de don' : `${amount}$`}
+                        </Label>
+                      </div>
+                    ))}
+                    {/* Custom School Donation Option */}
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="custom" id="school-donation-custom" className="peer sr-only" />
+                      <Label
+                        htmlFor="school-donation-custom"
+                        className={`flex items-center justify-center px-4 py-2 text-sm font-medium border rounded-full cursor-pointer ${schoolDonation === 'custom' ? 'bg-green-100 border-green-500' : 'hover:bg-gray-100'}`}
+                      >
+                        Personnalisé
+                      </Label>
+                      <Input
+                        type="number"
+                        placeholder="Montant"
+                        value={customSchoolDonation}
+                        onChange={handleCustomSchoolDonationChange}
+                        className="w-24 text-sm px-2 py-1 border rounded"
+                      />
+                    </div>
+                  </RadioGroup>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Total Amount */}
             <div className="flex justify-between items-center font-semibold text-lg bg-gray-100 p-4 rounded-lg">
               <span>Total à payer:</span>
-              <span className="text-blue-700">{(total + tipAmount).toFixed(2)}$</span>
+              <span className="text-blue-700">{(total + studentDonation + schoolDonation).toFixed(2)}$</span>
             </div>
 
             {/* Form Actions - Fixed for mobile with safe area */}
@@ -299,9 +506,19 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem }) {
                 className="flex flex-col items-center p-6"
               >
                 <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-                <DialogTitle className="text-2xl font-bold text-green-600 mb-2">Commande réussie</DialogTitle>
+                <DialogTitle className="text-2xl font-bold text-green-600 mb-2">Bravo, commande reçue!</DialogTitle>
+                <DialogDescription className="text-center text-gray-700 mb-4">
+                  Maintenant, suivez les étapes pour finaliser votre paiement.
+                </DialogDescription>
+                {schoolAddress && deliveryDate && (
+                  <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r-lg mb-4 text-left w-full">
+                    <p className="text-sm text-blue-800">
+                      <strong>📦 Distribution :</strong> La distribution se fera à <strong>{schoolAddress}</strong> le <strong>{new Date(deliveryDate).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. Assurez-vous d'apporter cette confirmation de commande ou du moins votre numéro de commande {orderId ? `(#${orderId})` : '(#commande)'}.
+                    </p>
+                  </div>
+                )}
                 <DialogDescription className="text-center text-gray-700 mb-6">
-                  Votre commande a été envoyée avec succès ! Vous recevrez bientôt un e-mail de confirmation avec les instructions de paiement.
+                  Vous recevrez bientôt un e-mail de confirmation avec les instructions de paiement.
                   N'oubliez pas de regarder dans les indésirables.
                 </DialogDescription>
                 <Button

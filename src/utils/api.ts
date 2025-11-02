@@ -67,7 +67,7 @@
 
   export const generateDeliveryReport = async (schoolId: string) => {
     if (!schoolId) {
-      throw new Error('Veuillez sélectionner une école avant de générer le rapport.');
+      throw new Error('Veuillez sélectionner une organisation avant de générer le rapport.');
     }
 
     const response = await fetch(`/api/generate-delivery-report?schoolId=${schoolId}`, {

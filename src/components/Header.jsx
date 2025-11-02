@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useSession, signOut } from 'next-auth/react'
+import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -53,7 +54,7 @@ export default function Header() {
         body: JSON.stringify({ name, email, telephone }), // Added telephone to the update payload
       });
       if (response.ok) {
-        alert("Profil mis à jour avec succès!");
+        toast.success("Profil mis à jour avec succès!");
         setShowProfileModal(false);
       } else {
         const errorData = await response.json();
@@ -61,26 +62,36 @@ export default function Header() {
       }
     } catch (error) {
       console.error("Erreur:", error);
-      alert("Une erreur est survenue lors de la mise à jour du profil.");
+      toast.error("Une erreur est survenue lors de la mise à jour du profil.");
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.")) {
-      try {
-        const response = await fetch('/api/deleteAccount', { method: 'DELETE' });
-        if (response.ok) {
-          alert("Compte supprimé avec succès.");
-          await handleLogout();
-        } else {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Erreur lors de la suppression du compte");
-        }
-      } catch (error) {
-        console.error("Erreur:", error);
-        alert("Une erreur est survenue lors de la suppression du compte.");
-      }
-    }
+    toast("Êtes-vous sûr de vouloir supprimer votre compte ?", {
+      description: "Cette action est irréversible.",
+      action: {
+        label: "Supprimer",
+        onClick: async () => {
+          try {
+            const response = await fetch('/api/deleteAccount', { method: 'DELETE' });
+            if (response.ok) {
+              toast.success("Compte supprimé avec succès.");
+              await handleLogout();
+            } else {
+              const errorData = await response.json();
+              throw new Error(errorData.message || "Erreur lors de la suppression du compte");
+            }
+          } catch (error) {
+            console.error("Erreur:", error);
+            toast.error("Une erreur est survenue lors de la suppression du compte.");
+          }
+        },
+      },
+      cancel: {
+        label: "Annuler",
+        onClick: () => {},
+      },
+    });
   };
 
   useEffect(() => {
@@ -134,11 +145,6 @@ export default function Header() {
                   transition={{ duration: 0.3 }}
                   className="flex items-center space-x-4"
                 >
-                  <Link href="/detail" passHref>
-                    <Button variant="secondary" size="sm">
-                      Détail de la campagne
-                    </Button>
-                  </Link>
                   <Link href={isSchoolManager ? "/dashboard-manager" : "/dashboard"} passHref>
                     <Button variant="secondary" size="sm">
                       Tableau de bord
@@ -213,11 +219,6 @@ export default function Header() {
               transition={{ duration: 0.3 }}
               className="md:hidden mt-4 space-y-4 bg-white p-4 rounded-lg"
             >
-              <Link href="/detail" passHref>
-                <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
-                  Détail de la campagne
-                </Button>
-              </Link>
               {session ? (
                 <>
                   <Link href={isSchoolManager ? "/dashboard-manager" : "/dashboard"} passHref>

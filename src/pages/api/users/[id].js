@@ -2,6 +2,7 @@
 
 import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
+import Campaign from '../../../models/Campaign';
 
 export default async function handler(req, res) {
   const name = req.query;
@@ -35,7 +36,10 @@ export default async function handler(req, res) {
         return res.status(200).json(exampleUser);
       }
       
-      const user = await User.findById(name.id);
+      const user = await User.findById(name.id)
+        .populate('campaigns.campaignId', 'startDate endDate deliveryDate')
+        .populate('campaigns.schoolId', 'name')
+        .populate('school', 'name');
       if (!user) {
         return res.status(404).json({ message: 'User non trouvée.' });
       }
