@@ -168,17 +168,17 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
             Participants - Campagne #{campaign.campaignNumber}
           </h2>
-          <p className="text-gray-600 mt-1">
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
             {participants.length} participant{participants.length !== 1 ? 's' : ''} actif{participants.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Button onClick={handleRefresh} variant="outline">
+        <Button onClick={handleRefresh} variant="outline" className="w-full sm:w-auto">
           <RefreshCw className="h-4 w-4 mr-2" />
           Actualiser
         </Button>
@@ -204,7 +204,7 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
           </p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-lg overflow-hidden overflow-x-auto scrollbar-hide">
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50">
@@ -306,8 +306,8 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
       {/* Summary Stats */}
       {participants.length > 0 && (
         <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
               <div>
                 <div className="text-2xl font-bold text-blue-600">
                   {participants.length}

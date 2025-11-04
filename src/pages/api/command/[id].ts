@@ -45,16 +45,23 @@ export default async function handler(
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
 
-      // Update order status
-      const { status } = req.body;
-      const validStatuses = ['En attente', 'Payé', 'Commander', 'Complété'];
-      if (!validStatuses.includes(status)) {
-        return res.status(400).json({
-          message: `Statut invalide. Les statuts valides sont : ${validStatuses.join(', ')}.`,
-        });
+      // Update order status and/or distributionNotes
+      const { status, distributionNotes } = req.body;
+      
+      if (status !== undefined) {
+        const validStatuses = ['En attente', 'Payé', 'Commander', 'Complété'];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({
+            message: `Statut invalide. Les statuts valides sont : ${validStatuses.join(', ')}.`,
+          });
+        }
+        order.status = status;
       }
-
-      order.status = status;
+      
+      if (distributionNotes !== undefined) {
+        order.distributionNotes = distributionNotes || '';
+      }
+      
       await order.save();
 
       res.status(200).json({ message: 'Statut de la commande mis à jour avec succès' });

@@ -121,7 +121,7 @@ const MultiSchoolSelector = ({ selectedSchoolId, onSelectSchool, onCreateSchool,
         </Button>
       </DropdownMenuTrigger>
       
-      <DropdownMenuContent align="start" className="w-80 bg-white border border-gray-200 shadow-xl rounded-xl">
+      <DropdownMenuContent align="start" className="w-80 bg-white border border-gray-200 shadow-xl rounded-xl z-[80]">
         <div className="p-3 border-b border-gray-200 bg-gray-50 rounded-t-xl">
           <h3 className="font-semibold text-gray-900">Mes Organisations</h3>
           <p className="text-sm text-gray-500">{schools.length} organisation{schools.length > 1 ? 's' : ''}</p>

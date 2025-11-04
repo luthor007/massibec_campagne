@@ -265,19 +265,19 @@ const SchoolSettings = ({ school, onUpdate }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       {/* Paramètres personnels */}
       <PersonalSettings currentUser={school?.currentUser} onUpdate={onUpdate} />
 
       {/* Paramètres de l'école */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Building className="h-5 w-5 mr-2" />
+      <Card className="overflow-x-hidden">
+        <CardHeader className="p-3 sm:p-6">
+          <CardTitle className="flex items-center text-base sm:text-lg">
+            <Building className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
             Paramètres de l'école
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4 sm:space-y-6 p-3 sm:p-6">
           {!canEditSchool && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -380,11 +380,11 @@ const SchoolSettings = ({ school, onUpdate }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 overflow-x-hidden">
             {/* Informations générales */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center">
-                <Building className="h-5 w-5 mr-2" />
+            <div className="space-y-3 sm:space-y-4">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center">
+                <Building className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Informations générales
               </h3>
               
@@ -435,9 +435,9 @@ const SchoolSettings = ({ school, onUpdate }) => {
             </div>
 
             {/* Contact et paiement */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center">
-                <Phone className="h-5 w-5 mr-2" />
+            <div className="space-y-3 sm:space-y-4">
+              <h3 className="text-base sm:text-lg font-semibold flex items-center">
+                <Phone className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Contact et paiement
               </h3>
               
@@ -532,17 +532,17 @@ const SchoolSettings = ({ school, onUpdate }) => {
               <Button 
                 onClick={handleSaveSchool} 
                 disabled={saving}
-                className="min-w-[120px]"
+                className="min-w-[120px] w-full sm:w-auto"
               >
                 {saving ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Sauvegarde...
+                    <span className="text-sm sm:text-base">Sauvegarde...</span>
                   </>
                 ) : (
                   <>
                     <Save className="h-4 w-4 mr-2" />
-                    Sauvegarder
+                    <span className="text-sm sm:text-base">Sauvegarder</span>
                   </>
                 )}
               </Button>

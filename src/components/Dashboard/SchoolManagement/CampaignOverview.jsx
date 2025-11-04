@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   DollarSign, 
   Users, 
@@ -13,12 +14,13 @@ import {
   CheckCircle,
   Clock,
   AlertCircle,
-  Mail
+  Mail,
+  Copy
 } from 'lucide-react';
 import ParentLetterModal from './ParentLetterModal';
-import CampaignCodeDisplay from './CampaignCodeDisplay';
 import { getTerminology } from '@/utils/organizationHelpers';
 import { isTestCampaign } from '@/utils/campaignHelpers';
+import { toast } from 'react-toastify';
 
 const CampaignOverview = ({ campaign, stats, loading, school }) => {
   const [showParentLetterModal, setShowParentLetterModal] = useState(false);
@@ -97,60 +99,96 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
 
   return (
     <div className="space-y-6">
-      {isTest && (
-        <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <AlertCircle className="h-5 w-5 text-orange-600" />
-            <span className="font-bold text-orange-900">⚠️ MODE TEST</span>
-          </div>
-          <p className="text-sm text-orange-800">
-            Les statistiques affichées sont en mode test et ne sont pas définitives.
-          </p>
-        </div>
-      )}
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Target className="h-7 w-7 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                {campaign.name || `Campagne #${campaign.campaignNumber}`}
-              </h2>
-              <p className="text-gray-600 mt-1 font-medium">
-                {campaign.name ? `Campagne #${campaign.campaignNumber}` : 'Vue d\'ensemble des performances'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3">
-            <Button
-              onClick={() => setShowParentLetterModal(true)}
-              variant="outline"
-              className="flex items-center space-x-2 border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
-            >
-              <Mail className="h-4 w-4" />
-              <span>Lettre aux parents</span>
-            </Button>
-            <Badge className={`${getStatusColor(campaign.status)} border font-medium px-3 py-1`}>
-              <div className="flex items-center space-x-2">
-                {getStatusIcon(campaign.status)}
-                <span>
-                  {campaign.status === 'active' ? 'Active' :
-                   campaign.status === 'approved' ? 'Approuvée' :
-                   campaign.status === 'pending_approval' ? 'En attente d\'approbation' :
-                   campaign.status === 'rejected' ? 'Rejetée' :
-                   campaign.status === 'completed' ? 'Terminée' : campaign.status}
-                </span>
+      {/* Combined Campaign Info Card - Compact */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-3 sm:p-4 overflow-x-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Left: Title and Status */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                  {campaign.name || `Campagne #${campaign.campaignNumber}`}
+                </h2>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <Badge className={`${getStatusColor(campaign.status)} border font-medium px-2 py-0.5 text-xs ${isTest ? 'cursor-help' : ''}`}>
+                          <div className="flex items-center space-x-1">
+                            {getStatusIcon(campaign.status)}
+                            <span className="whitespace-nowrap">
+                              {campaign.status === 'active' ? 'Active' :
+                               campaign.status === 'approved' ? 'Approuvée' :
+                               campaign.status === 'pending_approval' ? 'En attente' :
+                               campaign.status === 'rejected' ? 'Rejetée' :
+                               campaign.status === 'completed' ? 'Terminée' : campaign.status}
+                            </span>
+                            {isTest && (
+                              <AlertCircle className="h-2.5 w-2.5 text-orange-600" />
+                            )}
+                          </div>
+                        </Badge>
+                      </div>
+                    </TooltipTrigger>
+                    {isTest && (
+                      <TooltipContent className="max-w-xs bg-gray-900 text-white text-xs">
+                        <p className="font-semibold mb-1">⚠️ Mode test</p>
+                        <p>
+                          Cette campagne est en attente d'approbation. Toutes les données, commandes, statistiques et rapports sont en mode test et ne sont pas définitives jusqu'à l'approbation de la campagne par Massibec.
+                        </p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               </div>
-            </Badge>
+              {campaign?.campaignCode && (
+                <div className="flex items-center gap-2">
+                  <div className="bg-gray-50 rounded border border-gray-200 px-2 py-1">
+                    <span className="text-sm font-bold text-blue-600 font-mono">
+                      {campaign.campaignCode}
+                    </span>
+                  </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(campaign.campaignCode);
+                              toast.success('Code copié!');
+                            } catch (err) {
+                              console.error('Erreur lors de la copie:', err);
+                            }
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Copier le code</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
+            </div>
           </div>
+          
+          {/* Right: Action Button */}
+          <Button
+            onClick={() => setShowParentLetterModal(true)}
+            variant="outline"
+            size="sm"
+            className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200 whitespace-nowrap shrink-0"
+          >
+            <Mail className="h-4 w-4 mr-2" />
+            <span className="text-sm">Lettre aux parents</span>
+          </Button>
         </div>
       </div>
-
-      {/* Campaign Code Section */}
-      <CampaignCodeDisplay campaign={campaign} school={school} />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -35,6 +35,8 @@ export const useSchoolData = (schoolIdOrUserId) => {
         // If 403 and we were using a schoolId, clear it and retry without schoolId
         if (response.status === 403 && isSchoolId) {
           console.log('403 Forbidden - invalid schoolId, retrying without schoolId parameter');
+          console.log('This means the schoolId in localStorage is invalid and should be cleared');
+          
           // Retry without schoolId to let API find from user associations
           const retryUrl = forceRefresh ? `/api/school-info?t=${Date.now()}` : '/api/school-info';
           const retryResponse = await fetch(retryUrl, {
@@ -47,7 +49,14 @@ export const useSchoolData = (schoolIdOrUserId) => {
           if (retryResponse.ok) {
             const data = await retryResponse.json();
             setSchool(data);
+            // Set a special error to indicate schoolId was invalid but we recovered
+            // This will help parent components know to update their selectedSchoolId
+            setError('INVALID_SCHOOL_ID_RECOVERED');
             return; // Success on retry
+          } else {
+            // Even retry failed, set proper error
+            setError(`Failed to fetch school info: ${retryResponse.status}`);
+            throw new Error(`Failed to fetch school info: ${retryResponse.status}`);
           }
         }
         throw new Error(`Failed to fetch school info: ${response.status}`);

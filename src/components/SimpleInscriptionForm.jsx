@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, CheckCircle, Mail, Lock, User, ArrowRight, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle, Mail, Lock, User, ArrowRight, Sparkles, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function SimpleInscriptionForm() {
@@ -193,6 +193,12 @@ export default function SimpleInscriptionForm() {
                   Cette adresse e-mail est déjà utilisée
                 </p>
               )}
+              <div className="flex items-start space-x-2 mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-blue-800">
+                  Cet email sera utilisé pour les transferts Interac et les communications.
+                </p>
+              </div>
             </div>
 
             {/* Mot de passe */}

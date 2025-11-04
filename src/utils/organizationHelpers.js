@@ -19,17 +19,35 @@ export const getTerminology = (orgType) => {
       participantLabel: 'étudiant(e)',
       participantsLabel: 'étudiants',
       organization: 'école',
-      organizationLabel: 'École'
+      organizationLabel: 'École',
+      accountLabel: 'Compte Scolaire',
+      cashLabel: 'Comptant (étudiant)',
+      cashLabelShort: 'Comptant'
     };
-  } else {
-    // For sport_team, community_org, and other
+  } else if (defaultType === 'sport_team') {
     return {
       participant: 'membre',
       participants: 'membres',
       participantLabel: 'membre',
       participantsLabel: 'membres',
       organization: 'organisation',
-      organizationLabel: 'Organisation'
+      organizationLabel: 'Organisation',
+      accountLabel: 'Compte équipe',
+      cashLabel: 'Comptant (membre)',
+      cashLabelShort: 'Comptant'
+    };
+  } else {
+    // For community_org and other
+    return {
+      participant: 'membre',
+      participants: 'membres',
+      participantLabel: 'membre',
+      participantsLabel: 'membres',
+      organization: 'organisation',
+      organizationLabel: 'Organisation',
+      accountLabel: 'Compte de l\'organisation',
+      cashLabel: 'Comptant (membre)',
+      cashLabelShort: 'Comptant'
     };
   }
 };

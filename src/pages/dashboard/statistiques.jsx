@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Layout from '../../components/Layout'
 import { motion } from 'framer-motion'
 import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip'
@@ -44,9 +44,13 @@ import { useToast } from "@/hooks/use-toast"
 import { ToastAction } from "@/components/ui/toast"
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
-import { calculateStudentEarnings, getUserCampaignContext, isTestCampaign } from '@/utils/campaignHelpers'
+import { calculateStudentEarnings, getUserCampaignContext, isTestCampaign, calculateOrderProfitsDetailed, getCampaignDataWithFallback } from '@/utils/campaignHelpers'
 import CampaignSelector from '@/components/Dashboard/CampaignSelector'
 import JoinCampaignModal from '@/components/Dashboard/JoinCampaignModal'
+// Import extracted components
+import EnhancedLeaderboardCard from '@/components/Dashboard/StudentStats/EnhancedLeaderboardCard'
+import GamificationCard from '@/components/Dashboard/StudentStats/GamificationCard'
+import MetricCard from '@/components/Dashboard/StudentStats/MetricCard'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell
@@ -179,6 +183,7 @@ export default function StatistiquesEtudiantUltime() {
   const [earnings, setEarnings] = useState([])
   const [products, setProducts] = useState([])
   const [totalStudentEarning, setTotalStudentEarning] = useState(0)
+  const [productBreakdown, setProductBreakdown] = useState([])
   
   // Campaign-related state
   const [campaignContext, setCampaignContext] = useState(null)
@@ -209,12 +214,12 @@ export default function StatistiquesEtudiantUltime() {
   const effectiveSchoolId = campaignContext?.schoolId || schoolId
 
   // Get current campaign or fallback to active campaign
-  const getCurrentCampaign = () => {
+  const getCurrentCampaign = useCallback(() => {
     if (selectedCampaignId && campaignContext?.campaigns) {
       return campaignContext.campaigns.find(c => c._id === selectedCampaignId)
     }
     return campaignContext?.campaigns?.[0] // Fallback to first campaign
-  }
+  }, [selectedCampaignId, campaignContext])
 
   // Check if current campaign is in test mode
   const isTest = (() => {
@@ -250,7 +255,7 @@ export default function StatistiquesEtudiantUltime() {
       
       return order.campaignId?.toString() === campaignIdToMatch
     })
-  }, [orders, selectedCampaignId, campaignContext])
+  }, [orders, getCurrentCampaign])
 
   // Debug logs removed - campaign context now working properly
 
@@ -393,6 +398,60 @@ export default function StatistiquesEtudiantUltime() {
   
       return totalTip;
     }, [getFilteredOrders, school]);
+
+  // Calculate today's sales (products and amount)
+  const calculateTodaySales = useCallback(() => {
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders) return { products: 0, amount: 0, orders: 0 };
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let todayProducts = 0;
+    let todayAmount = 0;
+    let todayOrders = 0;
+
+    filteredOrders.forEach(order => {
+      const orderDate = new Date(order.createdAt);
+      orderDate.setHours(0, 0, 0, 0);
+      
+      if (orderDate.getTime() === today.getTime()) {
+        todayOrders++;
+        order.products?.forEach(product => {
+          todayProducts += product.quantity || 0;
+          todayAmount += (product.productPrice || 0) * (product.quantity || 0);
+        });
+      }
+    });
+
+    return { products: todayProducts, amount: todayAmount, orders: todayOrders };
+  }, [getFilteredOrders]);
+
+  // Calculate this week's sales
+  const calculateWeekSales = useCallback(() => {
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders) return { products: 0, amount: 0 };
+    
+    const today = new Date();
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+    weekStart.setHours(0, 0, 0, 0);
+    
+    let weekProducts = 0;
+    let weekAmount = 0;
+
+    filteredOrders.forEach(order => {
+      const orderDate = new Date(order.createdAt);
+      if (orderDate >= weekStart) {
+        order.products?.forEach(product => {
+          weekProducts += product.quantity || 0;
+          weekAmount += (product.productPrice || 0) * (product.quantity || 0);
+        });
+      }
+    });
+
+    return { products: weekProducts, amount: weekAmount };
+  }, [getFilteredOrders]);
 
     // Calculate total student sales
   const calculateTotalStudentSales = useCallback(() => {
@@ -692,46 +751,152 @@ export default function StatistiquesEtudiantUltime() {
   // useEffect to handle real-time updates (if applicable)
   // Example: WebSocket or polling implementation can be added here
 
-    // Function to calculate product breakdown from orders
-    const getProductBreakdown = (orders) => {
+  // Memoize campaignId to avoid unnecessary API calls
+  const currentCampaignId = useMemo(() => {
+    const currentCampaign = getCurrentCampaign()
+    return currentCampaign?._id || currentCampaign?.campaignId?._id || currentCampaign?.campaignId || null
+  }, [getCurrentCampaign])
+
+  // Calculate product breakdown with detailed profits
+  useEffect(() => {
+    let cancelled = false
+    
+    const calculateProductBreakdown = async () => {
       const filteredOrders = getFilteredOrders()
-      const productBreakdown = filteredOrders.reduce((breakdown, order) => {
-        order.products.forEach(product => {
-          // Calculate earnings for this product
-          const profit = (product.productPrice - product.productCost) * product.quantity
-          const studentPercentage = school?.split?.studentBenefit || 85.6
-          const earnings = (profit * studentPercentage / 100) + (order.tip || 0)
-          
-          // Calculate unit price
-          const unitPrice = product.productPrice
-          
-          const existingProduct = breakdown.find(p => p.name === product.productName)
-          if (existingProduct) {
-            existingProduct.quantity += product.quantity
-            existingProduct.earnings += earnings
-          } else {
-            breakdown.push({ 
-              name: product.productName, 
-              quantity: product.quantity, 
-              earnings: earnings, 
-              unitPrice: unitPrice 
-            })
-          }
-        })
-        return breakdown
-      }, [])
+      if (!school || filteredOrders.length === 0) {
+        if (!cancelled) setProductBreakdown([])
+        return
+      }
       
-      // Round earnings to 2 decimal places
-      const roundedBreakdown = productBreakdown.map(product => ({
+      // Get campaign data with fallback
+      let campaign = null
+      let fallbackSplit = school.split || {}
+      
+      if (currentCampaignId && school?._id) {
+        try {
+          const campaignData = await getCampaignDataWithFallback(school._id, school, currentCampaignId)
+          if (cancelled) return
+          campaign = campaignData.campaign
+          fallbackSplit = campaignData.fallbackSplit || school.split || {}
+        } catch (error) {
+          console.error('Error fetching campaign data:', error)
+          if (cancelled) return
+          // Use school split as fallback
+          fallbackSplit = school.split || {}
+        }
+      }
+      
+      const productBreakdown = {}
+      let totalTip = 0
+      
+      // Calculate profits for each order
+      filteredOrders.forEach(order => {
+        totalTip += order.tip || 0
+        
+        // Calculate profits for each product in the order
+        order.products.forEach(product => {
+          const productName = product.productName
+          const quantity = product.quantity
+          const unitPrice = product.productPrice
+          const unitCost = product.productCost
+          
+          // Calculate raw profit for this product
+          const rawProfit = (unitPrice - unitCost) * quantity
+          
+          // Calculate profits based on campaign split
+          // Use the same logic as detail.jsx
+          let cashProfit = 0
+          let schoolAccountProfit = 0
+          let schoolProfit = 0
+          let raffleProfit = 0
+          
+          // Get product ID - same way as detail.jsx
+          const productId = product.product?._id?.toString() || 
+                           product.product?.toString() || 
+                           product.productId?.toString()
+          
+          // Check if this product has custom profit splits in the campaign (same as detail.jsx)
+          const customProfitSplit = campaign?.profitSplits?.find(ps => {
+            const psProductId = ps.productId?._id?.toString() || ps.productId?.toString()
+            return psProductId === productId
+          })
+          
+          // Check if we should use absolute values from campaign (same condition as detail.jsx)
+          if (campaign?.profitSplitType === 'absolute' && customProfitSplit) {
+            // Use product-specific absolute values from campaign's profitSplits
+            // Preserve 0 values - don't use || which treats 0 as falsy
+            // Use same fallbacks as detail.jsx
+            const studentCash = customProfitSplit.studentCash !== undefined && customProfitSplit.studentCash !== null 
+              ? Number(customProfitSplit.studentCash) 
+              : 1.00
+            const studentSchoolAccount = customProfitSplit.studentSchoolAccount !== undefined && customProfitSplit.studentSchoolAccount !== null
+              ? Number(customProfitSplit.studentSchoolAccount)
+              : 1.00
+            const schoolProject = customProfitSplit.schoolProject !== undefined && customProfitSplit.schoolProject !== null
+              ? Number(customProfitSplit.schoolProject)
+              : 0.75
+            const raffle = customProfitSplit.raffle !== undefined && customProfitSplit.raffle !== null
+              ? Number(customProfitSplit.raffle)
+              : 0.25
+            
+            cashProfit = studentCash * quantity
+            schoolAccountProfit = studentSchoolAccount * quantity
+            schoolProfit = schoolProject * quantity
+            raffleProfit = raffle * quantity
+          } else {
+            // Use percentage-based calculation using school's split configuration (same as detail.jsx)
+            const studentBenefit = fallbackSplit?.studentBenefit || 85.6
+            const raffleBenefit = fallbackSplit?.raffleBenefit || 5.0
+            const orgBenefit = fallbackSplit?.organizationBenefit || 9.4
+            
+            // Split student benefit equally between cash and school account (same as detail.jsx)
+            const studentBenefitHalf = studentBenefit / 2
+            cashProfit = rawProfit * (studentBenefitHalf / 100)
+            schoolAccountProfit = rawProfit * (studentBenefitHalf / 100)
+            schoolProfit = rawProfit * (orgBenefit / 100)
+            raffleProfit = rawProfit * (raffleBenefit / 100)
+          }
+          
+          if (!productBreakdown[productName]) {
+            productBreakdown[productName] = {
+              name: productName,
+              quantity: 0,
+              unitPrice: unitPrice,
+              unitCost: unitCost,
+              cashProfit: 0,
+              schoolAccountProfit: 0,
+              schoolProfit: 0,
+              raffleProfit: 0,
+              totalStudentProfit: 0
+            }
+          }
+          
+          productBreakdown[productName].quantity += quantity
+          productBreakdown[productName].cashProfit += cashProfit
+          productBreakdown[productName].schoolAccountProfit += schoolAccountProfit
+          productBreakdown[productName].schoolProfit += schoolProfit
+          productBreakdown[productName].raffleProfit += raffleProfit
+          productBreakdown[productName].totalStudentProfit += cashProfit + schoolAccountProfit
+        })
+      })
+      
+      // Note: Tips are NOT distributed in product breakdown
+      // They are shown separately in the total earnings calculation
+      
+      // Round all values to 2 decimal places
+      const roundedBreakdown = Object.values(productBreakdown).map(product => ({
         ...product,
-        earnings: Math.round(product.earnings * 100) / 100
+        cashProfit: Math.round(product.cashProfit * 100) / 100,
+        schoolAccountProfit: Math.round(product.schoolAccountProfit * 100) / 100,
+        schoolProfit: Math.round(product.schoolProfit * 100) / 100,
+        raffleProfit: Math.round(product.raffleProfit * 100) / 100,
+        totalStudentProfit: Math.round(product.totalStudentProfit * 100) / 100
       }))
       
       // Custom sort: priority products first, then by quantity (best sellers)
       const priorityProducts = ['Pâté à la viande', 'Pâté au poulet', 'Tarte au sucre']
       
-      return roundedBreakdown.sort((a, b) => {
-        // Helper function to check if a product name matches a priority product (case-insensitive, exact match)
+      const sortedBreakdown = roundedBreakdown.sort((a, b) => {
         const getPriorityIndex = (productName) => {
           const normalizedName = productName.toLowerCase().trim()
           return priorityProducts.findIndex(priority => {
@@ -743,25 +908,25 @@ export default function StatistiquesEtudiantUltime() {
         const aPriorityIndex = getPriorityIndex(a.name)
         const bPriorityIndex = getPriorityIndex(b.name)
         
-        // If both are priority products, maintain their order
         if (aPriorityIndex !== -1 && bPriorityIndex !== -1) {
           return aPriorityIndex - bPriorityIndex
         }
-        
-        // If only a is priority, a comes first
-        if (aPriorityIndex !== -1) {
-          return -1
-        }
-        
-        // If only b is priority, b comes first
-        if (bPriorityIndex !== -1) {
-          return 1
-        }
-        
-        // If neither is priority, sort by quantity (best sellers first)
+        if (aPriorityIndex !== -1) return -1
+        if (bPriorityIndex !== -1) return 1
         return b.quantity - a.quantity
       })
+      
+      if (!cancelled) {
+        setProductBreakdown(sortedBreakdown)
+      }
     }
+    
+    calculateProductBreakdown()
+    
+    return () => {
+      cancelled = true
+    }
+  }, [orders, school, getFilteredOrders, currentCampaignId])
 
   // Calculate total student earnings using campaign data
   useEffect(() => {
@@ -780,11 +945,100 @@ export default function StatistiquesEtudiantUltime() {
     calculateEarnings();
   }, [school, orders, calculateTotalStudentEarnings]);
 
+  // Calculate previous period data for comparison (previous week)
+  const calculatePreviousPeriodData = useCallback(() => {
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders) return { sales: 0, earnings: 0, orders: 0, products: 0 }
+    
+    const today = new Date()
+    const weekStart = new Date(today)
+    weekStart.setDate(today.getDate() - today.getDay())
+    weekStart.setHours(0, 0, 0, 0)
+    
+    const previousWeekStart = new Date(weekStart)
+    previousWeekStart.setDate(weekStart.getDate() - 7)
+    const previousWeekEnd = new Date(weekStart)
+    
+    let prevSales = 0
+    let prevEarnings = 0
+    let prevOrders = 0
+    let prevProducts = 0
+    
+    filteredOrders.forEach(order => {
+      const orderDate = new Date(order.createdAt)
+      if (orderDate >= previousWeekStart && orderDate < previousWeekEnd) {
+        prevOrders++
+        order.products?.forEach(product => {
+          prevProducts += product.quantity || 0
+          prevSales += (product.productPrice || 0) * (product.quantity || 0)
+        })
+      }
+    })
+    
+    // Calculate earnings for previous period (simplified - would need full profit calculation)
+    prevEarnings = prevSales * 0.3 // Approximation
+    
+    return { sales: prevSales, earnings: prevEarnings, orders: prevOrders, products: prevProducts }
+  }, [getFilteredOrders])
+  
+  // Generate chart data for sales over time (current vs previous week)
+  const generateSalesChartData = useCallback(() => {
+    const filteredOrders = getFilteredOrders()
+    if (!filteredOrders || filteredOrders.length === 0) return []
+    
+    const today = new Date()
+    const weekStart = new Date(today)
+    weekStart.setDate(today.getDate() - today.getDay())
+    weekStart.setHours(0, 0, 0, 0)
+    
+    const previousWeekStart = new Date(weekStart)
+    previousWeekStart.setDate(weekStart.getDate() - 7)
+    
+    // Generate data for each day of the current week
+    const chartData = []
+    for (let i = 0; i < 7; i++) {
+      const currentDay = new Date(weekStart)
+      currentDay.setDate(weekStart.getDate() + i)
+      currentDay.setHours(0, 0, 0, 0)
+      
+      const previousDay = new Date(previousWeekStart)
+      previousDay.setDate(previousWeekStart.getDate() + i)
+      previousDay.setHours(0, 0, 0, 0)
+      
+      let currentDaySales = 0
+      let previousDaySales = 0
+      
+      filteredOrders.forEach(order => {
+        const orderDate = new Date(order.createdAt)
+        orderDate.setHours(0, 0, 0, 0)
+        
+        if (orderDate.getTime() === currentDay.getTime()) {
+          order.products?.forEach(product => {
+            currentDaySales += (product.productPrice || 0) * (product.quantity || 0)
+          })
+        }
+        
+        if (orderDate.getTime() === previousDay.getTime()) {
+          order.products?.forEach(product => {
+            previousDaySales += (product.productPrice || 0) * (product.quantity || 0)
+          })
+        }
+      })
+      
+      chartData.push({
+        date: currentDay.toISOString(),
+        value: currentDaySales,
+        previousValue: previousDaySales
+      })
+    }
+    
+    return chartData
+  }, [getFilteredOrders])
+
   // Calculate derived data
   const totalProductsSold = calculateTotalProductsSold()
   const moneyRemaining = user ? user.objectifPersonnel - totalStudentEarning : 0
   const progressTowardGoal = user ? (totalStudentEarning / user.objectifPersonnel) * 100 : 0
-  const productBreakdown = getProductBreakdown(orders)
   const chances = Math.floor(totalProductsSold / 6)
   const nextChanceProducts = 6 - (totalProductsSold % 6)
   const schoolGoal = school ? school.objectifFinancier : 0
@@ -795,6 +1049,30 @@ export default function StatistiquesEtudiantUltime() {
   const totalSales = calculateTotalStudentSales()
   const totalCost = calculateTotalStudentCost()
   const totalTip = calculateTotalStudentTip()
+  
+  // Previous period data
+  const previousPeriodData = calculatePreviousPeriodData()
+  const salesChartData = generateSalesChartData()
+  
+  // Calculate total orders count
+  const totalOrdersCount = useMemo(() => {
+    return getFilteredOrders()?.length || 0
+  }, [getFilteredOrders])
+  
+  // Calculate average order value
+  const averageOrderValue = useMemo(() => {
+    const orders = getFilteredOrders()
+    if (!orders || orders.length === 0) return 0
+    return totalSales / orders.length
+  }, [totalSales, getFilteredOrders])
+  
+  // Calculate conversion rate (products sold / unique customers)
+  const conversionRate = useMemo(() => {
+    const orders = getFilteredOrders()
+    if (!orders || orders.length === 0) return 0
+    const uniqueCustomers = new Set(orders.map(o => o.customerName || o.customerEmail || 'unknown')).size
+    return uniqueCustomers > 0 ? (totalProductsSold / uniqueCustomers) : 0
+  }, [totalProductsSold, getFilteredOrders])
 
   const raffleInfo = {
     totalAmount: totalRaffle,
@@ -832,20 +1110,111 @@ export default function StatistiquesEtudiantUltime() {
   const accumulatedProfitRewards = getAccumulatedRewards(totalStudentEarning)
   const nextProfitReward = getNextReward(totalStudentEarning)
 
+  // Loading skeleton component
+  const LoadingSkeleton = () => (
+    <Layout>
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-8 space-y-6 max-w-7xl">
+        {/* Header Skeleton */}
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-6 w-96" />
+        </div>
+
+        {/* Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-24 w-full" />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Tabs Skeleton */}
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Skeleton className="h-12 w-32" />
+            <Skeleton className="h-12 w-32" />
+          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-48" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-32 w-full" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </Layout>
+  )
+
   // Handle loading and error states
   if (loading) {
-    return <p>Loading...</p>  }
+    return <LoadingSkeleton />
+  }
 
   if (error) {
-    return <p>Error: {error}</p>
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Erreur</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
+      </Layout>
+    )
   }
 
   if (!user) {
-    return <p>Missing user</p>
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Utilisateur non trouvé</AlertTitle>
+            <AlertDescription>Impossible de charger les informations de l'utilisateur.</AlertDescription>
+          </Alert>
+        </div>
+      </Layout>
+    )
   }
 
   if (!school) {
-    return <p>Missing school</p>
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>École non trouvée</AlertTitle>
+            <AlertDescription>Impossible de charger les informations de l'école.</AlertDescription>
+          </Alert>
+        </div>
+      </Layout>
+    )
   }
 
  
@@ -870,28 +1239,29 @@ export default function StatistiquesEtudiantUltime() {
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-8 space-y-6 max-w-7xl">
       {/* Header */}
       <motion.div
-        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8"
-        initial={{ opacity: 0, y: -50 }}
+        className="mb-8"
+        initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex-1 space-y-3">
           {/* Back arrow */}
           <Link 
             href="/dashboard" 
-            className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors mb-2"
+              className="inline-flex items-center text-sm text-gray-500 hover:text-gray-900 transition-colors group"
           >
-            <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-2 h-4 w-4 group-hover:text-indigo-600 transition-colors" />
             Retour au tableau de bord
           </Link>
           
           {/* Title */}
           <div className="space-y-2">
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-              Statistique de campagne
+                Statistiques de campagne
             </h1>
-            <p className="text-sm text-gray-600">
-              Suivez vos performances et vos progrès
+              <p className="text-base text-gray-600">
+                Suivez vos performances, relevez des défis et montez dans le classement
             </p>
           </div>
         </div>
@@ -903,13 +1273,13 @@ export default function StatistiquesEtudiantUltime() {
             onJoinCampaign={() => setShowJoinCampaignModal(true)}
           />
           
-          <div className="flex items-center space-x-2">
-            <Calendar className="h-5 w-5 text-gray-600" />
+            <div className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
+              <Calendar className="h-4 w-4 text-gray-500" />
             <Select 
               value={selectedCampaignId || campaignContext?.campaigns?.[0]?._id} 
               onValueChange={setSelectedCampaignId}
             >
-              <SelectTrigger className="w-48">
+                <SelectTrigger className="w-48 border-0 shadow-none focus:ring-0 h-auto">
                 <SelectValue placeholder="Sélectionner une campagne" />
               </SelectTrigger>
               <SelectContent>
@@ -930,68 +1300,131 @@ export default function StatistiquesEtudiantUltime() {
             </Select>
           </div>
         </div>
-      </motion.div>
-
-      {/* Cards Section */}
-      <motion.div 
-        ref={statsCardsRef}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
-        animate={currentStep?.key === 'viewedStats' ? {
-          scale: [1, 1.02, 1],
-        } : {}}
-        transition={{
-          duration: 2,
-          repeat: currentStep?.key === 'viewedStats' ? Infinity : 0,
-          ease: "easeInOut"
-        }}
-      >
-        <div className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 rounded-lg p-2' : ''}>
-          <MotivationCard />
-        </div>
-        <div className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 rounded-lg p-2' : ''}>
-          <DailyChallenge />
-        </div>
-        <div className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 rounded-lg p-2' : ''}>
-          <AchievementsCard totalProfit={totalStudentEarning} />
         </div>
       </motion.div>
 
       {/* Tabs Section */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 h-12 bg-gray-100/50 p-1 rounded-lg">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 mb-8">
+        <TabsList className="grid w-full grid-cols-3 h-11 bg-gray-100/50 p-1 rounded-lg border border-gray-200">
           <TabsTrigger 
             value="apercu"
-            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 font-medium transition-all duration-200 rounded-md"
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 font-medium transition-all duration-200 rounded-md"
           >
             Aperçu
           </TabsTrigger>
           <TabsTrigger 
             value="produits"
-            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 font-medium transition-all duration-200 rounded-md"
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 font-medium transition-all duration-200 rounded-md"
           >
             Produits
+          </TabsTrigger>
+          <TabsTrigger 
+            value="badges"
+            className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-indigo-600 font-medium transition-all duration-200 rounded-md"
+          >
+            Badges & Accomplissements
           </TabsTrigger>
         </TabsList>
 
         {/* Aperçu Tab */}
-        <TabsContent value="apercu" className="space-y-4">
-          <CampaignOverview
-                campaignName={school?.campaignName || 'Campagne de Vente'}
-                studentName={user?.name || 'Étudiant'}
-                totalSales={totalSales}
-                totalEarnings={totalStudentEarning}
-                totalCost={totalCost}
-                totalTip={totalTip}
-                salesTarget={user?.objectifPersonnel || 1000}
-                productsSold={totalProductsSold}
-                customersReached={userProductsSold} // Assuming customersReached is number of products sold
-                daysLeft={orderDeadline ? Math.ceil((new Date(orderDeadline) - new Date()) / (1000 * 60 * 60 * 24)) : 0}
-                leaderboardPosition={userRank}
-                milestones={profitRewards}
-                topPerformers={topPerformers}
-              />
+        <TabsContent value="apercu" className="space-y-6">
+          {/* Shopify-style Metrics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Total Sales */}
+            <MetricCard
+              title="Total des ventes"
+              value={totalSales}
+              previousValue={previousPeriodData.sales}
+              formatCurrency={true}
+              chartData={salesChartData}
+              chartDataKey="value"
+              chartDataKeyPrevious="previousValue"
+            />
+            
+            {/* Total Profits */}
+            <MetricCard
+              title="Total des profits"
+              value={totalStudentEarning}
+              previousValue={previousPeriodData.earnings}
+              formatCurrency={true}
+              breakdown={[
+                { label: 'Profits + Pourboires', value: totalStudentEarning + totalTip, growth: undefined }
+              ]}
+            />
+            
+            {/* Total Orders */}
+            <MetricCard
+              title="Commandes totales"
+              value={totalOrdersCount}
+              previousValue={previousPeriodData.orders}
+              formatValue={(v) => Math.round(v).toString()}
+            />
+            
+            {/* Conversion Rate */}
+            <MetricCard
+              title="Taux de conversion"
+              value={conversionRate}
+              previousValue={previousPeriodData.products > 0 ? (previousPeriodData.products / Math.max(previousPeriodData.orders, 1)) : 0}
+              formatValue={(v) => `${(v * 100).toFixed(2)}%`}
+              breakdown={[
+                { label: 'Produits vendus', value: totalProductsSold },
+                { label: 'Clients atteints', value: userProductsSold || totalOrdersCount }
+              ]}
+            />
+            
+            {/* Average Order Value */}
+            <MetricCard
+              title="Valeur moyenne de commande"
+              value={averageOrderValue}
+              previousValue={previousPeriodData.sales > 0 ? (previousPeriodData.sales / Math.max(previousPeriodData.orders, 1)) : 0}
+              formatCurrency={true}
+            />
+            
+            {/* Products Sold */}
+            <MetricCard
+              title="Produits vendus"
+              value={totalProductsSold}
+              previousValue={previousPeriodData.products}
+              formatValue={(v) => Math.round(v).toString()}
+            />
+          </div>
 
-          <LeaderboardCard rank={userRank} topPerformers={topPerformers} />
+          {/* Campaign Overview - Main Stats */}
+          <CampaignOverview
+            campaignName={school?.campaignName || 'Campagne de Vente'}
+            studentName={user?.name || 'Étudiant'}
+            totalSales={totalSales}
+            totalEarnings={totalStudentEarning}
+            totalCost={totalCost}
+            totalTip={totalTip}
+            salesTarget={user?.objectifPersonnel || 1000}
+            productsSold={totalProductsSold}
+            customersReached={userProductsSold}
+            daysLeft={orderDeadline ? Math.ceil((new Date(orderDeadline) - new Date()) / (1000 * 60 * 60 * 24)) : 0}
+            leaderboardPosition={userRank}
+            milestones={profitRewards}
+            topPerformers={topPerformers}
+          />
+
+          {/* Leaderboard - Social Comparison */}
+          <EnhancedLeaderboardCard 
+            rank={userRank} 
+            topPerformers={topPerformers}
+            totalProductsSold={totalProductsSold}
+            totalStudentEarning={totalStudentEarning}
+            userId={userId}
+          />
+
+          {/* Important Dates and Raffle Info */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ImportantDatesCard orderDeadline={orderDeadline} deliveryDate={deliveryDate} />
+            {totalRaffle > 0 && (
+              <RaffleInfoCard 
+                raffleInfo={raffleInfo}
+                totalTickets={topPerformers?.reduce((sum, p) => sum + Math.floor((p.totalProductsSold || 0) / 6), 0) || 0}
+              />
+            )}
+          </div>
         </TabsContent>
 
         {/* Produits Tab */}
@@ -1004,27 +1437,24 @@ export default function StatistiquesEtudiantUltime() {
           <ProductDistributionCard productBreakdown={productBreakdown} />
         </TabsContent>
 
-        {/* Performance Tab */}
-        <TabsContent value="performance" className="space-y-4">
-          <WeeklySalesCard salesOverTime={earnings} />
-          <GoalsCard
-            personalGoal={personalGoal}
-            schoolGoal={schoolGoal}
+        {/* Badges & Accomplissements Tab */}
+        <TabsContent value="badges" className="h-full">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="h-full min-h-[600px]"
+          >
+            <GamificationCard
+              totalProfit={totalStudentEarning}
             totalProductsSold={totalProductsSold}
+              userRank={userRank}
             totalStudentEarning={totalStudentEarning}
+              orders={orders}
           />
+          </motion.div>
         </TabsContent>
       </Tabs>
-
-      {/* Important Dates and Rewards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ImportantDatesCard orderDeadline={orderDeadline} deliveryDate={deliveryDate} />
-        <RewardsCard totalProfit={totalStudentEarning} />
-      </div>
-
-      {/* Recommendations and Raffle Info */}
-      <RecommendationsCard />
-      <RaffleInfoCard raffleInfo={raffleInfo} />
     </div>
     
     {/* Onboarding Tooltip */}
@@ -1057,40 +1487,6 @@ export default function StatistiquesEtudiantUltime() {
   )
 }
 
-// Motivation Card Component
-function MotivationCard() {
-  const [quote, setQuote] = useState("Le succès, c'est tomber sept fois et se relever huit.")
-
-  useEffect(() => {
-    const quotes = [
-      "Le succès, c'est tomber sept fois et se relever huit.",
-      "Le seul endroit où le succès vient avant le travail, c'est dans le dictionnaire.",
-      "Le meilleur moyen de prédire l'avenir, c'est de le créer.",
-      "Les défis sont ce qui rend la vie intéressante et les surmonter est ce qui lui donne du sens.",
-    ]
-    const interval = setInterval(() => {
-      setQuote(quotes[Math.floor(Math.random() * quotes.length)])
-    }, 86400000) // 24 hours
-
-    return () => clearInterval(interval)
-  }, [])
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5, delay: 0.2 }}
-    >
-      <Card className="bg-gradient-to-r from-blue-500 to-purple-600 text-white h-full">
-        <CardContent className="flex flex-col items-center justify-center h-full p-6">
-          <div className="text-2xl font-bold mb-4">Motivation du Jour</div>
-          <div className="text-lg italic text-center">"{quote}"</div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  )
-}
-
 function StatCard({ icon: Icon, label, value }) {
   return (
     <Card>
@@ -1103,116 +1499,6 @@ function StatCard({ icon: Icon, label, value }) {
       </CardContent>
     </Card>
   )
-}
-
-// Daily Challenge Card Component
-function DailyChallenge() {
-  const [challenge, setChallenge] = useState({
-    task: "Vendez 5 produits aujourd'hui",
-    progress: 3,
-    reward: "Badge Vendeur Étoile"
-  })
-
-  useEffect(() => {
-    const challenges = [
-      { task: "Vendez 5 produits aujourd'hui", progress: Math.floor(Math.random() * 6), reward: "Badge Vendeur Étoile" },
-      { task: "Partagez votre lien 3 fois", progress: Math.floor(Math.random() * 4), reward: "Bonus de 5%" },
-      { task: "Obtenez 2 nouveaux clients", progress: Math.floor(Math.random() * 3), reward: "Produit gratuit" },
-    ]
-    const interval = setInterval(() => {
-      setChallenge(challenges[Math.floor(Math.random() * challenges.length)])
-    }, 86400000) // 24 hours
-
-    return () => clearInterval(interval)
-  }, [])
-
-  return (
-    <Card className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Zap className="mr-2 h-5 w-5" />
-          Défi du Jour
-        </CardTitle>
-      </CardHeader>
-      
-      <CardContent>
-        <h1 className="font-semibold mb-2">{challenge.task}</h1>
-        {/*<Progress value={(challenge.progress / 5) * 100} className="h-2 mb-2 bg-white/30" indicatorColor="bg-white" />
-        <p>{challenge.progress}/5 complétés</p>
-        <p className="mt-2">
-          <strong>Récompense:</strong> {challenge.reward}
-        </p>*/}
-      </CardContent>
-    </Card>
-  )
-}
-
-// Achievements Card Component
-function AchievementsCard({ totalProfit }) {
-  // Function to accumulate rewards based on total profit
-  const getAccumulatedRewards = (totalProfit) => {
-    const accumulatedRewards = []
-    for (const level in profitRewards) {
-      if (totalProfit >= profitRewards[level].minimum) {
-        accumulatedRewards.push(profitRewards[level])
-      }
-    }
-    return accumulatedRewards
-  }
-
-  // Function to calculate the next profit reward
-  const getNextReward = (totalProfit) => {
-    let nextReward = { name: '', productsAway: 0 }
-    for (const level in profitRewards) {
-      if (totalProfit < profitRewards[level].minimum) {
-        nextReward.name = profitRewards[level].badge
-        nextReward.productsAway = Math.round((profitRewards[level].minimum - totalProfit) * 100) / 100
-        break
-      }
-    }
-    return nextReward
-  }
-
-  const accumulatedProfitRewards = getAccumulatedRewards(totalProfit)
-  const nextProfitReward = getNextReward(totalProfit)
-
-  return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Trophy className="mr-2 h-5 w-5" />
-          Récompenses Gagnées (Profits)
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex justify-between mb-4">
-          <h3 className="font-semibold">Profits Actuels</h3>
-          <Badge variant="outline" className="ml-2 text-yellow-500">Profits: {Math.round(totalProfit * 100) / 100}$</Badge>
-        </div>
-        <ScrollArea className="h-[200px] mb-4">
-          {accumulatedProfitRewards.map((reward, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.2 }}
-              className="flex items-center mb-2"
-            >
-              <Check className="mr-2 h-4 w-4 text-green-500" />
-              <span>{reward.badge} - {reward.description}</span>
-            </motion.div>
-          ))}
-        </ScrollArea>
-
-        <div className="flex items-center mt-4">
-          <Award className="mr-2 h-5 w-5 text-yellow-500" />
-          <p><strong>Prochaine Récompense:</strong> {nextProfitReward.name} (à {nextProfitReward.productsAway.toFixed(2)}$ près)</p>
-        </div>
-      </CardContent>
-    </Card>
-    
-  );
-  
 }
 
 // Animated Stat Card Component
@@ -1304,41 +1590,6 @@ function ProgressCard({ title, value, target, icon = <Trophy className="h-5 w-5"
   )
 }
 
-// Leaderboard Card Component
-function LeaderboardCard({ rank, topPerformers }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Classement</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-4">
-          Votre Rang: <Badge variant="secondary" className="text-lg">{rank}ème</Badge>
-        </div>
-        <h3 className="font-semibold mb-2">Meilleurs Vendeurs:</h3>
-        <ol className="list-decimal list-inside">
-          {topPerformers.map((performer, index) => (
-            <motion.li 
-              key={index}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="mb-2"
-            >
-              <div className="flex items-center justify-between">
-                <span>{performer.name} - {performer.totalProductsSold} produits vendus</span>
-                <Badge variant="outline">
-                  {performer.category}
-                </Badge>
-              </div>
-            </motion.li>
-          ))}
-        </ol>
-      </CardContent>
-    </Card>
-  );
-}
-
 // Product Breakdown Card Component
 function ProductBreakdownCard({ productBreakdown, totalProductsSold, totalEarnings }) {
   if (!productBreakdown || productBreakdown.length === 0) {
@@ -1353,38 +1604,74 @@ function ProductBreakdownCard({ productBreakdown, totalProductsSold, totalEarnin
       </Card>
     );
   }
+
+  // Calculate totals
+  const totals = productBreakdown.reduce((acc, product) => {
+    acc.quantity += product.quantity
+    acc.cashProfit += product.cashProfit || 0
+    acc.schoolAccountProfit += product.schoolAccountProfit || 0
+    acc.schoolProfit += product.schoolProfit || 0
+    acc.raffleProfit += product.raffleProfit || 0
+    acc.totalStudentProfit += product.totalStudentProfit || 0
+    return acc
+  }, {
+    quantity: 0,
+    cashProfit: 0,
+    schoolAccountProfit: 0,
+    schoolProfit: 0,
+    raffleProfit: 0,
+    totalStudentProfit: 0
+  })
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Détail des Produits</CardTitle>
       </CardHeader>
       <CardContent>
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nom du Produit</TableHead>
-              <TableHead>Quantité Vendue</TableHead>
-              <TableHead>Prix Unitaire</TableHead>
-              <TableHead>Gains</TableHead>
+                <TableHead className="text-right">Qté</TableHead>
+                <TableHead className="text-right">Prix Vente</TableHead>
+                <TableHead className="text-right">Prix Achat</TableHead>
+                <TableHead className="text-right">Profit Comptant</TableHead>
+                <TableHead className="text-right">Profit Compte Scolaire</TableHead>
+                <TableHead className="text-right">Profit École</TableHead>
+                <TableHead className="text-right">Profit Tirage</TableHead>
+                <TableHead className="text-right font-semibold">Total Profit Élève</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {productBreakdown.map((product, index) => (
               <TableRow key={index}>
-                <TableCell>{product.name}</TableCell>
-                <TableCell>{product.quantity}</TableCell>
-                <TableCell>{product.unitPrice.toFixed(2)}$</TableCell>
-                <TableCell>{product.earnings.toFixed(2)}$</TableCell>
+                  <TableCell className="font-medium">{product.name}</TableCell>
+                  <TableCell className="text-right">{product.quantity}</TableCell>
+                  <TableCell className="text-right">{product.unitPrice.toFixed(2)}$</TableCell>
+                  <TableCell className="text-right">{product.unitCost.toFixed(2)}$</TableCell>
+                  <TableCell className="text-right">{product.cashProfit.toFixed(2)}$</TableCell>
+                  <TableCell className="text-right">{product.schoolAccountProfit.toFixed(2)}$</TableCell>
+                  <TableCell className="text-right">{product.schoolProfit.toFixed(2)}$</TableCell>
+                  <TableCell className="text-right">{product.raffleProfit.toFixed(2)}$</TableCell>
+                  <TableCell className="text-right font-semibold">{product.totalStudentProfit.toFixed(2)}$</TableCell>
               </TableRow>
             ))}
-            <TableRow className="font-bold">
+              <TableRow className="font-bold bg-gray-50">
               <TableCell>Total</TableCell>
-              <TableCell>{totalProductsSold}</TableCell>
-              <TableCell></TableCell>
-              <TableCell>{Math.round(totalEarnings * 100) / 100}$</TableCell>
+                <TableCell className="text-right">{totals.quantity}</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">{totals.cashProfit.toFixed(2)}$</TableCell>
+                <TableCell className="text-right">{totals.schoolAccountProfit.toFixed(2)}$</TableCell>
+                <TableCell className="text-right">{totals.schoolProfit.toFixed(2)}$</TableCell>
+                <TableCell className="text-right">{totals.raffleProfit.toFixed(2)}$</TableCell>
+                <TableCell className="text-right">{totals.totalStudentProfit.toFixed(2)}$</TableCell>
             </TableRow>
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   )
@@ -1485,156 +1772,42 @@ function GoalsCard({ personalGoal, schoolGoal, totalProductsSold, totalStudentEa
 // Important Dates Card Component
 function ImportantDatesCard({ orderDeadline, deliveryDate }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Dates Importantes</CardTitle>
+    <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+      <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
+        <CardTitle className="flex items-center text-lg">
+          <Calendar className="mr-2 h-5 w-5 text-indigo-600" />
+          Dates Importantes
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p><strong>Date Limite de Commande:</strong> {new Date(orderDeadline).toLocaleDateString('fr-CA')}</p>
-        <p><strong>Date de Livraison:</strong> {new Date(deliveryDate).toLocaleDateString('fr-CA')}</p>
-      </CardContent>
-    </Card>
-  )
-}
-
-// Rewards Card Component
-function RewardsCard({ totalProfit }) {
-  // Function to accumulate rewards based on total profit
-  const getAccumulatedRewards = (totalProfit) => {
-    const accumulatedRewards = []
-    for (const level in profitRewards) {
-      if (totalProfit >= profitRewards[level].minimum) {
-        accumulatedRewards.push(profitRewards[level])
-      }
-    }
-    return accumulatedRewards
-  }
-
-  // Function to calculate the next profit reward
-  const getNextReward = (totalProfit) => {
-    let nextReward = { name: '', productsAway: 0 }
-    for (const level in profitRewards) {
-      if (totalProfit < profitRewards[level].minimum) {
-        nextReward.name = profitRewards[level].badge
-        nextReward.productsAway = Math.round((profitRewards[level].minimum - totalProfit) * 100) / 100
-        break
-      }
-    }
-    return nextReward
-  }
-
-  const accumulatedRewards = getAccumulatedRewards(totalProfit)
-  const nextReward = getNextReward(totalProfit)
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Récompenses</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center mb-4">
-          <Gift className="mr-2 h-5 w-5 text-green-500" />
-          <p><strong>Récompenses Gagnées:</strong></p>
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-start space-x-3">
+          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-indigo-600 mt-2"></div>
+          <div>
+            <p className="text-sm font-medium text-gray-500 mb-1">Date Limite de Commande</p>
+            <p className="text-base font-semibold text-gray-900">
+              {orderDeadline ? new Date(orderDeadline).toLocaleDateString('fr-CA', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              }) : 'Non définie'}
+            </p>
         </div>
-        <ScrollArea className="h-[200px]">
-          {accumulatedRewards.map((reward, index) => (
-            <div key={index} className="flex items-center mb-2">
-              <Check className="mr-2 h-4 w-4 text-green-500" />
-              <span>{reward.badge} - {reward.description}</span>
             </div>
-          ))}
-        </ScrollArea>
-        <div className="flex items-center mt-4">
-          <Award className="mr-2 h-5 w-5 text-yellow-500" />
-          <p><strong>Prochaine Récompense:</strong> {nextReward.name} (à {nextReward.productsAway.toFixed(2)}$ près)</p>
+        <div className="flex items-start space-x-3">
+          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-purple-600 mt-2"></div>
+          <div>
+            <p className="text-sm font-medium text-gray-500 mb-1">Date de Livraison</p>
+            <p className="text-base font-semibold text-gray-900">
+              {deliveryDate ? new Date(deliveryDate).toLocaleDateString('fr-CA', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              }) : 'Non définie'}
+            </p>
+          </div>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Recommendations Card Component
-function RecommendationsCard() {
-  const { data: session } = useSession();
-  const [storeId, setStoreId] = useState(null);
-  const [isSharing, setIsSharing] = useState(false);
-
-  useEffect(() => {
-    const fetchStoreId = async () => {
-      if (session?.user?.id) {
-        try {
-          const response = await fetch('/api/get-store', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: session.user.id }),
-          });
-          const data = await response.json();
-          if (data.storeId) {
-            setStoreId(data.storeId);
-          }
-        } catch (error) {
-          console.error('Error fetching store ID:', error);
-        }
-      }
-    };
-    fetchStoreId();
-  }, [session]);
-
-  const handleShare = async () => {
-    if (!storeId) {
-      toast.error('Votre boutique n\'est pas encore configurée. Veuillez d\'abord personnaliser votre boutique.');
-      return;
-    }
-
-    setIsSharing(true);
-    const storeUrl = `${window.location.origin}/boutique/${storeId}`;
-    
-    try {
-      // Try using Web Share API first
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Ma boutique de financement',
-          text: 'Découvrez ma boutique et commandez vos produits préférés!',
-          url: storeUrl
-        });
-      } else {
-        // Fallback to copying to clipboard
-        await navigator.clipboard.writeText(storeUrl);
-        toast.success('Lien copié dans le presse-papiers! Partagez-le maintenant.');
-      }
-    } catch (error) {
-      // User cancelled or error occurred, try clipboard fallback
-      try {
-        await navigator.clipboard.writeText(storeUrl);
-        toast.success('Lien copié dans le presse-papiers!');
-      } catch (clipboardError) {
-        console.error('Error copying to clipboard:', clipboardError);
-        toast.error('Impossible de partager le lien. Veuillez le copier manuellement.');
-      }
-    } finally {
-      setIsSharing(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recommandations</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ul className="list-disc list-inside space-y-2">
-          <li>Partagez votre lien de vente avec vos amis et votre famille</li>
-          <li>Organisez un mini-événement pour promouvoir vos produits</li>
-          <li>Utilisez les réseaux sociaux pour atteindre plus de clients potentiels</li>
-        </ul>
-        <Button 
-          className="mt-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-          onClick={handleShare}
-          disabled={isSharing || !storeId}
-        >
-          <Share2 className="mr-2 h-4 w-4" />
-          {isSharing ? 'Partage en cours...' : 'Partager votre lien de vente'}
-        </Button>
       </CardContent>
     </Card>
   )
@@ -1746,31 +1919,45 @@ function CampaignOverview({
 }
 
 // Raffle Info Card Component
-function RaffleInfoCard({ raffleInfo }) {
+function RaffleInfoCard({ raffleInfo, totalTickets }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Information sur le Tirage au Sort</CardTitle>
+    <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+      <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
+        <CardTitle className="flex items-center text-lg">
+          <Gift className="mr-2 h-5 w-5 text-indigo-600" />
+          Tirage au Sort
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p><strong>Montant Total du Tirage:</strong> {raffleInfo.totalAmount}$</p>
-        <p><strong>Vos Chances:</strong> {raffleInfo.chances} tickets</p>
-        <p className="mt-4"><strong>Comment Gagner Plus de Chances:</strong></p>
-        <p>Vendez {raffleInfo.nextChanceProducts} produits de plus pour gagner une chance supplémentaire!</p>
-       {/*  <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" className="mt-2">
-                <TrendingUp className="mr-2 h-4 w-4" />
-                Voir le Classement du Tirage
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Classement à venir</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        */}
+      <CardContent className="p-6 space-y-4">
+        <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-100">
+          <p className="text-sm font-medium text-gray-500 mb-1">Montant Total du Tirage</p>
+          <p className="text-2xl font-bold text-indigo-700">{parseFloat(raffleInfo.totalAmount || 0).toFixed(2)}$</p>
+        </div>
+        
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">Vos Chances</p>
+            <p className="text-lg font-bold text-gray-900">{raffleInfo.chances} ticket{raffleInfo.chances > 1 ? 's' : ''}</p>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">Total de Tickets</p>
+            <p className="text-lg font-bold text-gray-900">{totalTickets} ticket{totalTickets > 1 ? 's' : ''}</p>
+          </div>
+          {totalTickets > 0 && (
+            <div className="mt-2 pt-2 border-t border-gray-200">
+              <p className="text-xs text-gray-500">
+                Vous avez {((raffleInfo.chances / totalTickets) * 100).toFixed(1)}% des chances
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm font-semibold text-yellow-900 mb-1">💡 Comment Gagner Plus de Chances</p>
+          <p className="text-sm text-yellow-800">
+            Vendez <span className="font-bold">{raffleInfo.nextChanceProducts} produit{raffleInfo.nextChanceProducts > 1 ? 's' : ''}</span> de plus pour gagner une chance supplémentaire!
+          </p>
+        </div>
       </CardContent>
     </Card>
   )

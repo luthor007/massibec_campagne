@@ -241,34 +241,6 @@ export default function Dashboard() {
   return (
     <Layout className="pt-8">
       <div className="pt-24">
-        {/* Preview Mode Banner for School Managers */}
-        {isPreviewMode && (
-          <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 shadow-sm">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center space-x-3">
-                <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                <div>
-                  <h3 className="text-sm font-bold text-blue-900 mb-1">
-                    Mode Aperçu - Vue Participant
-                  </h3>
-                  <p className="text-sm text-blue-800">
-                    Vous visualisez le dashboard tel qu'il apparaît pour vos participants. Vous pouvez rejoindre des campagnes, voir vos commandes et statistiques.
-                  </p>
-                </div>
-              </div>
-              <Button
-                onClick={handleReturnToManagerDashboard}
-                variant="outline"
-                size="sm"
-                className="border-blue-300 text-blue-700 hover:bg-blue-100 whitespace-nowrap"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour au dashboard école
-              </Button>
-            </div>
-          </div>
-        )}
-        
         {/* Header with Campaign Management */}
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -310,17 +282,17 @@ export default function Dashboard() {
           </motion.div>
         </div>
 
-        {/* Distribution Information */}
+        {/* Distribution Information 
         {schoolData && campaignData && campaignData.deliveryDate && (
           <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-md">
             <p className="text-blue-800 text-sm">
               <strong>📦 Distribution :</strong> La distribution se fera à <strong>{schoolData.address || 'l\'adresse de l\'école'}</strong> le <strong>{new Date(campaignData.deliveryDate).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. Assurez-vous d'apporter cette confirmation de commande ou du moins votre numéro de commande (#commande).
             </p>
           </div>
-        )}
+        )}*/}
 
         {/* Campaign Status Alert */}
-        {!campaignsLoading && campaignContext && (
+        {/*!campaignsLoading && campaignContext && (
           <div className="mb-6">
             {campaignContext.mode === 'none' ? (
               <Alert className="border-orange-200 bg-orange-50">
@@ -348,7 +320,7 @@ export default function Dashboard() {
               </Alert>
             )}
           </div>
-        )}
+        )}*/}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <motion.div

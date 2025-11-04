@@ -220,26 +220,50 @@ const RapportView = ({ campaign, school }) => {
       </Card>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview" className="flex items-center">
-            <Table className="h-4 w-4 mr-2" />
-            Vue d'ensemble
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center">
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Analyses
-          </TabsTrigger>
-          <TabsTrigger value="filters" className="flex items-center">
-            <Filter className="h-4 w-4 mr-2" />
-            Filtres
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+        {/* Mobile: Scrollable horizontal tabs */}
+        <div className="lg:hidden overflow-x-auto scrollbar-hide">
+          <TabsList className="inline-flex w-max min-w-full bg-gray-50/50 h-12 p-1 space-x-1">
+            <TabsTrigger value="overview" className="flex items-center whitespace-nowrap px-3 sm:px-4">
+              <Table className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Vue d'ensemble</span>
+              <span className="sm:hidden">Vue</span>
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center whitespace-nowrap px-3 sm:px-4">
+              <BarChart3 className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Analyses</span>
+              <span className="sm:hidden">Anal.</span>
+            </TabsTrigger>
+            <TabsTrigger value="filters" className="flex items-center whitespace-nowrap px-3 sm:px-4">
+              <Filter className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Filtres</span>
+              <span className="sm:hidden">Filt.</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* Desktop: Grid layout */}
+        <div className="hidden lg:block">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="overview" className="flex items-center">
+              <Table className="h-4 w-4 mr-2" />
+              Vue d'ensemble
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Analyses
+            </TabsTrigger>
+            <TabsTrigger value="filters" className="flex items-center">
+              <Filter className="h-4 w-4 mr-2" />
+              Filtres
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview" className="space-y-6">
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-hidden">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center">
@@ -302,7 +326,7 @@ const RapportView = ({ campaign, school }) => {
       </div>
 
       {/* Additional Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-hidden">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
@@ -370,43 +394,45 @@ const RapportView = ({ campaign, school }) => {
       </div>
 
       {/* Export Buttons */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
         <Button
           onClick={handleExportStudents}
           variant="outline"
-          className="flex items-center"
+          className="flex items-center justify-center w-full sm:w-auto text-sm sm:text-base"
           disabled={loading || !students || students.length === 0}
         >
           <Download className="h-4 w-4 mr-2" />
-          Exporter Données Étudiants (CSV)
+          <span className="truncate">Exporter Données Étudiants (CSV)</span>
         </Button>
         <Button
           onClick={handleExportOrders}
           variant="outline"
-          className="flex items-center"
+          className="flex items-center justify-center w-full sm:w-auto text-sm sm:text-base"
           disabled={loading || !students || students.length === 0}
         >
           <Download className="h-4 w-4 mr-2" />
-          Exporter Toutes les Commandes (CSV)
+          <span className="truncate">Exporter Toutes les Commandes (CSV)</span>
         </Button>
         <Button
           onClick={handlePrint}
           variant="outline"
-          className="flex items-center"
+          className="flex items-center justify-center w-full sm:w-auto text-sm sm:text-base"
           disabled={loading || !students || students.length === 0}
         >
           <Printer className="h-4 w-4 mr-2" />
-          Imprimer Résumé
+          <span className="truncate">Imprimer Résumé</span>
         </Button>
       </div>
 
           {/* Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Détails par {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} ({filteredStudents.length})</CardTitle>
+          <Card className="overflow-x-hidden">
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Détails par {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} ({filteredStudents.length})</CardTitle>
             </CardHeader>
-            <CardContent>
-                <RapportTable students={filteredStudents} loading={loading} school={school} />
+            <CardContent className="p-0 sm:p-6">
+                <div className="overflow-x-auto scrollbar-hide">
+                  <RapportTable students={filteredStudents} loading={loading} school={school} />
+                </div>
             </CardContent>
           </Card>
         </TabsContent>

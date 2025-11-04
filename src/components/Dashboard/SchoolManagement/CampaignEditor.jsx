@@ -65,14 +65,87 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Global profit settings
+  // Global profit settings - will be initialized after campaign data is loaded
   const [globalProfitSettings, setGlobalProfitSettings] = useState({
-    profitPerProduct: 3.00, // Default profit per product
-    studentCash: 1.00, // Absolute value for student cash ($)
-    studentSchoolAccount: 1.00, // Absolute value for student school account ($)
-    schoolProject: 0.75, // Absolute value for school project ($)
-    raffle: 0.25 // Absolute value for raffle ($)
+    profitPerProduct: 3.00,
+    studentCash: 1.00,
+    studentSchoolAccount: 1.00,
+    schoolProject: 0.75,
+    raffle: 0.25
   });
+  
+  // Initialize global profit settings from campaign or localStorage
+  useEffect(() => {
+    if (campaign?.profitSplits && campaign.profitSplits.length > 0) {
+      // Try to infer global settings from campaign profit splits
+      const firstSplit = campaign.profitSplits[0];
+      const allSame = campaign.profitSplits.every(ps => 
+        ps.studentCash === firstSplit.studentCash &&
+        ps.studentSchoolAccount === firstSplit.studentSchoolAccount &&
+        ps.schoolProject === firstSplit.schoolProject &&
+        ps.raffle === firstSplit.raffle
+      );
+      
+      if (allSame && products.length > 0) {
+        // All products have the same splits - likely from global controls
+        // Calculate average profit per product from custom prices
+        let totalProfit = 0;
+        let productCount = 0;
+        
+        products.forEach(product => {
+          const campaignPrice = campaign?.customPrices?.find(cp => {
+            const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
+            return cpProductId === product.id;
+          })?.price;
+          
+          if (campaignPrice !== undefined) {
+            const profit = campaignPrice - (product.cost || 0);
+            totalProfit += profit;
+            productCount++;
+          }
+        });
+        
+        const avgProfit = productCount > 0 ? totalProfit / productCount : 0;
+        
+        // Use inferred settings from campaign
+        const inferredSettings = {
+          profitPerProduct: avgProfit || 3.00,
+          studentCash: firstSplit.studentCash !== undefined && firstSplit.studentCash !== null ? firstSplit.studentCash : 1.00,
+          studentSchoolAccount: firstSplit.studentSchoolAccount !== undefined && firstSplit.studentSchoolAccount !== null ? firstSplit.studentSchoolAccount : 1.00,
+          schoolProject: firstSplit.schoolProject !== undefined && firstSplit.schoolProject !== null ? firstSplit.schoolProject : 0.75,
+          raffle: firstSplit.raffle !== undefined && firstSplit.raffle !== null ? firstSplit.raffle : 0.25
+        };
+        
+        setGlobalProfitSettings(inferredSettings);
+        
+        // Also save to localStorage for future use
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('globalProfitSettings', JSON.stringify(inferredSettings));
+        }
+        return;
+      }
+    }
+    
+    // If no campaign data to infer from, load from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('globalProfitSettings');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setGlobalProfitSettings({
+            profitPerProduct: parsed.profitPerProduct || 3.00,
+            studentCash: parsed.studentCash !== undefined ? parsed.studentCash : 1.00,
+            studentSchoolAccount: parsed.studentSchoolAccount !== undefined ? parsed.studentSchoolAccount : 1.00,
+            schoolProject: parsed.schoolProject !== undefined ? parsed.schoolProject : 0.75,
+            raffle: parsed.raffle !== undefined ? parsed.raffle : 0.25
+          });
+          return;
+        } catch (e) {
+          console.error('Error parsing saved globalProfitSettings:', e);
+        }
+      }
+    }
+  }, [campaign?.profitSplits, campaign?.customPrices, products]);
 
   // Load products and initialize form data
   useEffect(() => {
@@ -101,13 +174,26 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
               return psProductId === product.id;
             });
-            // Preserve 0 values - don't use || which treats 0 as falsy
-            initialProfitSplits[product.id] = {
-              studentCash: campaignSplit?.studentCash !== undefined && campaignSplit?.studentCash !== null ? campaignSplit.studentCash : 1.00,
-              studentSchoolAccount: campaignSplit?.studentSchoolAccount !== undefined && campaignSplit?.studentSchoolAccount !== null ? campaignSplit.studentSchoolAccount : 0,
-              schoolProject: campaignSplit?.schoolProject !== undefined && campaignSplit?.schoolProject !== null ? campaignSplit.schoolProject : 0.75,
-              raffle: campaignSplit?.raffle !== undefined && campaignSplit?.raffle !== null ? campaignSplit.raffle : 0.25
-            };
+            // Preserve actual values from campaign, including 0
+            // If campaignSplit exists, use the actual values or 0 if not set
+            // If campaignSplit doesn't exist, use defaults (new product)
+            if (campaignSplit) {
+              // Campaign split exists - preserve exact values including 0
+              initialProfitSplits[product.id] = {
+                studentCash: campaignSplit.studentCash !== undefined && campaignSplit.studentCash !== null ? campaignSplit.studentCash : 0,
+                studentSchoolAccount: campaignSplit.studentSchoolAccount !== undefined && campaignSplit.studentSchoolAccount !== null ? campaignSplit.studentSchoolAccount : 0,
+                schoolProject: campaignSplit.schoolProject !== undefined && campaignSplit.schoolProject !== null ? campaignSplit.schoolProject : 0,
+                raffle: campaignSplit.raffle !== undefined && campaignSplit.raffle !== null ? campaignSplit.raffle : 0
+              };
+            } else {
+              // No campaign split - use defaults for new products
+              initialProfitSplits[product.id] = {
+                studentCash: 1.00,
+                studentSchoolAccount: 1.00,
+                schoolProject: 0.75,
+                raffle: 0.25
+              };
+            }
           });
           
           setCustomPrices(initialPrices);
@@ -180,10 +266,17 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
 
   // Handle global profit settings changes
   const handleGlobalProfitSettingsChange = (field, value) => {
-    setGlobalProfitSettings(prev => ({
-      ...prev,
-      [field]: parseFloat(value) || 0
-    }));
+    setGlobalProfitSettings(prev => {
+      const updated = {
+        ...prev,
+        [field]: parseFloat(value) || 0
+      };
+      // Save to localStorage whenever it changes
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('globalProfitSettings', JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   // Apply global profit settings to all products
@@ -209,6 +302,12 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
 
     setCustomPrices(newCustomPrices);
     setProfitSplits(newProfitSplits);
+    
+    // Save global profit settings to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('globalProfitSettings', JSON.stringify(globalProfitSettings));
+    }
+    
     toast.success('Répartition des profits appliquée à tous les produits');
   };
 
@@ -450,12 +549,12 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
             result.campaign.profitSplits.forEach(ps => {
               const productId = ps.productId?._id?.toString() || ps.productId?.toString();
               if (productId) {
-                // Preserve 0 values - don't use || which treats 0 as falsy
+                // Preserve actual values from campaign, including 0
                 updatedSplits[productId] = {
-                  studentCash: ps.studentCash !== undefined && ps.studentCash !== null ? ps.studentCash : 1.00,
+                  studentCash: ps.studentCash !== undefined && ps.studentCash !== null ? ps.studentCash : 0,
                   studentSchoolAccount: ps.studentSchoolAccount !== undefined && ps.studentSchoolAccount !== null ? ps.studentSchoolAccount : 0,
-                  schoolProject: ps.schoolProject !== undefined && ps.schoolProject !== null ? ps.schoolProject : 0.75,
-                  raffle: ps.raffle !== undefined && ps.raffle !== null ? ps.raffle : 0.25
+                  schoolProject: ps.schoolProject !== undefined && ps.schoolProject !== null ? ps.schoolProject : 0,
+                  raffle: ps.raffle !== undefined && ps.raffle !== null ? ps.raffle : 0
                 };
               }
             });
@@ -580,47 +679,32 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
   const isApproved = campaign.status === 'approved';
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md">
-      <div className="text-center mb-8">
-        <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
+    <div className="max-w-5xl mx-auto p-3 sm:p-4 lg:p-6 bg-white rounded-lg shadow-md overflow-x-hidden">
+      <div className="text-center mb-6 sm:mb-8">
+        <div className={`inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-4 ${
           isApproved ? 'bg-gray-400' : 'bg-gradient-to-r from-orange-500 to-orange-600'
         }`}>
-          <Edit3 className="h-8 w-8 text-white" />
+          <Edit3 className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
         </div>
-        <h2 className={`text-3xl font-bold mb-2 ${isApproved ? 'text-gray-600' : 'text-gray-900'}`}>
+        <h2 className={`text-xl sm:text-2xl lg:text-3xl font-bold mb-2 px-2 break-words ${isApproved ? 'text-gray-600' : 'text-gray-900'}`}>
           Modifier la Campagne #{campaign.campaignNumber}
         </h2>
-        <p className={`text-lg ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
+        <p className={`text-sm sm:text-base lg:text-lg px-2 ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
           Gérez les détails de votre campagne de financement
         </p>
         
         {/* Message d'approbation */}
         {isApproved && (
-          <div className="mt-4 p-4 bg-orange-50 border-2 border-orange-300 rounded-lg">
-            <div className="flex items-center justify-center gap-2 text-orange-800">
-              <AlertCircle className="h-5 w-5" />
-              <span className="font-semibold">Approuvée et verrouillée par le fournisseur</span>
+          <div className="mt-4 p-3 sm:p-4 bg-orange-50 border-2 border-orange-300 rounded-lg mx-2 sm:mx-0">
+            <div className="flex items-center justify-center gap-2 text-orange-800 flex-wrap">
+              <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+              <span className="font-semibold text-xs sm:text-sm text-center">Approuvée et verrouillée par le fournisseur</span>
             </div>
-          </div>
-        )}
-
-        {/* Bouton de suppression (uniquement si non approuvée) */}
-        {!isApproved && campaign.status !== 'active' && (
-          <div className="mt-4 flex justify-center">
-            <Button
-              variant="destructive"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center space-x-2"
-              disabled={isDeleting}
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>Supprimer la campagne</span>
-            </Button>
           </div>
         )}
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-6 lg:space-y-8 overflow-x-hidden">
         {/* Nom de la campagne */}
         <Card className={`transition-shadow duration-200 border-0 shadow-md ${isApproved ? '' : 'hover:shadow-lg'}`}>
           <CardHeader className={`rounded-t-lg ${isApproved ? 'bg-gray-100' : 'bg-gradient-to-r from-blue-50 to-indigo-50'}`}>
@@ -655,7 +739,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 overflow-x-hidden">
           {/* Dates */}
           <Card className={`transition-shadow duration-200 border-0 shadow-md ${isApproved ? '' : 'hover:shadow-lg'}`}>
             <CardHeader className={`rounded-t-lg ${isApproved ? 'bg-gray-100' : 'bg-gradient-to-r from-blue-50 to-indigo-50'}`}>
@@ -952,13 +1036,13 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                 </Card>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 overflow-x-hidden">
                 {products.map((product) => {
                   const sellingPrice = customPrices[product.id] || product.price;
                   const profit = sellingPrice - product.cost;
 
                   return (
-                    <div key={product.id} className={`border-0 rounded-xl p-5 shadow-md transition-all duration-200 ${
+                    <div key={product.id} className={`border-0 rounded-xl p-3 sm:p-4 lg:p-5 shadow-md transition-all duration-200 overflow-x-hidden ${
                       isApproved 
                         ? 'bg-gray-100 opacity-75' 
                         : 'bg-gradient-to-br from-white to-gray-50 hover:shadow-lg hover:scale-[1.02]'
@@ -1254,10 +1338,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                     <h4 className={`text-sm font-semibold ${isApproved ? 'text-gray-500' : 'text-gray-700'}`}>
                       Répartition des dons {terminology.participants} (en pourcentage):
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 overflow-x-hidden">
                       <div>
                         <Label htmlFor="student-donation-account" className={`text-sm ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
-                          Compte Scolaire:
+                          {terminology.accountLabel}:
                         </Label>
                         <div className="flex items-center space-x-2">
                           <Input
@@ -1276,7 +1360,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                       </div>
                       <div>
                         <Label htmlFor="student-donation-cash" className={`text-sm ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
-                          Comptant (étudiant):
+                          {terminology.cashLabel}:
                         </Label>
                         <div className="flex items-center space-x-2">
                           <Input
@@ -1303,13 +1387,13 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                           <div className="text-blue-600 font-semibold">
                             ${((10 * studentDonationSplit.studentAccount) / 100).toFixed(2)}
                           </div>
-                          <div className="text-gray-600">Compte Scolaire</div>
+                          <div className="text-gray-600">{terminology.accountLabel}</div>
                         </div>
                         <div className="text-center">
                           <div className="text-green-600 font-semibold">
                             ${((10 * studentDonationSplit.studentCash) / 100).toFixed(2)}
                           </div>
-                          <div className="text-gray-600">Comptant</div>
+                          <div className="text-gray-600">{terminology.cashLabelShort}</div>
                         </div>
                       </div>
                       <div className="mt-2 text-center">
@@ -1408,8 +1492,8 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
         </Card>
 
         {/* Action Buttons */}
-        <div className="flex justify-center pt-8">
-          <div className="flex space-x-4">
+        <div className="flex justify-center pt-6 sm:pt-8">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
             <Button 
               type="button"
               onClick={(e) => {
@@ -1420,7 +1504,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               }}
               disabled={saving || isApproved}
               className={`
-                relative px-8 py-4 text-lg font-semibold rounded-xl
+                relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-xl
                 ${isApproved 
                   ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl'
@@ -1429,20 +1513,20 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                 hover:scale-105 active:scale-95
                 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
                 disabled:hover:scale-100 disabled:hover:shadow-lg
-                min-w-[200px]
+                w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px]
                 ${saving ? 'animate-pulse' : ''}
               `}
             >
-              <div className="flex items-center justify-center space-x-3">
+              <div className="flex items-center justify-center space-x-2 sm:space-x-3">
                 {saving ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Sauvegarde...</span>
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-sm sm:text-base">Sauvegarde...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="h-5 w-5" />
-                    <span>Sauvegarder</span>
+                    <Save className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="text-sm sm:text-base">Sauvegarder</span>
                   </>
                 )}
               </div>
@@ -1457,38 +1541,69 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               onClick={handleCancel}
               variant="outline"
               disabled={isApproved}
-              className={`px-8 py-4 text-lg font-semibold rounded-xl border-2 transition-all duration-200 min-w-[200px] ${
+              className={`px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-xl border-2 transition-all duration-200 w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px] ${
                 isApproved 
                   ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50' 
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
               }`}
             >
-              <X className="h-5 w-5 mr-2" />
-              Annuler
+              <X className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-2" />
+              <span className="text-sm sm:text-base">Annuler</span>
             </Button>
           </div>
         </div>
+
+        {/* Bouton de suppression en bas du formulaire (uniquement si non approuvée) */}
+        {!isApproved && campaign.status !== 'active' && (
+          <div className="pt-6 border-t border-gray-200 mt-6">
+            <div className="flex flex-col items-center space-y-3">
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center space-x-2 w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="text-sm sm:text-base">Supprimer la campagne</span>
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Dialog de confirmation de suppression */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Supprimer la campagne</DialogTitle>
-            <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer cette campagne ? Cette action est irréversible.
+            <DialogTitle className="text-red-600 flex items-center space-x-2">
+              <AlertCircle className="h-5 w-5" />
+              <span>Supprimer la campagne</span>
+            </DialogTitle>
+            <DialogDescription className="pt-4 space-y-3">
+              <p className="text-sm text-gray-700">
+                Cette action est <strong className="text-red-600">irréversible</strong> et supprimera définitivement :
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 ml-2">
+                <li>La campagne et toutes ses données</li>
+                <li>Les commandes associées</li>
+                <li>Les statistiques et rapports</li>
+              </ul>
               {campaign?.name && (
-                <span className="block mt-2 font-semibold text-gray-900">
-                  Campagne: {campaign.name}
-                </span>
+                <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-xs text-gray-500 mb-1">Campagne à supprimer :</p>
+                  <p className="font-semibold text-gray-900">
+                    {campaign.name} (Campagne #{campaign.campaignNumber})
+                  </p>
+                </div>
               )}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={() => setShowDeleteConfirm(false)}
               disabled={isDeleting}
+              className="w-full sm:w-auto order-2 sm:order-1"
             >
               Annuler
             </Button>
@@ -1496,8 +1611,19 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               variant="destructive"
               onClick={handleDelete}
               disabled={isDeleting}
+              className="w-full sm:w-auto order-1 sm:order-2"
             >
-              {isDeleting ? 'Suppression...' : 'Supprimer'}
+              {isDeleting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Supprimer définitivement
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

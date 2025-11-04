@@ -4,7 +4,6 @@ import dbConnect from '../../lib/mongodb';
 import OrderStudent from '../../models/OrderStudent';
 import School from '../../models/School';
 import { getNextSequence } from '../../utils/getNextSequence';
-import { sendStudentOrderEmail } from '../../utils/gmailMailer'; // Import de la nouvelle fonction
 import { calculateOrderProfits, getCampaignDataWithFallback, isTestCampaign } from '../../utils/campaignHelpers';
 
 export default async function handler(req, res) {
@@ -215,10 +214,13 @@ export default async function handler(req, res) {
 
       const calculatedProducts = Array.from(productMap.values());
 
-      // Générer le nouvel orderId
-      const newOrderId = school.orderCounter + 1;
-      school.orderCounter = newOrderId;
-      await school.save();
+      // Générer le nouvel orderId unique par campagne
+      // Compter les commandes existantes pour cette campagne spécifique
+      const existingOrdersCount = await OrderStudent.countDocuments({ 
+        school: schoolId, 
+        campaignNumber: campaignNumber 
+      });
+      const newOrderId = existingOrdersCount + 1;
 
       // Créer la nouvelle commande étudiante
       const orderStudent = new OrderStudent({
@@ -247,32 +249,8 @@ export default async function handler(req, res) {
 
       await orderStudent.save();
 
-      // Générer les instructions de paiement
-      const paymentInstructions = `
-        <h3 style="color: #4A90E2; font-weight: bold;">Transfert Interac</h3>
-        <p>Pour finaliser votre commande, merci d'effectuer le transfert Interac à :</p>
-        <strong>Destinataire : </strong>Massibec<br/>
-        <strong>Adresse courriel : </strong> <a href="mailto:facturation@massibec.com">facturation@massibec.com</a><br/>
-        <strong>Montant : </strong><strong>${totalAmount.toFixed(2)}$</strong><br/>
-        <strong>Message : </strong>@#&*-${school.code}-${newOrderId}-${studentName}<br/>
-        <strong>IMPORTANT :</strong> Assurez-vous d'effectuer le virement dans les plus brefs délais pour que votre commande soit traitée.
-      `;
-
-      // Envoyer l'e-mail à l'étudiant
-      await sendStudentOrderEmail({
-        studentPercentage: studentBenefit,
-        orderId: newOrderId,
-        studentName,
-        email,
-        phoneNumber,
-        schoolName: school.name,
-        products: calculatedProducts,
-        totalUnits,
-        totalAmount,
-        amountPaid,
-        paymentInstructions,
-        organizationType: school.organizationType || 'school', // Pass organization type for dynamic terminology
-      });
+      // Note: L'étudiant reçoit déjà les confirmations de commande en CC dans les emails envoyés aux clients
+      // donc pas besoin d'envoyer un email de félicitation supplémentaire ici
 
       res.status(201).json(orderStudent);
     } catch (error) {

@@ -12,7 +12,14 @@ export const useCampaigns = (userId) => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/campaigns');
+      const response = await fetch('/api/campaigns', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       if (!response.ok) {
         throw new Error(`Failed to fetch campaigns: ${response.status}`);
       }

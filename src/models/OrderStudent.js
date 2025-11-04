@@ -27,7 +27,7 @@ const OrderStudentSchema = new mongoose.Schema({
   totalUnits: { type: Number, required: true }, // Total d'unités
   totalAmount: { type: Number, required: true },
   amountPaid: { type: Number, required: true }, // Montant payé
-  orderId: { type: Number, unique: true }, // ID de commande unique
+  orderId: { type: Number, required: true }, // ID de commande unique par campagne
   transferAmount: { type: Number }, // Transfert Interac effectué au montant de
   studentCashBenefit: { type: Number, required: true }, // Bénéfice étudiant comptant total
   studentSchoolAccountBenefit: { type: Number, required: true }, // Bénéfice étudiant compte scolaire total
@@ -47,7 +47,30 @@ const OrderStudentSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-// Ajouter un index unique sur orderId si ce n'est pas déjà fait
-OrderStudentSchema.index({ orderId: 1 }, { unique: true });
+// Index unique composé: orderId est unique par campagne (campaignNumber)
+// Cela permet d'avoir orderId: 1, 2, 3... pour chaque campagne
+OrderStudentSchema.index({ campaignNumber: 1, orderId: 1 }, { unique: true });
 
-export default mongoose.models.OrderStudent || mongoose.model('OrderStudent', OrderStudentSchema);
+// Get the model instance
+const OrderStudentModel = mongoose.models.OrderStudent || mongoose.model('OrderStudent', OrderStudentSchema);
+
+// Migration: Remove old unique index on orderId if it exists
+// This should only run once, but it's safe to run multiple times
+if (mongoose.connection.readyState === 1) {
+  OrderStudentModel.collection.getIndexes()
+    .then(indexes => {
+      // Check if old index exists
+      if (indexes.orderId_1) {
+        console.log('Removing old unique index on orderId...');
+        return OrderStudentModel.collection.dropIndex('orderId_1');
+      }
+    })
+    .catch(err => {
+      // Index might not exist, which is fine
+      if (err.code !== 27) { // 27 = IndexNotFound
+        console.error('Error removing old index:', err);
+      }
+    });
+}
+
+export default OrderStudentModel;

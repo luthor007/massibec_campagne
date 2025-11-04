@@ -1,6 +1,6 @@
 // components/CheckoutForm.jsx
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign } from 'lucide-react'
+import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check } from 'lucide-react'
+import { getTerminology } from '@/utils/organizationHelpers'
 
 export default function CheckoutForm({ total, onClose, items, removeAllItem, campaignId, schoolId }) {
   const [formData, setFormData] = useState({
@@ -26,6 +27,7 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
   const [isLoadingOwner, setIsLoadingOwner] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false)
   
   // Separate donation states
   const [studentDonation, setStudentDonation] = useState(0)
@@ -45,6 +47,28 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
   const [schoolAddress, setSchoolAddress] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
   const [orderId, setOrderId] = useState('')
+  const [copiedField, setCopiedField] = useState(null)
+  const [savedFinalTotal, setSavedFinalTotal] = useState(null)
+  const [schoolOrganizationType, setSchoolOrganizationType] = useState(null)
+  
+  // Calculate final total including donations - recalculate when any value changes
+  const finalTotal = useMemo(() => {
+    const baseTotal = total || 0
+    const donations = (studentDonation || 0) + (schoolDonation || 0)
+    const calculated = baseTotal + donations
+    // Save the total when it's calculated (before cart is emptied)
+    if (calculated > 0 && !savedFinalTotal) {
+      setSavedFinalTotal(calculated)
+    }
+    return calculated
+  }, [total, studentDonation, schoolDonation, savedFinalTotal])
+  
+  // Use saved total in success modal, fallback to calculated total
+  const displayTotal = savedFinalTotal || finalTotal
+
+  // Get terminology based on organization type
+  const organizationType = campaign?.organizationType || schoolOrganizationType || 'school'
+  const terminology = getTerminology(organizationType)
 
   const router = useRouter()
 
@@ -165,6 +189,9 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
                     if (schoolData.address) {
                       setSchoolAddress(schoolData.address);
                     }
+                    if (schoolData.organizationType) {
+                      setSchoolOrganizationType(schoolData.organizationType);
+                    }
                   }
                 } catch (error) {
                   console.error('Error fetching school address:', error);
@@ -256,7 +283,7 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
           cost: item.cost,
           name: item.name,
         })),
-        totalAmount: total,
+        totalAmount: total, // Only products amount, donations are sent separately
         customerEmail: formData.email,
         customerName: formData.nom,
         phoneNumber: formData.phoneNumber,
@@ -281,6 +308,10 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
         const responseData = await response.json();
         const orderIdFromResponse = responseData.orderId || responseData.order?.orderId;
         
+        // Save final total before removing cart items
+        const currentFinalTotal = total + studentDonation + schoolDonation
+        setSavedFinalTotal(currentFinalTotal)
+        
         localStorage.removeItem('cartItems')
         if (orderIdFromResponse) {
           setOrderId(orderIdFromResponse);
@@ -304,10 +335,33 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
   }
 
   const handleSuccessClose = () => {
+    // Show confirmation modal before closing
+    setShowPaymentConfirmation(true)
+  }
+
+  const handlePaymentConfirmed = () => {
+    setShowPaymentConfirmation(false)
     setIsSuccess(false)
     onClose()
     setFormData({ email: '', nom: '', phoneNumber: '' })
+    setSavedFinalTotal(null) // Reset saved total
     window.location.reload()
+  }
+
+  const handlePaymentCancel = () => {
+    setShowPaymentConfirmation(false)
+    // Stay on the payment modal
+  }
+
+  const copyToClipboard = (text, fieldName) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(fieldName)
+      setTimeout(() => setCopiedField(null), 2000)
+      toast.success('Copié dans le presse-papiers!')
+    }).catch(err => {
+      console.error('Erreur lors de la copie:', err)
+      toast.error('Erreur lors de la copie')
+    })
   }
 
   return (
@@ -382,7 +436,9 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
             {campaign?.donationsForStudents?.enabled && (
               <Card className="border-blue-200">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-semibold text-blue-800">Don pour les Étudiants</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-blue-800">
+                    Don pour les {terminology.participantsLabel.charAt(0).toUpperCase() + terminology.participantsLabel.slice(1)}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <RadioGroup onValueChange={handleStudentDonationChange} className="flex flex-wrap gap-4">
@@ -423,7 +479,9 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
             {campaign?.donationsForSchool?.enabled && (
               <Card className="border-green-200">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-semibold text-green-800">Don pour l'École</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-green-800">
+                    Don pour l'{terminology.organizationLabel}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <RadioGroup onValueChange={handleSchoolDonationChange} className="flex flex-wrap gap-4">
@@ -497,33 +555,212 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
       <AnimatePresence>
         {isSuccess && (
           <Dialog open={isSuccess} onOpenChange={handleSuccessClose}>
-            <DialogContent className="sm:max-w-[425px] bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-[500px] bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.3 }}
-                className="flex flex-col items-center p-6"
+                className="flex flex-col items-center p-4 sm:p-6"
               >
                 <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
-                <DialogTitle className="text-2xl font-bold text-green-600 mb-2">Bravo, commande reçue!</DialogTitle>
-                <DialogDescription className="text-center text-gray-700 mb-4">
-                  Maintenant, suivez les étapes pour finaliser votre paiement.
+                <DialogTitle className="text-2xl font-bold text-green-600 mb-2 text-center">Merci pour votre commande!</DialogTitle>
+                <DialogDescription className="text-center text-gray-700 mb-6">
+                  Votre commande a été enregistrée avec succès. Veuillez suivre les étapes ci-dessous pour finaliser votre paiement par virement Interac.
                 </DialogDescription>
-                {schoolAddress && deliveryDate && (
-                  <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r-lg mb-4 text-left w-full">
-                    <p className="text-sm text-blue-800">
-                      <strong>📦 Distribution :</strong> La distribution se fera à <strong>{schoolAddress}</strong> le <strong>{new Date(deliveryDate).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. Assurez-vous d'apporter cette confirmation de commande ou du moins votre numéro de commande {orderId ? `(#${orderId})` : '(#commande)'}.
+                
+                {/* Payment Instructions */}
+                <div className="w-full space-y-4 mb-6">
+                  {/* Bank Links */}
+                  <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-gray-700 mb-3">1. Choisissez votre banque :</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <a href="https://www.desjardins.com/fr/" target="_blank" rel="noopener noreferrer" className="w-full">
+                        <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                          <img src="/images/desjardins.svg" alt="Desjardins" className="w-8 h-8 object-contain" />
+                          <span className="text-xs font-medium">Desjardins</span>
+                        </Button>
+                      </a>
+                      <a href="https://www.bnc.ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer" className="w-full">
+                        <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                          <img src="/images/bnc.svg" alt="BNC" className="w-8 h-8 object-contain" />
+                          <span className="text-xs font-medium">BNC</span>
+                        </Button>
+                      </a>
+                      <a href="https://www.rbcbanqueroyale.com/" target="_blank" rel="noopener noreferrer" className="w-full">
+                        <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                          <img src="/images/rbc.svg" alt="RBC" className="w-8 h-8 object-contain" />
+                          <span className="text-xs font-medium">RBC</span>
+                        </Button>
+                      </a>
+                      <a href="https://www.td.com/ca/fr/perso/" target="_blank" rel="noopener noreferrer" className="w-full">
+                        <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                          <img src="/images/TD.svg" alt="TD" className="w-8 h-8 object-contain" />
+                          <span className="text-xs font-medium">TD</span>
+                        </Button>
+                      </a>
+                      <a href="https://www.scotiabank.com/ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer" className="w-full">
+                        <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                          <img src="/images/Scotiabank.svg" alt="Scotiabank" className="w-8 h-8 object-contain" />
+                          <span className="text-xs font-medium">Scotiabank</span>
+                        </Button>
+                      </a>
+                      <a href="https://www.cibc.com/fr/personal-banking.html" target="_blank" rel="noopener noreferrer" className="w-full">
+                        <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                          <img src="/images/cibc.svg" alt="CIBC" className="w-8 h-8 object-contain" />
+                          <span className="text-xs font-medium">CIBC</span>
+                        </Button>
+                      </a>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                    <h3 className="font-semibold text-blue-900 mb-3">Instructions pour le virement Interac</h3>
+                    <p className="text-xs text-blue-700 mb-3">Veuillez utiliser les informations ci-dessous pour effectuer votre virement Interac :</p>
+                    
+                    {owner && (
+                      <div className="space-y-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-gray-700 flex-1">
+                            <strong>2. Destinataire :</strong> {owner.name || owner.firstName || 'N/A'}
+                          </p>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => copyToClipboard(owner.name || owner.firstName || '', 'destinataire')}
+                            title="Copier le destinataire"
+                          >
+                            {copiedField === 'destinataire' ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 text-gray-500" />
+                            )}
+                          </Button>
+                        </div>
+                        
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-gray-700 flex-1">
+                            <strong>3. Adresse courriel :</strong> {ownerEmail}
+                          </p>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => copyToClipboard(ownerEmail, 'email')}
+                            title="Copier l'email"
+                          >
+                            {copiedField === 'email' ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 text-gray-500" />
+                            )}
+                          </Button>
+                        </div>
+
+                        {!autoDeposit && (
+                          <>
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-gray-700 flex-1">
+                                <strong>4. Question de sécurité :</strong> {formData.nom || 'Votre nom'}
+                              </p>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 w-7 p-0 shrink-0"
+                                onClick={() => copyToClipboard(formData.nom || '', 'question')}
+                                title="Copier la question"
+                              >
+                                {copiedField === 'question' ? (
+                                  <Check className="h-3.5 w-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 text-gray-500" />
+                                )}
+                              </Button>
+                            </div>
+                            
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-gray-700 flex-1">
+                                <strong>5. Réponse :</strong> {formData.email}
+                              </p>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 w-7 p-0 shrink-0"
+                                onClick={() => copyToClipboard(formData.email || '', 'reponse')}
+                                title="Copier la réponse"
+                              >
+                                {copiedField === 'reponse' ? (
+                                  <Check className="h-3.5 w-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 text-gray-500" />
+                                )}
+                              </Button>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-gray-700 flex-1">
+                            <strong>{autoDeposit ? '4' : '6'}. Montant :</strong> {displayTotal.toFixed(2)} $
+                          </p>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => copyToClipboard(displayTotal.toFixed(2), 'montant')}
+                            title="Copier le montant"
+                          >
+                            {copiedField === 'montant' ? (
+                              <Check className="h-3.5 w-3.5 text-green-600" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 text-gray-500" />
+                            )}
+                          </Button>
+                        </div>
+
+                        {orderId && (
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-gray-700 flex-1">
+                              <strong>{autoDeposit ? '5' : '7'}. Message :</strong> #{orderId}
+                            </p>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-7 w-7 p-0 shrink-0"
+                              onClick={() => copyToClipboard(`#${orderId}`, 'message')}
+                              title="Copier le message"
+                            >
+                              {copiedField === 'message' ? (
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 text-gray-500" />
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {!owner && (
+                      <p className="text-sm text-gray-600">
+                        Les informations de paiement seront envoyées par email.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-lg">
+                    <p className="text-sm text-yellow-800">
+                      <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page.
+                      Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement. 
+                      Ne pas tenir compte du paiement si c'est déjà fait. Il se peut qu'il soit dans les indésirables.
                     </p>
                   </div>
-                )}
-                <DialogDescription className="text-center text-gray-700 mb-6">
-                  Vous recevrez bientôt un e-mail de confirmation avec les instructions de paiement.
-                  N'oubliez pas de regarder dans les indésirables.
-                </DialogDescription>
+                </div>
+
                 <Button
                   onClick={handleSuccessClose}
-                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-base rounded-lg"
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 text-base rounded-lg w-full"
                 >
                   Fermer
                 </Button>
@@ -532,6 +769,51 @@ export default function CheckoutForm({ total, onClose, items, removeAllItem, cam
           </Dialog>
         )}
       </AnimatePresence>
+
+      {/* Payment Confirmation Dialog */}
+      <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
+        <DialogContent className="sm:max-w-[450px] bg-white p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900 mb-2">
+              Confirmation de paiement
+            </DialogTitle>
+            <DialogDescription className="text-gray-700">
+              IMPORTANT : Assurez-vous de faire le virement avant de quitter cette page.
+              Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement. 
+              Ne pas tenir compte du paiement si c'est déjà fait. Il se peut qu'il soit dans les indésirables.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-gray-600">
+              Avez-vous effectué le virement Interac avec les informations fournies ?
+            </p>
+            
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg">
+              <p className="text-xs text-blue-800">
+                Si vous n'avez pas encore fait le virement, vous pouvez le faire maintenant en utilisant 
+                les informations affichées ci-dessus. Une fois le virement complété, vous pouvez confirmer.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6 flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handlePaymentCancel}
+              className="flex-1"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handlePaymentConfirmed}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            >
+              Oui, j'ai effectué le paiement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

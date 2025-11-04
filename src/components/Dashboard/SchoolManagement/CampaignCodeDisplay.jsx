@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Copy, Hash, CheckCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Copy, Hash, CheckCircle, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import { getTerminology } from '@/utils/organizationHelpers';
 
 const CampaignCodeDisplay = ({ campaign, school }) => {
@@ -8,6 +9,7 @@ const CampaignCodeDisplay = ({ campaign, school }) => {
   const organizationType = school?.organizationType || campaign?.organizationType || 'school';
   const terminology = getTerminology(organizationType);
   const [copied, setCopied] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const copyCampaignCode = async () => {
     const campaignCode = campaign?.campaignCode || 'N/A';
@@ -25,54 +27,88 @@ const CampaignCodeDisplay = ({ campaign, school }) => {
   }
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-            <Hash className="h-7 w-7 text-white" />
+    <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0">
+            <Hash className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">Code de Campagne</h3>
-            <p className="text-gray-600 text-sm">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-gray-900">Code de Campagne</h3>
+            <p className="text-xs text-gray-500 truncate">
               Code que les {terminology.participants} doivent utiliser pour rejoindre cette campagne
             </p>
           </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <div className="bg-white rounded-lg border border-blue-200 px-4 py-3 shadow-sm">
-            <div className="text-2xl font-bold text-blue-600 font-mono">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="bg-gray-50 rounded-md border border-gray-200 px-3 py-2">
+            <div className="text-lg font-bold text-blue-600 font-mono">
               {campaign.campaignCode}
             </div>
           </div>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={copyCampaignCode}
+                  variant="ghost"
+                  size="sm"
+                  className={`h-9 w-9 p-0 transition-all duration-200 ${
+                    copied 
+                      ? 'text-green-600 hover:text-green-700 hover:bg-green-50' 
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {copied ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{copied ? 'Copié!' : 'Copier le code'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button
-            onClick={copyCampaignCode}
-            variant="outline"
-            className={`flex items-center space-x-2 transition-all duration-200 ${
-              copied 
-                ? 'border-green-300 text-green-600 bg-green-50' 
-                : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
-            }`}
+            onClick={() => setShowInstructions(!showInstructions)}
+            variant="ghost"
+            size="sm"
+            className="h-9 w-9 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+            title={showInstructions ? 'Masquer les instructions' : 'Afficher les instructions'}
           >
-            <Copy className="h-4 w-4" />
-            <span>{copied ? 'Copié!' : 'Copier'}</span>
+            {showInstructions ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </div>
-      <div className="mt-4 p-4 bg-white rounded-lg border border-blue-100">
-        <p className="text-sm text-gray-600">
-          <strong>Instructions pour les {terminology.participants} :</strong> Les {terminology.participants} doivent utiliser ce code de campagne lors de leur inscription 
-          ou dans leur tableau de bord pour rejoindre cette campagne spécifique. Partagez ce code avec les parents et les {terminology.participants}.
-        </p>
-        <div className="mt-2 text-xs text-gray-500">
-          <strong>Campagne :</strong> #{campaign.campaignNumber} • 
-          <strong> {terminology.organizationLabel} :</strong> {school?.name} • 
-          <strong> Statut :</strong> {campaign.status === 'active' ? 'Active' :
-                                   campaign.status === 'approved' ? 'Approuvée' :
-                                   campaign.status === 'pending_approval' ? 'En attente' :
-                                   campaign.status === 'rejected' ? 'Rejetée' :
-                                   campaign.status === 'completed' ? 'Terminée' : campaign.status}
+      
+      {showInstructions && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-start space-x-2 mb-3">
+            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 break-words">
+                <strong>Instructions pour les {terminology.participants} :</strong> Les {terminology.participants} doivent utiliser ce code de campagne lors de leur inscription 
+                ou dans leur tableau de bord pour rejoindre cette campagne spécifique. Partagez ce code avec les parents et les {terminology.participants}.
+              </p>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 break-words pl-6">
+            <strong>Campagne :</strong> #{campaign.campaignNumber} • 
+            <strong> {terminology.organizationLabel} :</strong> {school?.name} • 
+            <strong> Statut :</strong> {campaign.status === 'active' ? 'Active' :
+                                     campaign.status === 'approved' ? 'Approuvée' :
+                                     campaign.status === 'pending_approval' ? 'En attente' :
+                                     campaign.status === 'rejected' ? 'Rejetée' :
+                                     campaign.status === 'completed' ? 'Terminée' : campaign.status}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

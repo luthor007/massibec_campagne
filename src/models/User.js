@@ -57,6 +57,11 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  originalPasswordHash: {
+    type: String,
+    // Temporary field to store original password hash when testing
+    // This field should be cleared after restoring the password
+  },
   profileCompleted: { type: Boolean, default: false },
   profileCompletionPercentage: { type: Number, default: 0 },
   parentInfo: {

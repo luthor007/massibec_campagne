@@ -14,7 +14,8 @@ import {
   Target,
   Package,
   X,
-  Settings
+  Settings,
+  Check
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import ParentLetterModal from './ParentLetterModal';
@@ -52,14 +53,36 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   const [showParentLetterModal, setShowParentLetterModal] = useState(false);
   const [createdCampaign, setCreatedCampaign] = useState(null);
   
-  // Global profit settings
-  const [globalProfitSettings, setGlobalProfitSettings] = useState({
-    profitPerProduct: 3.00, // Default profit per product
-    studentCash: 1.00, // Absolute value for student cash ($)
-    studentSchoolAccount: 1.00, // Absolute value for student school account ($)
-    schoolProject: 0.75, // Absolute value for school project ($)
-    raffle: 0.25 // Absolute value for raffle ($)
+  // Global profit settings - load from localStorage or defaults
+  const [globalProfitSettings, setGlobalProfitSettings] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('globalProfitSettings');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return {
+            profitPerProduct: parsed.profitPerProduct || 3.00,
+            studentCash: parsed.studentCash !== undefined ? parsed.studentCash : 1.00,
+            studentSchoolAccount: parsed.studentSchoolAccount !== undefined ? parsed.studentSchoolAccount : 1.00,
+            schoolProject: parsed.schoolProject !== undefined ? parsed.schoolProject : 0.75,
+            raffle: parsed.raffle !== undefined ? parsed.raffle : 0.25
+          };
+        } catch (e) {
+          console.error('Error parsing saved globalProfitSettings:', e);
+        }
+      }
+    }
+    return {
+      profitPerProduct: 3.00,
+      studentCash: 1.00,
+      studentSchoolAccount: 1.00,
+      schoolProject: 0.75,
+      raffle: 0.25
+    };
   });
+
+  // State for visual feedback when applying settings
+  const [settingsApplied, setSettingsApplied] = useState(false);
 
   // Load products on component mount
   useEffect(() => {
@@ -77,12 +100,12 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
           const initialProfitSplits = {};
           productsData.forEach(product => {
             initialPrices[product.id] = product.price;
-            // Default profit splits: $1.00 for student cash, $1.00 for student school account, $0.75 for school project, $0.25 for raffle
+            // Initialize profit splits with 0 - user will set values manually or use global controls
             initialProfitSplits[product.id] = {
-              studentCash: 1.00,
-              studentSchoolAccount: 1.00,
-              schoolProject: 0.75,
-              raffle: 0.25
+              studentCash: 0,
+              studentSchoolAccount: 0,
+              schoolProject: 0,
+              raffle: 0
             };
           });
           setCustomPrices(initialPrices);
@@ -123,10 +146,17 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
 
   // Handle global profit settings changes
   const handleGlobalProfitSettingsChange = (field, value) => {
-    setGlobalProfitSettings(prev => ({
-      ...prev,
-      [field]: parseFloat(value) || 0
-    }));
+    setGlobalProfitSettings(prev => {
+      const updated = {
+        ...prev,
+        [field]: parseFloat(value) || 0
+      };
+      // Save to localStorage whenever it changes
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('globalProfitSettings', JSON.stringify(updated));
+      }
+      return updated;
+    });
   };
 
   // Apply global profit settings to all products
@@ -152,7 +182,20 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
 
     setCustomPrices(newCustomPrices);
     setProfitSplits(newProfitSplits);
+    
+    // Save global profit settings to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('globalProfitSettings', JSON.stringify(globalProfitSettings));
+    }
+    
+    // Show visual feedback
+    setSettingsApplied(true);
     toast.success('Répartition des profits appliquée à tous les produits');
+    
+    // Reset visual feedback after animation
+    setTimeout(() => {
+      setSettingsApplied(false);
+    }, 2000);
   };
 
   // Student donation handlers
@@ -327,13 +370,24 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
           productId,
           price: parseFloat(price)
         })),
-        profitSplits: Object.entries(profitSplits).map(([productId, splits]) => ({
-          productId,
-          studentCash: splits.studentCash === '' ? 1.00 : (splits.studentCash || 1.00),
-          studentSchoolAccount: splits.studentSchoolAccount === '' ? 1.00 : (splits.studentSchoolAccount || 1.00),
-          schoolProject: splits.schoolProject === '' ? 0.75 : (splits.schoolProject || 0.75),
-          raffle: splits.raffle === '' ? 0.25 : (splits.raffle || 0.25)
-        })),
+        profitSplits: Object.entries(profitSplits).map(([productId, splits]) => {
+          // Preserve 0 values - don't use || which treats 0 as falsy
+          const parseValue = (value, defaultValue) => {
+            if (value === '' || value === null || value === undefined) {
+              return defaultValue;
+            }
+            const parsed = parseFloat(value);
+            return isNaN(parsed) ? defaultValue : parsed;
+          };
+          
+          return {
+            productId,
+            studentCash: parseValue(splits.studentCash, 1.00),
+            studentSchoolAccount: parseValue(splits.studentSchoolAccount, 1.00),
+            schoolProject: parseValue(splits.schoolProject, 0.75),
+            raffle: parseValue(splits.raffle, 0.25)
+          };
+        }),
         donationsForStudents: {
           enabled: studentDonationsEnabled,
           presets: studentDonationPresets,
@@ -342,7 +396,8 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
         donationsForSchool: {
           enabled: schoolDonationsEnabled,
           presets: schoolDonationPresets
-        }
+        },
+        schoolId: school?.id || school?._id // Pass school ID to ensure correct school association
       };
 
       const response = await fetch('/api/campaigns/create', {
@@ -396,15 +451,15 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white rounded-lg shadow-md">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full mb-4">
-          <Target className="h-8 w-8 text-white" />
+    <div className="max-w-5xl mx-auto p-3 sm:p-4 lg:p-6 bg-white rounded-lg shadow-md overflow-x-hidden">
+      <div className="text-center mb-6 sm:mb-8">
+        <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full mb-3 sm:mb-4">
+          <Target className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2 px-2 break-words">
           Créer une Nouvelle Campagne
         </h2>
-        <p className="text-gray-600 text-lg">
+        <p className="text-gray-600 text-sm sm:text-base lg:text-lg px-2">
           Configurez les paramètres de votre nouvelle campagne de financement
         </p>
       </div>
@@ -671,9 +726,22 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                     <Button
                       type="button"
                       onClick={applyGlobalProfitSettings}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      className={`w-full text-white transition-all duration-300 ${
+                        settingsApplied 
+                          ? 'bg-green-600 hover:bg-green-700 scale-105 shadow-lg ring-4 ring-green-300 ring-opacity-50' 
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
                     >
-                      Appliquer cette répartition à tous les produits
+                      <div className="flex items-center justify-center space-x-2">
+                        {settingsApplied ? (
+                          <>
+                            <Check className="h-5 w-5 animate-pulse" />
+                            <span className="font-semibold">Appliqué avec succès!</span>
+                          </>
+                        ) : (
+                          <span>Appliquer cette répartition à tous les produits</span>
+                        )}
+                      </div>
                     </Button>
                   </CardContent>
                 </Card>
@@ -684,7 +752,14 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                    const profit = sellingPrice - product.cost;
                    
                    return (
-                     <div key={product.id} className="border-0 rounded-xl p-5 bg-gradient-to-br from-white to-gray-50 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.02]">
+                     <div 
+                       key={product.id} 
+                       className={`border-0 rounded-xl p-5 bg-gradient-to-br from-white to-gray-50 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.02] ${
+                         settingsApplied 
+                           ? 'ring-2 ring-green-400 ring-opacity-75 bg-gradient-to-br from-green-50 to-gray-50' 
+                           : ''
+                       }`}
+                     >
                        <div className="flex items-start space-x-4">
                          {/* Product Image */}
                          <div className="flex-shrink-0">
@@ -940,7 +1015,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="student-donation-account" className="text-sm text-gray-600">
-                          Compte Scolaire:
+                          {terminology.accountLabel}:
                         </Label>
                         <div className="flex items-center space-x-2">
                           <Input
@@ -958,7 +1033,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                       </div>
                       <div>
                         <Label htmlFor="student-donation-cash" className="text-sm text-gray-600">
-                          Comptant (étudiant):
+                          {terminology.cashLabel}:
                         </Label>
                         <div className="flex items-center space-x-2">
                           <Input
@@ -984,13 +1059,13 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                           <div className="text-blue-600 font-semibold">
                             ${((10 * studentDonationSplit.studentAccount) / 100).toFixed(2)}
                           </div>
-                          <div className="text-gray-600">Compte Scolaire</div>
+                          <div className="text-gray-600">{terminology.accountLabel}</div>
                         </div>
                         <div className="text-center">
                           <div className="text-green-600 font-semibold">
                             ${((10 * studentDonationSplit.studentCash) / 100).toFixed(2)}
                           </div>
-                          <div className="text-gray-600">Comptant</div>
+                          <div className="text-gray-600">{terminology.cashLabelShort}</div>
                         </div>
                       </div>
                       <div className="mt-2 text-center">
@@ -1088,7 +1163,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
 
         </div>
 
-        <div className="flex justify-center pt-8">
+        <div className="flex justify-center pt-6 sm:pt-8">
           <Button 
             type="submit" 
             disabled={creating}
@@ -1096,7 +1171,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
               console.log('Button clicked!', e);
             }}
             className={`
-              relative px-8 py-4 text-lg font-semibold rounded-xl
+              relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-xl
               bg-gradient-to-r from-blue-600 to-blue-700 
               hover:from-blue-700 hover:to-blue-800
               text-white shadow-lg hover:shadow-xl
@@ -1104,20 +1179,20 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
               hover:scale-105 active:scale-95
               disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
               disabled:hover:scale-100 disabled:hover:shadow-lg
-              min-w-[200px]
+              w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px]
               ${creating ? 'animate-pulse' : ''}
             `}
           >
-            <div className="flex items-center justify-center space-x-3">
+            <div className="flex items-center justify-center space-x-2 sm:space-x-3">
               {creating ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Création en cours...</span>
+                  <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm sm:text-base">Création en cours...</span>
                 </>
               ) : (
                 <>
-                  <Target className="h-5 w-5" />
-                  <span>Créer la Campagne</span>
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-sm sm:text-base">Créer la Campagne</span>
                 </>
               )}
             </div>

@@ -31,10 +31,11 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, AlertTriangle, AlertCircle, Copy, Check, CheckCircle } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ export default function Commandes() {
   const [error, setError] = useState(null);
   const [schoolFetchFailed, setSchoolFetchFailed] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [newOrderId, setNewOrderId] = useState(null);
   const [priceToPay, setPriceToPay] = useState();
@@ -65,6 +67,7 @@ export default function Commandes() {
   const [isHovered, setIsHovered] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
   
   // Campaign-related state
   const [campaignContext, setCampaignContext] = useState(null);
@@ -411,6 +414,37 @@ export default function Commandes() {
     }
   };
 
+  // Fonction pour gérer la mise à jour des notes de distribution
+  const handleDistributionNotesChange = async (orderId, notes) => {
+    try {
+      const orderToUpdate = orders.find(order => order._id === orderId);
+      if (!orderToUpdate) return;
+
+      // Optimistic update
+      setOrders(orders.map(order =>
+        order._id === orderId ? { ...order, distributionNotes: notes } : order
+      ));
+
+      const response = await fetch(`/api/command/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ distributionNotes: notes }),
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setOrders(orders.map(order =>
+          order._id === orderId ? { ...order, distributionNotes: orderToUpdate.distributionNotes } : order
+        ));
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur lors de la mise à jour des notes');
+      }
+    } catch (error) {
+      setError(error.message);
+      toast.error('Erreur lors de la sauvegarde des notes');
+    }
+  };
+
     // Fonction pour gérer l'impression des commandes
     const handlePrint = () => {
       window.print();
@@ -457,9 +491,42 @@ export default function Commandes() {
         throw new Error('Utilisateur non authentifié');
       }
 
-      // Get schoolId from campaign context or legacy school field
-      const schoolId = campaignContext?.schoolId || session.user.school;
+      // Get schoolId from multiple possible sources
+      let schoolId = null;
+      
+      // 1. Try from school object (already loaded in state)
+      if (school?._id) {
+        schoolId = school._id;
+      }
+      
+      // 2. Try to get schoolId from campaign context campaigns
+      if (!schoolId && campaignContext?.campaigns && campaignContext.campaigns.length > 0) {
+        const firstCampaign = campaignContext.campaigns[0];
+        schoolId = firstCampaign.school?._id || firstCampaign.school;
+      }
+      
+      // 3. Fallback to campaignContext.schoolId if available
+      if (!schoolId && campaignContext?.schoolId) {
+        schoolId = campaignContext.schoolId;
+      }
+      
+      // 4. Fallback to session.user.school
       if (!schoolId) {
+        schoolId = session.user.school;
+      }
+      
+      // 5. Try to get from orders if they exist (last resort)
+      if (!schoolId && orders.length > 0) {
+        schoolId = orders[0].school;
+      }
+      
+      if (!schoolId) {
+        console.error('SchoolId not found:', { 
+          school: school?._id, 
+          campaignContext: campaignContext?.schoolId || campaignContext?.campaigns?.[0]?.school,
+          session: session.user.school,
+          orders: orders.length > 0 ? orders[0].school : 'no orders'
+        });
         throw new Error('Aucune organisation associée à l\'utilisateur.');
       }
 
@@ -683,9 +750,25 @@ export default function Commandes() {
     };
 
   // Fonction pour copier du texte dans le presse-papier
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text, fieldName) => {
     navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
     toast.success('Copié dans le presse-papier!');
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // Handler pour fermer avec confirmation
+  const handleCloseWithConfirmation = () => {
+    setShowPaymentConfirmation(true);
+  };
+
+  const handleConfirmPayment = () => {
+    setShowPaymentConfirmation(false);
+    setShowPopup(false);
+  };
+
+  const handleCancelPayment = () => {
+    setShowPaymentConfirmation(false);
   };
 
   // Show loading if session is loading or if we're still fetching orders
@@ -748,13 +831,61 @@ export default function Commandes() {
         </CardHeader>
         <CardContent>
           {orders.length === 0 ? (
-            <p>Aucune commande trouvée</p>
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">Aucune commande trouvée</p>
+              <p className="text-gray-400 text-sm mt-2">Vos commandes apparaîtront ici une fois créées</p>
+            </div>
           ) : (
             <>
-                          {/* Bouton d'impression */}
-              <Button className="mt-4 mb-4" onClick={handlePrint}>
-                Imprimer les commandes
+              {/* Order Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="text-xs text-blue-600 font-medium mb-1">Total commandes</div>
+                  <div className="text-xl font-bold text-blue-700">{orders.filter(o => !o.isTest).length}</div>
+                  {orders.filter(o => o.isTest).length > 0 && (
+                    <div className="text-[10px] text-blue-500 mt-1">+{orders.filter(o => o.isTest).length} TEST</div>
+                  )}
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="text-xs text-green-600 font-medium mb-1">Payées</div>
+                  <div className="text-xl font-bold text-green-700">
+                    {orders.filter(o => o.status === 'Payé' && !o.isTest).length}
+                  </div>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <div className="text-xs text-purple-600 font-medium mb-1">Total revenus</div>
+                  <div className="text-xl font-bold text-purple-700">
+                    {orders
+                      .filter(o => o.status === 'Payé' && !o.isTest)
+                      .reduce((sum, o) => {
+                        const donations = (o.studentDonation || o.tip || 0) + (o.schoolDonation || 0);
+                        return sum + o.totalAmount + donations;
+                      }, 0)
+                      .toFixed(2)}$</div>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <div className="text-xs text-orange-600 font-medium mb-1">Total profit</div>
+                  <div className="text-xl font-bold text-orange-700">
+                    {orders
+                      .filter(o => o.status === 'Payé' && !o.isTest)
+                      .reduce((sum, o) => {
+                        const profit = calculateStudentProfit(o.products);
+                        const donation = o.studentDonation || o.tip || 0;
+                        return sum + profit + donation;
+                      }, 0)
+                      .toFixed(2)}$</div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-between mb-4">
+                <Button variant="outline" size="sm" onClick={handlePrint} className="text-xs">
+                  📄 Imprimer
               </Button>
+                <div className="text-xs text-gray-500">
+                  {orders.length} commande{orders.length > 1 ? 's' : ''} affichée{orders.length > 1 ? 's' : ''}
+                </div>
+              </div>
 
 {/* Instructions sur les statuts des commandes */}
 <div className="bg-white p-6 rounded-lg shadow-md mt-6">
@@ -773,7 +904,7 @@ export default function Commandes() {
       <h3 className="font-semibold text-lg mb-2">💰 Payé</h3>
       <p className="text-gray-700">
         Une fois le paiement reçu, mettez le statut à Payé.
-        Cela confirme que l'argent a bien été reçu et vous permettra ensuite d'envoyer la commande à Massibec.
+        Cela confirme que l'argent a bien été reçu et vous permettra plus tard d'envoyer votre commande à Massibec.
       </p>
     </div>
     <div>
@@ -825,85 +956,200 @@ export default function Commandes() {
                   ease: "easeInOut"
                 }}
               >
+              <div className="overflow-x-auto">
               <Table className={`mt-6 ${currentStep?.key === 'viewedOrders' ? 'ring-4 ring-blue-500 rounded-lg' : ''}`}>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Id de commande</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Téléphone</TableHead>
-                    <TableHead>Produit(s)</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Dons ({terminology.participant})</TableHead>
-                    <TableHead>Dons ({terminology.organization})</TableHead>
-                    <TableHead>Profit</TableHead>
-                    <TableHead>Créer le</TableHead>
-                    <TableHead>Statut</TableHead>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="py-2 text-xs font-semibold sticky left-0 bg-gray-50 z-10">Id</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold">Client</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold hidden lg:table-cell">Email</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold hidden md:table-cell">Téléphone</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold min-w-[180px]">Produit(s)</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold text-center">Dons ({terminology.participant})</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold text-center">Dons ({terminology.organization})</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold text-right font-bold">Total</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold text-right text-green-700">Profit</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold hidden lg:table-cell">Date</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold">Statut</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold min-w-[160px]">Notes distribution</TableHead>
+                      <TableHead className="py-2 text-xs font-semibold sticky right-0 bg-gray-50 z-10">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => (
-                    <TableRow key={order._id} className={order.isTest ? 'bg-orange-50/50' : ''}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {order.orderId}
+                    {orders.map((order) => {
+                      const studentDonation = order.studentDonation || order.tip || 0;
+                      const schoolDonation = order.schoolDonation || 0;
+                      const totalDonations = studentDonation + schoolDonation;
+                      const totalWithDonations = order.totalAmount + totalDonations;
+                      const studentProfit = calculateStudentProfit(order.products) + studentDonation;
+                      
+                      return (
+                        <TableRow key={order._id} className={`${order.isTest ? 'bg-orange-50/50' : ''} hover:bg-blue-50/30 transition-colors border-b border-gray-100`}>
+                          <TableCell className="py-2 sticky left-0 bg-white z-10 border-r border-gray-200">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-mono font-semibold text-gray-700">#{order.orderId}</span>
                           {order.isTest && (
-                            <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-50 text-xs">
-                              <AlertCircle className="h-3 w-3 mr-1" />
+                                <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-50 text-[10px] px-1 py-0">
+                                  <AlertCircle className="h-2 w-2 mr-0.5" />
                               TEST
                             </Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{order.customerName}</TableCell>
-                      <TableCell>{order.customerEmail}</TableCell>
-                      <TableCell>{order.phoneNumber}</TableCell>
-                      <TableCell>
-                        {/* Display list of products and quantities */}
-                        {order.products.map((prod, index) => (
-                          <div key={index}>
-                            {prod.productName} x {prod.quantity}
+                          <TableCell className="py-2 text-xs font-medium">{order.customerName}</TableCell>
+                          <TableCell className="py-2 text-xs text-gray-600 hidden lg:table-cell truncate max-w-[180px]" title={order.customerEmail}>
+                            {order.customerEmail}
+                          </TableCell>
+                          <TableCell className="py-2 text-xs text-gray-600 hidden md:table-cell">{order.phoneNumber}</TableCell>
+                          <TableCell className="py-2 text-xs">
+                            <div className="space-y-0.5">
+                              {order.products.map((prod, index) => {
+                                // Handle both productPrice (from Order schema) and price (from API)
+                                const unitPrice = prod.productPrice || prod.price || 0;
+                                const productTotal = unitPrice * prod.quantity;
+                                return (
+                                  <div key={index} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-gray-700 flex-1 min-w-0">
+                                      <span className="truncate">{prod.productName}</span> 
+                                      <span className="text-gray-500 ml-1">×{prod.quantity}</span>
+                                    </span>
+                                    <span className="text-gray-600 font-medium whitespace-nowrap ml-2">
+                                      {productTotal.toFixed(2)}$
+                                    </span>
                           </div>
-                        ))}
+                                );
+                              })}
+                              {order.products.length > 1 && (
+                                <div className="pt-0.5 mt-0.5 border-t border-gray-200">
+                                  <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                                    <span>Sous-total produits</span>
+                                    <span className="font-medium">{order.totalAmount.toFixed(2)}$</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                       </TableCell>
-                      <TableCell>
-                        <span className={order.isTest ? 'text-gray-500' : ''}>
-                          {order.totalAmount.toFixed(2)}$
+                          <TableCell className="py-2 text-xs text-center">
+                            {studentDonation > 0 ? (
+                              <span className="font-medium text-blue-700">{studentDonation.toFixed(2)}$</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 text-xs text-center">
+                            {schoolDonation > 0 ? (
+                              <span className="font-medium text-purple-700">{schoolDonation.toFixed(2)}$</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 text-xs text-right">
+                            <div className="flex flex-col items-end">
+                              <span className={`font-bold text-base ${order.isTest ? 'text-gray-500' : 'text-gray-900'}`}>
+                                {totalWithDonations.toFixed(2)}$
                         </span>
+                              {totalDonations > 0 && (
+                                <span className="text-[10px] text-gray-500 mt-0.5">
+                                  (dont {totalDonations.toFixed(2)}$ dons)
+                                </span>
+                              )}
+                            </div>
                       </TableCell>
-                      <TableCell>{(order.studentDonation || order.tip || 0).toFixed(2)}$</TableCell>
-                      <TableCell>{(order.schoolDonation || 0).toFixed(2)}$</TableCell>
-                      <TableCell>{(calculateStudentProfit(order.products) + (order.studentDonation || order.tip || 0)).toFixed(2)}$</TableCell>
-                      <TableCell>{new Date(order.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell>
+                          <TableCell className="py-2 text-xs text-right">
+                            <span className="font-semibold text-green-700 text-sm">
+                              {studentProfit.toFixed(2)}$
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 text-xs text-gray-600 hidden lg:table-cell">
+                            {new Date(order.createdAt).toLocaleDateString('fr-CA', { month: 'short', day: 'numeric' })}
+                          </TableCell>
+                          <TableCell className="py-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                                order.status === 'En attente' ? 'bg-yellow-500' :
+                                order.status === 'Payé' ? 'bg-green-500' :
+                                order.status === 'Commander' ? 'bg-blue-500' :
+                                order.status === 'Complété' ? 'bg-gray-500' :
+                                'bg-gray-300'
+                              }`} title={order.status}></span>
+                              {order.status === 'Commander' || order.status === 'Complété' ? (
+                                // Allow changing between Commander and Complété (can go back if mistake)
                         <Select
                           value={order.status}
                           onValueChange={(value) => handleStatusChange(order.orderId, value)}
                         >
-                          <SelectTrigger>
+                                  <SelectTrigger className="h-7 text-xs border-gray-300 w-[110px]">
                             <SelectValue placeholder="Statut" />
                           </SelectTrigger>
-                          <SelectContent className="bg-gray-200">
-                            <SelectItem value="En attente">En attente</SelectItem>
-                            <SelectItem value="Payé">Payé</SelectItem>
-                            <SelectItem value="Commander">Commander</SelectItem>
-                            <SelectItem value="Complété">Complété</SelectItem>
+                                  <SelectContent className="bg-white">
+                                    <SelectItem value="Commander" className="text-xs">
+                                      <div className="flex items-center">
+                                        <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                                        Commander
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="Complété" className="text-xs">
+                                      <div className="flex items-center">
+                                        <span className="inline-block w-2 h-2 rounded-full bg-gray-500 mr-2"></span>
+                                        Complété
+                                      </div>
+                                    </SelectItem>
                           </SelectContent>
                         </Select>
+                              ) : (
+                                // Allow changing between En attente and Payé
+                                <Select
+                                  value={order.status}
+                                  onValueChange={(value) => handleStatusChange(order.orderId, value)}
+                                >
+                                  <SelectTrigger className="h-7 text-xs border-gray-300 w-[110px]">
+                                    <SelectValue placeholder="Statut" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white">
+                                    <SelectItem value="En attente" className="text-xs">
+                                      <div className="flex items-center">
+                                        <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+                                        En attente
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="Payé" className="text-xs">
+                                      <div className="flex items-center">
+                                        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                                        Payé
+                                      </div>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
                       </TableCell>
-                      <TableCell>
+                          <TableCell className="py-2">
+                            <Input
+                              type="text"
+                              value={order.distributionNotes || ''}
+                              onChange={(e) => handleDistributionNotesChange(order._id, e.target.value)}
+                              onBlur={(e) => handleDistributionNotesChange(order._id, e.target.value)}
+                              placeholder="chez moi, travail..."
+                              className="h-7 text-xs border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            />
+                          </TableCell>
+                          <TableCell className="py-2 sticky right-0 bg-white z-10 border-l border-gray-200">
                         <Button
-                          variant="destructive"
+                              variant="ghost"
                           size="sm"
                           onClick={() => setSelectedOrderId(order._id)}
+                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              title="Supprimer la commande"
                         >
-                          <Trash2 className="h-4 w-4 mr-2" /> Supprimer
+                              <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                      );
+                    })}
                 </TableBody>
               </Table>
+              </div>
               </motion.div>
 
               <CommandeButton 
@@ -916,79 +1162,214 @@ export default function Commandes() {
 
               {/* Popup pour les instructions de paiement */}
               <Dialog open={showPopup} onOpenChange={handlePopupClose}>
-                <DialogContent className="bg-white p-6 rounded-md shadow-md">
+                <DialogContent className="bg-white p-6 rounded-lg shadow-xl max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Bravo, commande reçue!</DialogTitle>
-                    <DialogDescription>
-                      Maintenant, suivez les étapes pour finaliser votre paiement.
+                    <div className="flex items-center space-x-3 mb-2">
+                      <CheckCircle className="h-8 w-8 text-green-500" />
+                      <DialogTitle className="text-2xl font-bold text-gray-900">
+                        Merci, commande reçue!
+                      </DialogTitle>
+                    </div>
+                    <DialogDescription className="text-gray-600">
+                      Suivez les étapes ci-dessous pour finaliser votre paiement par virement Interac.
                     </DialogDescription>
                   </DialogHeader>
 
-                  <div className="mt-4 space-y-4">
-                    <p>1. Choisissez votre banque :</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      <a href="https://www.desjardins.com/fr/" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          Desjardins
-                        </Button>
-                      </a>
-                      <a href="https://www.bnc.ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          BNC
-                        </Button>
-                      </a>
-                      <a href="https://www.rbcbanqueroyale.com/" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          RBC
-                        </Button>
-                      </a>
-                      <a href="https://www.td.com/ca/fr/perso/" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          TD
-                        </Button>
-                      </a>
-                      <a href="https://www.scotiabank.com/ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          Scotiabank
-                        </Button>
-                      </a>
-                      <a href="https://www.cibc.com/fr/personal-banking.html" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          CIBC
-                        </Button>
-                      </a>
+                  <div className="mt-6 space-y-6">
+                    {/* Step 1: Bank Selection */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 mb-3">1. Choisissez votre banque :</h3>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                        <a 
+                          href="https://www.desjardins.com/fr/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all duration-200 group"
+                        >
+                          <img src="/images/desjardins.svg" alt="Desjardins" className="w-10 h-10 object-contain mb-2" />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-green-700">Desjardins</span>
+                        </a>
+                        <a 
+                          href="https://www.bnc.ca/fr/particuliers.html" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+                        >
+                          <img src="/images/bnc.svg" alt="BNC" className="w-10 h-10 object-contain mb-2" />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-blue-700">BNC</span>
+                        </a>
+                        <a 
+                          href="https://www.rbcbanqueroyale.com/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
+                        >
+                          <img src="/images/rbc.svg" alt="RBC" className="w-10 h-10 object-contain mb-2" />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">RBC</span>
+                        </a>
+                        <a 
+                          href="https://www.td.com/ca/fr/perso/" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all duration-200 group"
+                        >
+                          <img src="/images/TD.svg" alt="TD" className="w-10 h-10 object-contain mb-2" />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-green-700">TD</span>
+                        </a>
+                        <a 
+                          href="https://www.scotiabank.com/ca/fr/particuliers.html" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
+                        >
+                          <img src="/images/Scotiabank.svg" alt="Scotiabank" className="w-10 h-10 object-contain mb-2" />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">Scotiabank</span>
+                        </a>
+                        <a 
+                          href="https://www.cibc.com/fr/personal-banking.html" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
+                        >
+                          <img src="/images/cibc.svg" alt="CIBC" className="w-10 h-10 object-contain mb-2" />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">CIBC</span>
+                        </a>
+                      </div>
                     </div>
 
-                    <p>
-                      2. Envoyez un virement Interac à <strong>facturation@massibec.com</strong>
-                      <Button variant="outline" className="ml-2" onClick={() => copyToClipboard('facturation@massibec.com')}>
-                        Copier
+                    {/* Step 2: Email */}
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600 mb-1">2. Destinataire :</p>
+                        <p className="text-base font-semibold text-gray-900">facturation@massibec.com</p>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 shrink-0"
+                        onClick={() => copyToClipboard('facturation@massibec.com', 'email')}
+                        title="Copier l'email"
+                      >
+                        {copiedField === 'email' ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-500" />
+                        )}
                       </Button>
-                    </p>
+                    </div>
 
-                    <p>
-                      3. Montant à payer : <strong>{priceToPay}$</strong>
-                      <Button variant="outline" className="ml-2" onClick={() => copyToClipboard(`${priceToPay}`)}>
-                        Copier
+                    {/* Step 3: Amount */}
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-600 mb-1">3. Montant à payer :</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          {priceToPay ? parseFloat(priceToPay).toFixed(2) : '0.00'}$
+                        </p>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 shrink-0"
+                        onClick={() => copyToClipboard(priceToPay ? parseFloat(priceToPay).toFixed(2) : '0.00', 'montant')}
+                        title="Copier le montant"
+                      >
+                        {copiedField === 'montant' ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-500" />
+                        )}
                       </Button>
-                    </p>
+                    </div>
 
-                    <p>
-                      4. Message de virement : <strong>@#&*-{school?.code || 'N/A'}-{newOrderId || 'N/A'}-{name}</strong>
-                      <Button variant="outline" className="ml-2" onClick={() => copyToClipboard(`@#&*-${school?.code || ''}-${newOrderId || ''}-${name}`)}>
-                        Copier
+                    {/* Step 4: Message */}
+                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-600 mb-1">4. Message de virement :</p>
+                        <p className="text-base font-mono text-gray-900 break-all">
+                          {(() => {
+                            const schoolName = school?.name || school?.code || 'N/A';
+                            const orderId = newOrderId || 'N/A';
+                            const personName = session?.user?.role === 'school_manager' 
+                              ? session.user.name 
+                              : name;
+                            return `${schoolName}-${orderId}-${personName}`;
+                          })()}
+                        </p>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 shrink-0"
+                        onClick={() => {
+                          const schoolName = school?.name || school?.code || 'N/A';
+                          const orderId = newOrderId || 'N/A';
+                          const personName = session?.user?.role === 'school_manager' 
+                            ? session.user.name 
+                            : name;
+                          copyToClipboard(`${schoolName}-${orderId}-${personName}`, 'message');
+                        }}
+                        title="Copier le message"
+                      >
+                        {copiedField === 'message' ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-gray-500" />
+                        )}
                       </Button>
-                    </p>
+                    </div>
 
-                    <p>
-                      <strong>IMPORTANT : Assurez-vous de faire le virement avant de quitter cette page.</strong>
-                      Vous allez sous peu recevoir un courriel de confirmation, il se peut qu'il soit dans les indésirables.
+                    {/* Important Notice */}
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                      <p className="text-sm text-yellow-800">
+                        <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page. 
+                        Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement. 
+                        Si vous avez déjà effectué le paiement, ne tenez pas compte de ce courriel. 
+                        Il se peut qu'il soit dans vos indésirables.
+                      </p>
+                    </div>
+                  </div>
+
+                  <DialogFooter className="mt-6">
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 w-full sm:w-auto" 
+                      onClick={handleCloseWithConfirmation}
+                    >
+                      Terminer
+                      </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Modal de confirmation de paiement */}
+              <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
+                <DialogContent className="sm:max-w-[450px] bg-white p-6">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-bold text-gray-900 mb-2">
+                      Confirmation de paiement
+                    </DialogTitle>
+                  </DialogHeader>
+                  
+                  <div className="mt-4 space-y-3">
+                    <p className="text-sm text-gray-600">
+                      Avez-vous effectué le virement Interac avec les informations fournies ?
                     </p>
                   </div>
 
-                  <Button className="mt-4" onClick={handlePopupClose}>
-                    Terminer
+                  <DialogFooter className="mt-6 gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={handleCancelPayment}
+                      className="flex-1"
+                    >
+                      Annuler
                   </Button>
+                    <Button 
+                      onClick={handleConfirmPayment}
+                      className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                    >
+                      Oui, j'ai fait le paiement
+                    </Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
 
@@ -1091,6 +1472,7 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
   const orderEndDateFormatted = format(orderEndDate, 'dd MMMM yyyy', { locale: fr });
   const campaignEndDateLong = campaignEndDateInfo?.long || format(finCampagne, 'dd MMMM yyyy', { locale: fr });
   
+  // Check if current date is between campaign end date and 15 days after
   const isOrderingPeriod = !isBefore(currentDate, finCampagne) && 
                           !isAfter(currentDate, orderEndDate);
 
@@ -1155,7 +1537,7 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
         >
           Vous pourrez transmettre vos commandes le{' '}
           <span className="font-medium">{campaignEndDateLong}</span>{' '}
-          (minuit à midi)
+          entre minuit et midi.
         </motion.p>
       )}
     </motion.div>

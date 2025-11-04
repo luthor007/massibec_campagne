@@ -37,6 +37,7 @@ const OrderSchema = new mongoose.Schema({
   },
   discount: { type: Number },
   isTest: { type: Boolean, default: false }, // Flag to mark test orders from pending campaigns
+  distributionNotes: { type: String, default: '' }, // Notes for distribution (e.g., "chez moi", "travail", "livraison")
 });
 
 // Keep orderId compatible with TS pre-save

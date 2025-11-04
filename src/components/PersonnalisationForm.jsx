@@ -462,11 +462,6 @@ const EmailExample = () => {
             className={`mt-1 ${tooltipTarget === descriptionRef.current ? 'ring-4 ring-blue-500 border-blue-500' : ''}`}
             placeholder="Décrivez vos produits et votre cause..."
           />
-          {getDiscountSuggestion() && (
-            <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm">
-              <p className="text-sm text-yellow-800">{getDiscountSuggestion()}</p>
-            </div>
-          )}
         </motion.div>
         {/* Tip for Automatic Deposits */}
         <div className="mt-4 p-4 border border-blue-200 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 shadow-sm">

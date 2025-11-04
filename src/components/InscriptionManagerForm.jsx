@@ -150,6 +150,12 @@ export default function InscriptionManagerForm() {
           onChange={handleChange}
           required
         />
+        <div className="flex items-start space-x-2 mt-1.5 p-2 bg-blue-50 border border-blue-200 rounded-md">
+          <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-blue-800">
+            Cet email sera utilisé pour les transferts Interac et les communications, comme pour un élève.
+          </p>
+        </div>
       </div>
       <div className="space-y-2">
         <Label htmlFor="motDePasse">Mot de passe</Label>

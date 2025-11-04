@@ -53,6 +53,12 @@ export default async function handler(req, res) {
         .populate('customPrices.productId', 'name price cost image')
         .populate('profitSplits.productId', 'name')
         .sort({ campaignNumber: -1 }); // Most recent first
+      
+      console.log('Fetched campaigns from database:', {
+        schoolIds: schoolIds.map(id => id?.toString()),
+        campaignsCount: campaigns.length,
+        campaignIds: campaigns.map(c => c._id?.toString())
+      });
 
       // If no campaigns in Campaign collection, check schools' campaigns arrays (legacy)
       if (campaigns.length === 0) {

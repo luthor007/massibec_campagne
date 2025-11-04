@@ -379,39 +379,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await sendEmail(emailParams);
 
       // Confirmation d'une commande au vendeur (copie interne supprimée)
-      // À: vendeur
-      // De: Campagne Massibec <commande@massibec.com>
-      // Objet: (Commande #X) -(Montant)- de: (Nom du parent) - nom école - Pour: Massibec
-      // Texte: La distribution se fera à (Adresse de l'école) le (date de livraison)
-      const emailParams2 = {
-        to: owner.email,
-        subject: `(Commande #${newOrderId}) -($${(totalAmount + tipValue).toFixed(2)})- de: (${parentFullName}) - ${schoolData.name} - Pour: Massibec`,
-        studentName: owner.name,
-        firstName: customerName,
-        customerEmail: customerEmail,
-        customerPhone: phoneNumber,
-        schoolName: schoolData.name,
-        schoolAddress: deliveryAddress,
-        deliveryDate: activeCampaign?.deliveryDate ? new Date(activeCampaign.deliveryDate).toLocaleDateString('fr-FR') : '',
-        products: products.map((item: any) => ({
-          productId: item.product,
-          productName: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          amount: (item.price * item.quantity).toFixed(2),
-        })),
-        totalAmount: totalAmount + tipValue,
-        tip: tipValue,
-        autoDeposit: autoDeposit,
+      // Ne pas envoyer l'email "Félicitations!" si le client est l'étudiant lui-même
+      // L'étudiant recevra seulement la confirmation de commande en CC
+      //if (customerEmail.toLowerCase() !== owner.email.toLowerCase()) {
+      if (false) {
+        // À: vendeur
+        // De: Campagne Massibec <commande@massibec.com>
+        // Objet: (Commande #X) -(Montant)- de: (Nom du parent) - nom école - Pour: Massibec
+        // Texte: La distribution se fera à (Adresse de l'école) le (date de livraison)
+        const emailParams2 = {
+          to: owner.email,
+          subject: `(Commande #${newOrderId}) -($${(totalAmount + tipValue).toFixed(2)})- de: (${parentFullName}) - ${schoolData.name} - Pour: Massibec`,
+          studentName: owner.name,
+          firstName: customerName,
+          customerEmail: customerEmail,
+          customerPhone: phoneNumber,
+          schoolName: schoolData.name,
+          schoolAddress: deliveryAddress,
+          deliveryDate: activeCampaign?.deliveryDate ? new Date(activeCampaign.deliveryDate).toLocaleDateString('fr-FR') : '',
+          products: products.map((item: any) => ({
+            productId: item.product,
+            productName: item.name,
+            quantity: item.quantity,
+            price: item.price,
+            amount: (item.price * item.quantity).toFixed(2),
+          })),
+          totalAmount: totalAmount + tipValue,
+          tip: tipValue,
+          autoDeposit: autoDeposit,
+          orderId: newOrderId,
+          orderDate: new Date().toLocaleDateString('fr-FR'),
+
+        };
+
+        // Envoyer l'e-mail de confirmation à Massibec (vendeur avec facturation en CC)
+        await sendSaleNotificationEmail(emailParams2);
+      } else {
+        console.log(`Skipping sale notification email - student ${owner.email} is ordering for themselves. They will receive the order confirmation in CC only.`);
+      }
+
+      res.status(201).json({ 
+        message: 'Commande créée avec succès.',
         orderId: newOrderId,
-        orderDate: new Date().toLocaleDateString('fr-FR'),
-
-      };
-
-      // Envoyer l'e-mail de confirmation à Massibec (vendeur avec facturation en CC)
-      await sendSaleNotificationEmail(emailParams2);
-
-      res.status(201).json({ message: 'Commande créée avec succès.' });
+        order: {
+          _id: newCommande._id,
+          orderId: newOrderId
+        }
+      });
     } catch (error: any) {
       console.error('Erreur lors de la création de la commande:', error);
       res.status(500).json({ message: 'Erreur serveur.' });

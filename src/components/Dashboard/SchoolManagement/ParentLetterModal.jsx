@@ -223,11 +223,9 @@ Le détail complet de ces répartitions, incluant les dons et les montants à re
     return section;
   };
 
-  const parentLetter = `✉️ Lettre aux parents
+  const parentLetter = `
 
-{Logo_de_l'école}
 
- Note : Les informations entre {} seront automatiquement ajoutées lors de la création de la campagne sur le site web. Cette lettre, remplie avec ces informations, sera mise à votre disposition.
 ${getTodayDate()}
 
 Chers parents,
@@ -252,7 +250,7 @@ Astuce : proposez à vos clients d'acheter des caisses complètes de 6 produits 
 
 Procédure de participation
 1. Inscription
-https://www.campagne.massibec.com/
+https://campagne.massibec.com/
 Cliquez sur « Je suis ${terminology.participant === 'étudiant' ? 'un élève' : 'un membre'} ».
 Pour le nom du parent, inscrivez celui de la personne qui gérera les transferts Interac.
 Ce nom apparaîtra également sur vos bons de commande et sur vos caisses lors de la distribution.
@@ -331,28 +329,28 @@ Merci de communiquer avec moi pour prévoir la livraison le ${formatDate(campaig
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-2xl border-2 border-gray-200">
-        <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
-            <Mail className="h-6 w-6 text-blue-600" />
-            <span>Lettre aux parents - Campagne #{campaign.campaignNumber}</span>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white shadow-2xl border-2 border-gray-200 p-3 sm:p-6">
+        <DialogHeader className="px-0 sm:px-2">
+          <DialogTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <Mail className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+            <span className="break-words">Lettre aux parents - Campagne #{campaign.campaignNumber}</span>
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs sm:text-sm px-0 sm:px-2">
             Voici votre lettre aux parents personnalisée avec les informations de votre campagne. 
             Vous pouvez la copier et l'envoyer aux parents de vos {terminology.participants}.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
           {/* Campaign Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Informations de la campagne</CardTitle>
+          <Card className="overflow-x-hidden">
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">Informations de la campagne</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+            <CardContent className="p-3 sm:p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
                 <div>
-                  <span className="font-medium">{terminology.organizationLabel}:</span> {school.name}
+                  <span className="font-medium">{terminology.organizationLabel}:</span> <span className="break-words">{school.name}</span>
                 </div>
                 <div>
                   <span className="font-medium">Code {terminology.organization}:</span> {school.code}
@@ -377,76 +375,54 @@ Merci de communiquer avec moi pour prévoir la livraison le ${formatDate(campaig
           </Card>
 
           {/* Copy Buttons */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
             <Button
               onClick={() => copyToClipboard(parentLetter, 'Lettre complète')}
               variant="outline"
-              className="flex items-center space-x-2"
+              className="flex items-center justify-center space-x-2 w-full sm:w-auto text-sm sm:text-base"
             >
               {copiedSection === 'Lettre complète' ? (
                 <CheckCircle className="h-4 w-4 text-green-600" />
               ) : (
                 <Copy className="h-4 w-4" />
               )}
-              <span>Copier la lettre complète</span>
+              <span className="truncate">Copier la lettre complète</span>
             </Button>
             
             <Button
               onClick={() => copyToClipboard(facebookMessage, 'Message Facebook')}
               variant="outline"
-              className="flex items-center space-x-2"
+              className="flex items-center justify-center space-x-2 w-full sm:w-auto text-sm sm:text-base"
             >
               {copiedSection === 'Message Facebook' ? (
                 <CheckCircle className="h-4 w-4 text-green-600" />
               ) : (
                 <Facebook className="h-4 w-4" />
               )}
-              <span>Copier le message Facebook</span>
+              <span className="truncate">Copier le message Facebook</span>
             </Button>
           </div>
 
           {/* Letter Preview */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MessageSquare className="h-5 w-5" />
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span>Aperçu de la lettre</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
-                <pre className="whitespace-pre-wrap text-sm font-mono">
+            <CardContent className="p-3 sm:p-6">
+              <div className="bg-gray-50 p-3 sm:p-4 rounded-lg max-h-96 overflow-y-auto">
+                <pre className="whitespace-pre-wrap text-xs sm:text-sm font-mono break-words">
                   {parentLetter}
                 </pre>
               </div>
             </CardContent>
           </Card>
 
-          {/* Instructions */}
-          <Card className="bg-blue-50 border-blue-200">
-            <CardContent className="pt-6">
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 text-sm font-bold">💡</span>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-blue-900 mb-2">Instructions importantes :</h4>
-                  <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• Modifiez au minimum les textes surlignés en jaune dans la lettre</li>
-                    <li>• Cette lettre sera aussi disponible dans la "Vue d'ensemble" de votre campagne</li>
-                    <li>• Partagez le code {terminology.organization} ({school.code}) avec les parents pour l'inscription</li>
-                    <li>• Encouragez les parents à commander des caisses complètes de 6 produits</li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Close Button */}
           <div className="flex justify-end">
-            <Button onClick={onClose} className="px-8">
+            <Button onClick={onClose} className="px-4 sm:px-8 w-full sm:w-auto">
               Fermer
             </Button>
           </div>

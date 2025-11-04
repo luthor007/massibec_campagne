@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { School, User, Shield, Crown, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { School, User, Shield, Crown, CheckCircle, AlertCircle, Loader2, Info } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 const AcceptInvitationPage = () => {
@@ -262,6 +262,13 @@ const AcceptInvitationPage = () => {
                       <p className="text-sm text-gray-600">
                         Entrez le mot de passe de votre compte existant avec l'email {invitation?.email}
                       </p>
+                      <Alert className="mt-3">
+                        <Info className="h-4 w-4" />
+                        <AlertDescription className="text-sm">
+                          Si vous avez déjà un compte étudiant, celui-ci sera converti en compte gestionnaire. 
+                          Vous pourrez toujours accéder à vos données d'étudiant depuis le portail gestionnaire.
+                        </AlertDescription>
+                      </Alert>
                     </div>
                   </TabsContent>
                   

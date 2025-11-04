@@ -99,7 +99,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
         <strong>Adresse courriel :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a> <br />
         {autoDeposit ? null : <><strong>Question de sécurité :</strong> {firstName}<br /></>}
         {autoDeposit ? null : <strong>Réponse :</strong>} {autoDeposit ? null : <a href={`mailto:${customerEmail}`}>{customerEmail}</a>}<br />
-        <strong>Montant :</strong> {(totalAmount || 0).toFixed(2)} $<br/>
+        <strong>Montant :</strong> {((totalAmount || 0) + (studentDonation || 0)).toFixed(2)} $<br/>
         {autoDeposit ? <><strong>Message :</strong> #{orderId}</> : null}
       </p>
 

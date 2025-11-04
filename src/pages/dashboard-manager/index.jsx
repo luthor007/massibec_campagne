@@ -4,9 +4,10 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, RefreshCw, School, User, Eye, Edit, Users, Plus, FileText, Settings, Cog, Store, AlertCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LogOut, RefreshCw, School, User, Eye, Edit, Users, Plus, FileText, Settings, Cog, Store, Menu, X, Building2, ShoppingBag, ChevronDown, UserCircle, DollarSign } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { isTestCampaign } from '../../utils/campaignHelpers';
 
 // Custom Hooks
 import { useSchoolData } from '../../hooks/useSchoolData';
@@ -35,6 +36,8 @@ export default function DashboardManager() {
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [showCreateSchoolModal, setShowCreateSchoolModal] = useState(false);
   const [schoolListRefreshTrigger, setSchoolListRefreshTrigger] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [justCreatedCampaign, setJustCreatedCampaign] = useState(false);
   
   // Initialize selectedCampaignId from localStorage or null
   const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
@@ -57,14 +60,35 @@ export default function DashboardManager() {
   const schoolIdParam = selectedSchoolId || undefined;
   const { 
     school, 
-    schoolLoading, 
-    schoolError, 
+    loading: schoolLoading, 
+    error: schoolError, 
     refreshSchoolData 
   } = useSchoolData(schoolIdParam);
 
-  // Clear invalid selectedSchoolId if school data fetch fails
+  // Clear invalid selectedSchoolId if school data fetch fails or if school ID doesn't match
   useEffect(() => {
-    if (schoolError && selectedSchoolId) {
+    // If there's an error indicating invalid schoolId was recovered, clear it
+    if (schoolError === 'INVALID_SCHOOL_ID_RECOVERED' && selectedSchoolId) {
+      console.log('Invalid schoolId was detected and recovered, clearing from localStorage');
+      if (school && school.id) {
+        // Update to the correct school ID
+        const correctSchoolId = school.id.toString();
+        setSelectedSchoolId(correctSchoolId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedSchoolId', correctSchoolId);
+        }
+      } else {
+        // If no school loaded, just clear it
+        setSelectedSchoolId(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('selectedSchoolId');
+        }
+      }
+      return;
+    }
+
+    // If there's a regular error and we have a selectedSchoolId, clear it
+    if (schoolError && schoolError !== 'INVALID_SCHOOL_ID_RECOVERED' && selectedSchoolId) {
       console.log('School fetch failed, clearing invalid selectedSchoolId from localStorage');
       setSelectedSchoolId(null);
       if (typeof window !== 'undefined') {
@@ -72,8 +96,24 @@ export default function DashboardManager() {
       }
       // Retry fetching school data without the invalid schoolId
       refreshSchoolData();
+      return;
     }
-  }, [schoolError, selectedSchoolId, refreshSchoolData]);
+
+    // If school is loaded but doesn't match selectedSchoolId, update selectedSchoolId
+    if (school && school.id && selectedSchoolId && school.id.toString() !== selectedSchoolId.toString()) {
+      console.log('School ID mismatch detected:', {
+        selectedSchoolId,
+        actualSchoolId: school.id,
+        updatingSelectedSchoolId: true
+      });
+      // Update to match the loaded school
+      const loadedSchoolId = school.id.toString();
+      setSelectedSchoolId(loadedSchoolId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('selectedSchoolId', loadedSchoolId);
+      }
+    }
+  }, [schoolError, selectedSchoolId, school, refreshSchoolData]);
 
   const { 
     campaigns: allCampaigns, 
@@ -115,6 +155,18 @@ export default function DashboardManager() {
     await signOut({ redirect: false });
     router.push('/');
   };
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
 
   // Handle tab change
   const handleTabChange = (tab) => {
@@ -180,11 +232,62 @@ export default function DashboardManager() {
   };
 
   // Handle campaign creation
-  const handleCampaignCreated = (newCampaign) => {
-    refreshCampaigns();
-    setSelectedCampaignId(newCampaign._id?.toString() || newCampaign._id);
+  const handleCampaignCreated = async (newCampaign) => {
+    console.log('handleCampaignCreated called with:', newCampaign);
+    
+    if (!newCampaign?._id) {
+      console.error('No campaign ID in response:', newCampaign);
+      toast.error('Erreur: La campagne créée ne contient pas d\'ID');
+      return;
+    }
+    
+    // Mark that we just created a campaign to prevent welcome modal from showing
+    setJustCreatedCampaign(true);
+    setShowWelcomeModal(false); // Hide welcome modal immediately
+    
+    const campaignId = newCampaign._id.toString();
+    console.log('Setting selected campaign ID to:', campaignId);
+    
+    // Set the selected campaign ID immediately
+    setSelectedCampaignId(campaignId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedCampaignId', campaignId);
+    }
+    
     setActiveTab('overview');
-    setShowWelcomeModal(false); // Hide welcome modal after campaign creation
+    
+    // Refresh campaigns with retry logic
+    let retries = 5;
+    while (retries > 0) {
+      // Wait before refreshing (longer delay for first refresh)
+      await new Promise(resolve => setTimeout(resolve, retries === 5 ? 1500 : 1000));
+      
+      console.log(`Refreshing campaigns (attempt ${6 - retries}/5)...`);
+      
+      // Refresh campaigns
+      try {
+        await refreshCampaigns();
+        
+        // Wait a bit for state to update
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Check if we now have campaigns (this will be checked by the useEffect)
+        // We continue to give the API time to sync
+      } catch (error) {
+        console.error('Error refreshing campaigns:', error);
+      }
+      
+      retries--;
+    }
+    
+    console.log('Campaign creation handling complete');
+    
+    // Reset the flag after a delay to allow the campaigns to load
+    setTimeout(() => {
+      setJustCreatedCampaign(false);
+      console.log('Reset justCreatedCampaign flag');
+    }, 5000);
+    
     toast.success('Campagne créée avec succès !');
   };
 
@@ -203,6 +306,12 @@ export default function DashboardManager() {
 
   // Show welcome modal if no campaigns exist (but not if user just created one or if wizard is shown)
   useEffect(() => {
+    // Don't show welcome modal if we just created a campaign
+    if (justCreatedCampaign) {
+      console.log('Skipping welcome modal - campaign just created');
+      return;
+    }
+    
     // Only evaluate after all data has finished loading
     if (schoolLoading || campaignsLoading) {
       console.log('Still loading:', { schoolLoading, campaignsLoading });
@@ -216,12 +325,13 @@ export default function DashboardManager() {
       activeTab, 
       showOnboardingWizard,
       hasSchool: !!school,
-      profileIsCompleted
+      profileIsCompleted,
+      justCreatedCampaign
     });
     
     // Don't show welcome modal if onboarding wizard should be shown (profile not completed)
     // Only show modal if profile is completed, no campaigns exist, and wizard is not shown
-    if (school && profileIsCompleted && campaigns && campaigns.length === 0 && activeTab !== 'create' && !showOnboardingWizard) {
+    if (school && profileIsCompleted && campaigns && campaigns.length === 0 && activeTab !== 'create' && !showOnboardingWizard && !justCreatedCampaign) {
       console.log('Showing welcome modal - no campaigns found and profile completed');
       setShowWelcomeModal(true);
     } else if (campaigns && campaigns.length > 0) {
@@ -231,7 +341,7 @@ export default function DashboardManager() {
       console.log('Hiding welcome modal - profile not completed (wizard should show)');
       setShowWelcomeModal(false); // Hide welcome modal if profile not completed
     }
-  }, [school, campaigns, schoolLoading, campaignsLoading, activeTab, showOnboardingWizard]);
+  }, [school, campaigns, schoolLoading, campaignsLoading, activeTab, showOnboardingWizard, justCreatedCampaign]);
 
   // Show onboarding wizard if user profile is not completed
   useEffect(() => {
@@ -352,101 +462,261 @@ export default function DashboardManager() {
 
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
         {/* Header */}
-        <header className="bg-white/95 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-18 py-2">
-              <div className="flex items-center space-x-4">
-                <MultiSchoolSelector
-                  selectedSchoolId={selectedSchoolId || school?.id}
-                  refreshTrigger={schoolListRefreshTrigger}
-                  onSelectSchool={(schoolId) => {
-                    setSelectedSchoolId(schoolId);
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('selectedSchoolId', schoolId);
-                    }
-                    // Clear selected campaign when switching schools
-                    setSelectedCampaignId(null);
-                    if (typeof window !== 'undefined') {
-                      localStorage.removeItem('selectedCampaignId');
-                    }
-                    refreshSchoolData();
-                    refreshCampaigns();
-                  }}
-                  onCreateSchool={() => {
-                    setShowCreateSchoolModal(true);
-                  }}
-                  onSchoolsChange={(schools) => {
-                    // If no school is selected and schools exist, select the first one
-                    if (!selectedSchoolId && schools.length > 0) {
-                      const firstSchoolId = schools[0].id;
-                      setSelectedSchoolId(firstSchoolId);
-                      if (typeof window !== 'undefined') {
-                        localStorage.setItem('selectedSchoolId', firstSchoolId);
-                      }
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 px-3 py-2 bg-gray-100 rounded-lg">
-                  <User className="h-4 w-4 text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
-                    </div>
-                        <Button 
-                  onClick={handleSwitchToBoutique} 
-                          variant="outline" 
-                          size="sm"
-                  className="border-gray-300 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200"
-                        >
-                  <Users className="h-4 w-4 mr-2" />
-                  Voir comme participant
-                        </Button>
-                          <Button 
-                  onClick={handleLogout} 
-                            variant="outline" 
-                            size="sm"
-                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-all duration-200"
-                          >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Déconnexion
-                          </Button>
-                      </div>
-                    </div>
-                  </div>
-        </header>
-
-        {/* Campaign Selector */}
-        <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <CampaignSelector
-              campaigns={campaigns}
-              selectedCampaign={activeCampaign}
-              onSelect={handleCampaignSelect}
-              loading={campaignsLoading}
-            />
-                      </div>
-                    </div>
-                    
-        {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* TEST Mode Banner */}
-          {activeCampaign && isTestCampaign(activeCampaign) && (
-            <div className="mb-6 bg-orange-50 border-2 border-orange-300 rounded-xl p-4 shadow-sm">
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
-                  <h3 className="text-sm font-bold text-orange-900 mb-1">
-                    ⚠️ MODE TEST
-                  </h3>
-                  <p className="text-sm text-orange-800">
-                    Cette campagne est en attente d'approbation. Toutes les données, commandes, statistiques et rapports sont en mode test et ne sont pas définitives jusqu'à l'approbation de la campagne par Massibec.
-                  </p>
+        <header className="bg-white/98 backdrop-blur-md shadow-md border-b border-gray-200 sticky top-0 z-40 transition-all duration-200">
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+            <div className="flex justify-between items-center h-20 py-2">
+              {/* Campaign Selector - moved from separate section */}
+              <div className="flex items-center flex-1 min-w-0 lg:flex-none">
+                <div className="flex-1 min-w-0 lg:w-auto">
+                  <CampaignSelector
+                    campaigns={campaigns}
+                    selectedCampaign={activeCampaign}
+                    onSelect={handleCampaignSelect}
+                    loading={campaignsLoading}
+                  />
                 </div>
               </div>
+
+              {/* Mobile menu button - moved to right */}
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ml-2"
+                  aria-label="Toggle menu"
+                >
+                  {mobileMenuOpen ? (
+                    <X className="h-5 w-5" />
+                  ) : (
+                    <Menu className="h-5 w-5" />
+                  )}
+                </button>
+
+              {/* Desktop user menu */}
+              <div className="hidden lg:flex items-center space-x-3">
+                {/* Portail Navigation - Current Badge */}
+                <div className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+                  <School className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-semibold text-blue-700">Portail Organisation</span>
+                </div>
+
+                {/* Switch to Vendeur Portal Button */}
+                <Button 
+                  onClick={handleSwitchToBoutique} 
+                  variant="outline" 
+                  size="sm"
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Portail Vendeur
+                </Button>
+
+                {/* Profile Menu Dropdown with School Selector */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="flex items-center space-x-2 px-3 py-2 h-auto hover:bg-gray-100 transition-all duration-200"
+                    >
+                      <Avatar className="w-8 h-8 border-2 border-gray-200">
+                        <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
+                        <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                          {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="hidden xl:block text-left">
+                        <div className="text-sm font-medium text-gray-700">{session.user.name}</div>
+                        <div className="text-xs text-gray-500">Administrateur</div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72 bg-white border border-gray-200 shadow-xl rounded-lg mt-2">
+                    <div className="px-3 py-3 border-b border-gray-100">
+                      <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
+                    </div>
+                    
+                    {/* School Selector in Dropdown */}
+                    <div className="px-3 py-3 border-b border-gray-100">
+                      <MultiSchoolSelector
+                        selectedSchoolId={selectedSchoolId || school?.id}
+                        refreshTrigger={schoolListRefreshTrigger}
+                        onSelectSchool={(schoolId) => {
+                          setSelectedSchoolId(schoolId);
+                          if (typeof window !== 'undefined') {
+                            localStorage.setItem('selectedSchoolId', schoolId);
+                          }
+                          // Clear selected campaign when switching schools
+                          setSelectedCampaignId(null);
+                          if (typeof window !== 'undefined') {
+                            localStorage.removeItem('selectedCampaignId');
+                          }
+                          refreshSchoolData();
+                          refreshCampaigns();
+                        }}
+                        onCreateSchool={() => {
+                          setShowCreateSchoolModal(true);
+                        }}
+                        onSchoolsChange={(schools) => {
+                          // If no school is selected and schools exist, select the first one
+                          if (!selectedSchoolId && schools.length > 0) {
+                            const firstSchoolId = schools[0].id;
+                            setSelectedSchoolId(firstSchoolId);
+                            if (typeof window !== 'undefined') {
+                              localStorage.setItem('selectedSchoolId', firstSchoolId);
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <DropdownMenuItem 
+                      onClick={() => setActiveTab('settings')}
+                      className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5"
+                    >
+                      <UserCircle className="h-4 w-4 text-gray-600" />
+                      <span className="text-sm">Profil</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-gray-100" />
+                    <DropdownMenuItem 
+                      onClick={handleLogout}
+                      className="flex items-center space-x-2 cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span className="text-sm font-medium">Déconnexion</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
-          )}
-          
+          </div>
+        </header>
+
+        {/* Mobile menu dropdown with overlay - outside header */}
+        {mobileMenuOpen && (
+          <>
+            {/* Overlay backdrop */}
+            <div 
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            {/* Mobile menu */}
+            <div className="lg:hidden fixed top-0 right-0 h-screen w-80 max-w-[85vw] bg-white shadow-2xl z-[70] overflow-y-auto overflow-x-hidden">
+              <div className="p-4 space-y-4">
+                {/* Close button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                    aria-label="Close menu"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* School Selector */}
+                <div className="pb-4 border-b border-gray-200">
+                  <MultiSchoolSelector
+                    selectedSchoolId={selectedSchoolId || school?.id}
+                    refreshTrigger={schoolListRefreshTrigger}
+                    onSelectSchool={(schoolId) => {
+                      setSelectedSchoolId(schoolId);
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('selectedSchoolId', schoolId);
+                      }
+                      // Clear selected campaign when switching schools
+                      setSelectedCampaignId(null);
+                      if (typeof window !== 'undefined') {
+                        localStorage.removeItem('selectedCampaignId');
+                      }
+                      refreshSchoolData();
+                      refreshCampaigns();
+                      setMobileMenuOpen(false);
+                    }}
+                    onCreateSchool={() => {
+                      setShowCreateSchoolModal(true);
+                    }}
+                    onSchoolsChange={(schools) => {
+                      // If no school is selected and schools exist, select the first one
+                      if (!selectedSchoolId && schools.length > 0) {
+                        const firstSchoolId = schools[0].id;
+                        setSelectedSchoolId(firstSchoolId);
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('selectedSchoolId', firstSchoolId);
+                        }
+                      }
+                    }}
+                  />
+              </div>
+
+                {/* Portail Organisation */}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="w-full justify-start border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                  disabled
+                >
+                  <School className="h-4 w-4 mr-2" />
+                  Portail Organisation
+                </Button>
+
+                {/* Portail Vendeur */}
+                <Button 
+                  onClick={() => {
+                    handleSwitchToBoutique();
+                    setMobileMenuOpen(false);
+                  }}
+                  variant="outline" 
+                  size="sm"
+                  className="w-full justify-start border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  Portail Vendeur
+                </Button>
+
+                {/* Profile Info - Clickable */}
+                <Button
+                  onClick={() => {
+                    // Navigate to settings tab which contains profile
+                    setActiveTab('settings');
+                    setMobileMenuOpen(false);
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-gray-700 hover:bg-gray-100 p-3 h-auto"
+                >
+                  <Avatar className="w-10 h-10 border-2 border-gray-200 mr-3">
+                    <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
+                    <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                      {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="text-sm font-medium text-gray-700 truncate">{session.user.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
+                  </div>
+                </Button>
+
+                {/* Logout */}
+                <Button 
+                  onClick={() => {
+                    handleLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  variant="ghost" 
+                  size="sm"
+                  className="w-full justify-start text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Déconnexion
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+                    
+        {/* Main Content */}
+        <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
           {/* Error Messages */}
           {statsError && (
             <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm">
@@ -469,53 +739,104 @@ export default function DashboardManager() {
           )}
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4 sm:space-y-6 lg:space-y-8">
             <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 overflow-hidden">
-              <TabsList className="grid w-full grid-cols-6 bg-gray-50/50 h-14 p-1">
-                <TabsTrigger 
-                  value="overview" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  Vue d'ensemble
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="edit" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                                      Modifier
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="participants" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Participants
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="rapport" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Rapports
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="create" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Créer
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="settings" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Paramètres & Équipe
-                </TabsTrigger>
-              </TabsList>
-                                </div>
+              {/* Mobile: Icons only tabs - no overflow */}
+              <div className="lg:hidden overflow-hidden">
+                <TabsList className="grid grid-cols-6 w-full bg-gray-50/50 h-14 p-1 gap-1">
+                  <TabsTrigger 
+                    value="overview" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
+                    title="Vue d'ensemble"
+                  >
+                    <Eye className="h-5 w-5" />
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="edit" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
+                    title="Modifier"
+                  >
+                    <Edit className="h-5 w-5" />
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="participants" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
+                    title="Participants"
+                  >
+                    <Users className="h-5 w-5" />
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="rapport" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
+                    title="Rapports"
+                  >
+                    <FileText className="h-5 w-5" />
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="create" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
+                    title="Créer"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="settings" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
+                    title="Paramètres & Équipe"
+                  >
+                    <Settings className="h-5 w-5" />
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              {/* Desktop: Grid layout */}
+              <div className="hidden lg:block">
+                <TabsList className="grid w-full grid-cols-6 bg-gray-50/50 h-14 p-1">
+                  <TabsTrigger 
+                    value="overview" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    Vue d'ensemble
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="edit" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Modifier
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="participants" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Participants
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="rapport" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Rapports
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="create" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Créer
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="settings" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Paramètres & Équipe
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+            </div>
 
             <TabsContent value="overview" className="space-y-6">
               <CampaignOverview 

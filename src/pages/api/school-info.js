@@ -61,20 +61,38 @@ export default async function handler(req, res) {
         }
 
         // Verify user has access to the requested school
-        // Try with both ObjectId and string formats
-        let hasAccess = await SchoolManager.findOne({
+        // Try multiple query formats to handle different ID types
+        let hasAccess = null;
+        
+        // Try 1: ObjectId format
+        hasAccess = await SchoolManager.findOne({
           school: schoolIdObj,
           user: userId,
           status: 'active'
         }).lean();
 
-        // If not found with ObjectId, try with string
+        // Try 2: String format
         if (!hasAccess && typeof schoolId === 'string') {
           hasAccess = await SchoolManager.findOne({
             school: schoolId,
             user: userId,
             status: 'active'
           }).lean();
+        }
+
+        // Try 3: Convert both to strings and compare
+        if (!hasAccess) {
+          const schoolManagerRecords = await SchoolManager.find({
+            user: userId,
+            status: 'active'
+          }).lean();
+          
+          const requestedSchoolIdStr = schoolIdObj?.toString() || schoolId?.toString();
+          
+          hasAccess = schoolManagerRecords.find(sm => {
+            const smSchoolIdStr = sm.school?.toString();
+            return smSchoolIdStr === requestedSchoolIdStr;
+          });
         }
 
         // Also check backward compatibility
@@ -92,10 +110,54 @@ export default async function handler(req, res) {
           userSchoolId: userSchoolIdStr,
           hasAccess: !!hasAccess,
           hasLegacyAccess,
-          schoolIdObj: schoolIdObj?.toString()
+          schoolIdObj: schoolIdObj?.toString(),
+          userId: userId?.toString(),
+          userHasOrganisme: !!user.schoolManagerInfo?.organisme
         });
         
+        // If user has legacy access but no SchoolManager record, create one
+        if (!hasAccess && hasLegacyAccess) {
+          console.log('Creating missing SchoolManager record for legacy user');
+          try {
+            // Ensure schoolIdObj is a proper ObjectId
+            const schoolObjectId = mongoose.Types.ObjectId.isValid(schoolIdObj) 
+              ? new mongoose.Types.ObjectId(schoolIdObj)
+              : schoolIdObj;
+            
+            const newSchoolManager = new SchoolManager({
+              school: schoolObjectId,
+              user: userId,
+              role: 'owner',
+              invitedBy: userId,
+              status: 'active',
+              joinedAt: new Date()
+            });
+            await newSchoolManager.save();
+            console.log('SchoolManager record created successfully:', {
+              schoolId: newSchoolManager.school?.toString(),
+              userId: newSchoolManager.user?.toString()
+            });
+            hasAccess = newSchoolManager.toObject();
+          } catch (error) {
+            console.error('Error creating SchoolManager record:', error);
+            // If it's a duplicate key error, try to find it again
+            if (error.code === 11000) {
+              console.log('Duplicate key error, trying to find existing record');
+              hasAccess = await SchoolManager.findOne({
+                school: schoolIdObj,
+                user: userId,
+                status: 'active'
+              }).lean();
+              
+              if (hasAccess) {
+                console.log('Found existing SchoolManager record after duplicate error');
+              }
+            }
+          }
+        }
+        
         if (!hasAccess && !hasLegacyAccess) {
+          console.log('Access denied - no SchoolManager record and no legacy access');
           return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à accéder à cette école' });
         }
 

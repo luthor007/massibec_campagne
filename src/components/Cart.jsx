@@ -134,38 +134,28 @@ export default function Cart({ id, campaignId, schoolId }) {
       </CardHeader>
       <CardContent className="p-3 sm:p-4">
 
-        {/* New Discount Progress Bar and Info */}
-        <div className={`border-l-4 p-3 sm:p-4 mb-4 sm:mb-6 lg:mb-8 rounded-r-lg shadow-md ${
-          !discountEnabled 
-            ? 'bg-gray-100 border-gray-400' 
-            : 'bg-blue-100 border-blue-500'
-        }`}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
-            <div className="flex items-center">
-              <ShoppingBag className={`h-5 w-5 sm:h-6 sm:w-6 mr-2 flex-shrink-0 ${
-                !discountEnabled ? 'text-gray-500' : 'text-blue-500'
-              }`} />
-              <span className={`font-semibold text-sm sm:text-base ${
-                !discountEnabled ? 'text-gray-700' : 'text-blue-800'
-              }`}>
-                {cartItemCount} produit{cartItemCount !== 1 ? 's' : ''}
-              </span>
+        {/* New Discount Progress Bar and Info - Only show if discounts are enabled */}
+        {discountEnabled && (
+          <div className="border-l-4 p-3 sm:p-4 mb-4 sm:mb-6 lg:mb-8 rounded-r-lg shadow-md bg-blue-100 border-blue-500">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-2 gap-2">
+              <div className="flex items-center">
+                <ShoppingBag className="h-5 w-5 sm:h-6 sm:w-6 mr-2 flex-shrink-0 text-blue-500" />
+                <span className="font-semibold text-sm sm:text-base text-blue-800">
+                  {cartItemCount} produit{cartItemCount !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="flex items-center">
+                <span className="font-semibold text-sm sm:text-base text-green-700">
+                  {currentDiscount}% de réduction
+                </span>
+              </div>
             </div>
-            <div className="flex items-center">
-              <span className={`font-semibold text-sm sm:text-base ${
-                !discountEnabled ? 'text-gray-600' : 'text-green-700'
-              }`}>
-                {currentDiscount}% de réduction
-              </span>
-            </div>
+            <Progress value={discountProgress} className="h-2 mb-2" />
+            <p className="text-xs sm:text-sm text-blue-700">
+              {message}
+            </p>
           </div>
-          <Progress value={discountProgress} className="h-2 mb-2" />
-          <p className={`text-xs sm:text-sm ${
-            !discountEnabled ? 'text-gray-600' : 'text-blue-700'
-          }`}>
-            {message}
-          </p>
-        </div>
+        )}
 
         <AnimatePresence>
           {items.length === 0 ? (

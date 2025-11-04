@@ -275,7 +275,13 @@ export default function Boutique() {
           const ownerData = await ownerResponse.json()
           setOwnerName(ownerData.name)
           setOwnerEmail(ownerData.email)
-          setOwnerPhone(ownerData.parentInfo?.telephone || '')
+          // Get phone number based on user role
+          // For students: parentInfo.telephone
+          // For school managers: schoolManagerInfo.telephone or schoolManagerInfo.cellulaire
+          const phoneNumber = ownerData.role === 'school_manager' 
+            ? (ownerData.schoolManagerInfo?.telephone || ownerData.schoolManagerInfo?.cellulaire || '')
+            : (ownerData.parentInfo?.telephone || '')
+          setOwnerPhone(phoneNumber)
 
           // Try to get campaign dates from owner's active campaign
           let activeCampaignId = null;

@@ -130,10 +130,18 @@ const StudentOrderEmailTemplate = ({
       <h3>Instructions de paiement :</h3>
       <p dangerouslySetInnerHTML={{ __html: paymentInstructions }} />
 
+      <div style={{ backgroundColor: '#FEF3C7', borderLeft: '4px solid #F59E0B', padding: '12px', marginTop: '20px', marginBottom: '20px' }}>
+        <p style={{ margin: 0, fontSize: '14px', color: '#92400E' }}>
+          <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page. 
+          Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement. 
+          Si vous avez déjà effectué le paiement, ne tenez pas compte de ce courriel. 
+          Il se peut qu'il soit dans vos indésirables.
+        </p>
+      </div>
+
       <p>
         Si vous avez des questions, n'hésitez pas à nous contacter à l'adresse suivante : <a href="mailto:facturation@massibec.com">facturation@massibec.com</a>.
       </p>
-
 
       <p>Cordialement,<br />L'équipe Massibec</p>
     </div>

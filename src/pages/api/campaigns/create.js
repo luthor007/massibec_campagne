@@ -2,6 +2,7 @@ import dbConnect from '../../../lib/mongodb';
 import School from '../../../models/School';
 import Campaign from '../../../models/Campaign';
 import User from '../../../models/User';
+import SchoolManager from '../../../models/SchoolManager';
 import { getToken } from 'next-auth/jwt';
 import { generateCampaignCode } from '../../../utils/campaignHelpers';
 import { parseLocalDate } from '../../../utils/dateHelpers';
@@ -38,7 +39,8 @@ export default async function handler(req, res) {
         donationPresets,
         donationSplit,
         donationsForStudents,
-        donationsForSchool
+        donationsForSchool,
+        schoolId // Optional: if provided, use this school instead of finding from user
       } = req.body;
 
       // Validate required fields
@@ -72,8 +74,43 @@ export default async function handler(req, res) {
       }
 
 
-      // Find the school
-      const school = await School.findById(user.schoolManagerInfo.organisme);
+      // Find the school - check SchoolManager relationships first, then fall back to legacy schoolManagerInfo
+      let school;
+      
+      if (schoolId) {
+        // If schoolId is provided, verify the user has access to it
+        const schoolManagerRecord = await SchoolManager.findOne({
+          user: userId,
+          school: schoolId,
+          status: 'active'
+        }).lean();
+        
+        // Also check legacy schoolManagerInfo
+        const hasLegacyAccess = user.schoolManagerInfo?.organisme?.toString() === schoolId.toString();
+        
+        if (!schoolManagerRecord && !hasLegacyAccess) {
+          return res.status(403).json({ message: 'Vous n\'avez pas accès à cette école' });
+        }
+        
+        school = await School.findById(schoolId);
+      } else {
+        // Find school from user associations
+        // First check SchoolManager relationship (most reliable for new users)
+        const schoolManager = await SchoolManager.findOne({
+          user: userId,
+          status: 'active'
+        }).lean();
+        
+        if (schoolManager?.school) {
+          school = await School.findById(schoolManager.school);
+        }
+        
+        // If no school from SchoolManager, check legacy schoolManagerInfo
+        if (!school && user.schoolManagerInfo?.organisme) {
+          school = await School.findById(user.schoolManagerInfo.organisme);
+        }
+      }
+      
       if (!school) {
         return res.status(404).json({ message: 'École non trouvée' });
       }

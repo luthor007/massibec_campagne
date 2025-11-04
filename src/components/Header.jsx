@@ -6,8 +6,8 @@ import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ShoppingCart, User, LogOut, Menu, X, ChevronDown, Trash2 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { ShoppingCart, User, LogOut, Menu, X, ChevronDown, Trash2, Building2, ShoppingBag } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -145,28 +145,67 @@ export default function Header() {
                   transition={{ duration: 0.3 }}
                   className="flex items-center space-x-4"
                 >
-                  <Link href={isSchoolManager ? "/dashboard-manager" : "/dashboard"} passHref>
-                    <Button variant="secondary" size="sm">
-                      Tableau de bord
-                    </Button>
-                  </Link>
+                  {/* Navigation buttons for school managers */}
+                  {isSchoolManager ? (
+                    <>
+                      <Link href="/dashboard-manager" passHref>
+                        <Button 
+                          variant={router.pathname === '/dashboard-manager' ? 'default' : 'outline'} 
+                          size="sm"
+                          className="flex items-center space-x-2"
+                        >
+                          <Building2 className="h-4 w-4" />
+                          <span className="hidden sm:inline">Portail Organisation</span>
+                          <span className="sm:hidden">Organisation</span>
+                        </Button>
+                      </Link>
+                      <Link href="/dashboard" passHref>
+                        <Button 
+                          variant={router.pathname === '/dashboard' ? 'default' : 'outline'} 
+                          size="sm"
+                          className="flex items-center space-x-2"
+                        >
+                          <ShoppingBag className="h-4 w-4" />
+                          <span className="hidden sm:inline">Portail Vendeur</span>
+                          <span className="sm:hidden">Vendeur</span>
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <Link href="/dashboard" passHref>
+                      <Button variant="secondary" size="sm">
+                        Tableau de bord
+                      </Button>
+                    </Link>
+                  )}
+                  
+                  {/* Profile Menu Dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="secondary" size="sm" className="flex items-center">
-                        <Avatar className="w-6 h-6 mr-2">
+                      <Button variant="ghost" size="sm" className="flex items-center space-x-2 hover:bg-gray-100">
+                        <Avatar className="w-8 h-8 border-2 border-gray-200">
                           <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
-                          <AvatarFallback>{session.user?.name?.[0] || 'U'}</AvatarFallback>
+                          <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                            {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                          </AvatarFallback>
                         </Avatar>
-                        {session.user?.name}
-                        <ChevronDown className="ml-2 h-4 w-4" />
+                        <span className="hidden lg:inline">{session.user?.name}</span>
+                        <ChevronDown className="h-4 w-4 text-gray-400" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="bg-white text-lg">
-                      <DropdownMenuItem onClick={handleProfileClick}>
-                        <User className="mr-2 h-4 w-4" /> Profil
+                    <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-xl rounded-lg">
+                      <div className="px-3 py-2 border-b border-gray-100">
+                        <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
+                      </div>
+                      <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5">
+                        <User className="mr-2 h-4 w-4 text-gray-600" />
+                        <span className="text-sm">Profil</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" /> Déconnexion
+                      <DropdownMenuSeparator className="bg-gray-100" />
+                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5">
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span className="text-sm font-medium">Déconnexion</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -221,11 +260,28 @@ export default function Header() {
             >
               {session ? (
                 <>
-                  <Link href={isSchoolManager ? "/dashboard-manager" : "/dashboard"} passHref>
-                    <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
-                      Tableau de bord
-                    </Button>
-                  </Link>
+                  {isSchoolManager ? (
+                    <>
+                      <Link href="/dashboard-manager" passHref>
+                        <Button variant={router.pathname === '/dashboard-manager' ? 'default' : 'ghost'} size="lg" className="w-full justify-start text-xl">
+                          <Building2 className="mr-2 h-5 w-5" />
+                          Portail Organisation
+                        </Button>
+                      </Link>
+                      <Link href="/dashboard" passHref>
+                        <Button variant={router.pathname === '/dashboard' ? 'default' : 'ghost'} size="lg" className="w-full justify-start text-xl">
+                          <ShoppingBag className="mr-2 h-5 w-5" />
+                          Portail Vendeur
+                        </Button>
+                      </Link>
+                    </>
+                  ) : (
+                    <Link href="/dashboard" passHref>
+                      <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
+                        Tableau de bord
+                      </Button>
+                    </Link>
+                  )}
                   <Button
                     variant="ghost"
                     size="lg"

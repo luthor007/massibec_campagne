@@ -1,7 +1,9 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Calendar, Target, CheckCircle, Clock, AlertCircle, TrendingUp } from 'lucide-react';
+import { isTestCampaign } from '../../../utils/campaignHelpers';
 
 const CampaignSelector = ({ campaigns, selectedCampaign, onSelect, loading }) => {
   const getStatusColor = (status) => {
@@ -58,10 +60,7 @@ const CampaignSelector = ({ campaigns, selectedCampaign, onSelect, loading }) =>
   }
 
   return (
-    <div className="flex items-center space-x-4">
-      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-        <TrendingUp className="h-6 w-6 text-white" />
-      </div>
+    <div className="flex items-center">
       <div className="flex-1">
         <Select value={selectedCampaign?._id?.toString() || ''} onValueChange={onSelect}>
           <SelectTrigger className="w-full h-12 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white shadow-sm hover:shadow-md">
@@ -80,18 +79,37 @@ const CampaignSelector = ({ campaigns, selectedCampaign, onSelect, loading }) =>
                         <span className="font-semibold text-gray-900">
                           Campagne #{campaign.campaignNumber}
                         </span>
-                        <Badge className={`${getStatusColor(campaign.status)} border font-medium`}>
-                          <div className="flex items-center space-x-1">
-                            {getStatusIcon(campaign.status)}
-                            <span className="text-xs">
-                              {campaign.status === 'active' ? 'Active' :
-                               campaign.status === 'approved' ? 'Approuvée' :
-                               campaign.status === 'pending_approval' ? 'En attente' :
-                               campaign.status === 'rejected' ? 'Rejetée' :
-                               campaign.status === 'completed' ? 'Terminée' : campaign.status}
-                            </span>
-                          </div>
-                        </Badge>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <Badge className={`${getStatusColor(campaign.status)} border font-medium ${isTestCampaign(campaign) ? 'cursor-help' : ''}`}>
+                                  <div className="flex items-center space-x-1">
+                                    {getStatusIcon(campaign.status)}
+                                    <span className="text-xs">
+                                      {campaign.status === 'active' ? 'Active' :
+                                       campaign.status === 'approved' ? 'Approuvée' :
+                                       campaign.status === 'pending_approval' ? 'En attente' :
+                                       campaign.status === 'rejected' ? 'Rejetée' :
+                                       campaign.status === 'completed' ? 'Terminée' : campaign.status}
+                                    </span>
+                                    {isTestCampaign(campaign) && (
+                                      <AlertCircle className="h-2.5 w-2.5 text-orange-600 ml-0.5" />
+                                    )}
+                                  </div>
+                                </Badge>
+                              </div>
+                            </TooltipTrigger>
+                            {isTestCampaign(campaign) && (
+                              <TooltipContent className="max-w-xs bg-gray-900 text-white text-xs">
+                                <p className="font-semibold mb-1">⚠️ Mode test</p>
+                                <p>
+                                  Cette campagne est en attente d'approbation. Toutes les données, commandes, statistiques et rapports sont en mode test et ne sont pas définitives jusqu'à l'approbation de la campagne par Massibec.
+                                </p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                       <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
                         <div className="flex items-center space-x-1">
