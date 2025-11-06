@@ -81,10 +81,10 @@ const calculateTotalEarnings = async (orders, school) => {
   try {
     // Get campaign data with fallback to school data
     const { campaign, fallbackSplit } = await getCampaignDataWithFallback(school._id, school);
-    
+
     // Calculate earnings using campaign-specific per-product profit splits
     const totalEarnings = calculateStudentEarnings(orders, campaign, fallbackSplit);
-    
+
     return totalEarnings;
   } catch (error) {
     console.error('Error calculating total earnings:', error);
@@ -142,7 +142,7 @@ export default async function handler(req, res) {
     const endDate = new Date(yearData.endDate);
 
     // Fetch all students in the school (both legacy school field and campaign-based)
-    const students = await User.find({ 
+    const students = await User.find({
       $or: [
         { school: schoolId, role: 'student' },
         { 'campaigns.schoolId': schoolId, role: 'student' }
@@ -160,14 +160,14 @@ export default async function handler(req, res) {
 
     // Calculate total earnings for each student (filtered by school year and campaign)
     const studentData = await Promise.all(students.map(async student => {
-      const orderQuery = { 
+      const orderQuery = {
         user: student._id,
         createdAt: {
           $gte: startDate,
           $lte: endDate
         }
       };
-      
+
       // Filter by campaign if provided
       if (campaignId) {
         orderQuery.$or = [
@@ -176,12 +176,30 @@ export default async function handler(req, res) {
           { campaignId: null }
         ];
       }
-      
+
       const orders = await Order.find(orderQuery);
       const totalEarnings = await calculateTotalEarnings(orders, school);
       const totalProductsSold = orders.reduce((acc, order) => acc + order.products.reduce((sum, p) => sum + p.quantity, 0), 0);
+
+      // Calculate total sales including donations (products before discount + all donations)
+      const totalSales = orders.reduce((sum, order) => {
+        // Calculate original subtotal from products (before discount)
+        const originalSubtotal = order.products?.reduce((productSum, product) => {
+          const price = product.productPrice || product.price || 0;
+          const quantity = product.quantity || 0;
+          return productSum + (price * quantity);
+        }, 0) || 0;
+
+        // Add donations (student and school donations)
+        const studentDonation = order.studentDonation || order.tip || 0;
+        const schoolDonation = order.schoolDonation || 0;
+        const totalDonations = studentDonation + schoolDonation;
+
+        return sum + originalSubtotal + totalDonations;
+      }, 0);
+
       const category = determineUserCategory(totalEarnings);
-      return { student, totalEarnings, totalProductsSold, category };
+      return { student, totalEarnings, totalProductsSold, totalSales, category };
     }));
 
     // Sort by total earnings (descending), then alphabetically by name (ascending)
@@ -194,15 +212,17 @@ export default async function handler(req, res) {
       return a.student.name.localeCompare(b.student.name, 'fr', { sensitivity: 'base' });
     });
 
-    // Get the top 3 sellers
-    const topPerformers = sortedStudentData
-      .slice(0, 3)
-      .map(({ student, totalEarnings, totalProductsSold, category }) => ({
-        name: student.name,
-        totalEarnings: totalEarnings.toFixed(2),
-        totalProductsSold,
-        category
-      }));
+    // Get top performers (all students with their rank)
+    const topPerformers = sortedStudentData.map(({ student, totalEarnings, totalProductsSold, totalSales, category }, index) => ({
+      _id: student._id.toString(),
+      userId: student._id.toString(),
+      name: student.name,
+      rank: index + 1,
+      totalEarnings: totalEarnings.toFixed(2),
+      totalProductsSold,
+      totalSales: totalSales || 0,
+      category
+    }));
 
     // Find the current user's rank and earnings
     const currentUserData = sortedStudentData.find(data => data.student._id.toString() === userId);

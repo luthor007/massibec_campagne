@@ -39,6 +39,8 @@ interface EmailTemplateProps {
     amount: string;
   }[];
   totalAmount: number;
+  discount?: number; // Discount amount
+  originalSubtotal?: number; // Original subtotal before discount
   tip?: number; // Legacy field
   studentDonation?: number;
   schoolDonation?: number;
@@ -57,6 +59,9 @@ interface EmailTemplateProps {
   sellerPhone: string;
   sellerEmail: string;
   organizationType?: string; // New prop for organization type
+  deliveryOption?: string; // Option de livraison choisie
+  customDeliveryOption?: string; // Option personnalisée si "Autre" est sélectionné
+  customerDeliveryAddress?: string; // Adresse du client pour livraison
 }
 
 const EmailTemplate: React.FC<EmailTemplateProps> = ({
@@ -65,6 +70,8 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
   hoursAvailable,
   products,
   totalAmount,
+  discount = 0,
+  originalSubtotal,
   tip = 0,
   studentDonation = 0,
   schoolDonation = 0,
@@ -80,16 +87,26 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
   sellerPhone,
   sellerEmail,
   organizationType = 'school', // Default to school for backward compatibility
+  deliveryOption,
+  customDeliveryOption,
+  customerDeliveryAddress,
 }) => {
   // Get terminology based on organization type
   const terminology = getTerminology(organizationType);
   // Calculate total donation (new or legacy)
   const totalDonation = studentDonation + schoolDonation + tip;
+  // Calculate original subtotal if not provided
+  const subtotal = originalSubtotal || products.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const hasDiscount = discount > 0;
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', lineHeight: '1.1', color: '#333' }}>
 
       <p>Merci <strong>{firstName}</strong> pour votre commande.</p>
-      <p>La livraison se fera le <strong>{deliveryDate}</strong> et les produits vous seront donc acheminés tel que nous avons personnellement convenu.</p>
+      <p>La livraison se fera le <strong>{deliveryDate}</strong> et les produits vous seront donc acheminés tel que nous avons personnellement convenu.{deliveryOption && (
+        <>
+          {' '}Mode de livraison : <strong>{deliveryOption === 'Autre' && customDeliveryOption ? customDeliveryOption : deliveryOption === 'Livraison (si près de chez moi)' && customerDeliveryAddress ? `Livraison à ${customerDeliveryAddress}` : deliveryOption}</strong>
+        </>
+      )}</p>
 
 
       <h3 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Transfert Interac</h3>
@@ -99,7 +116,7 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
         <strong>Adresse courriel :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a> <br />
         {autoDeposit ? null : <><strong>Question de sécurité :</strong> {firstName}<br /></>}
         {autoDeposit ? null : <strong>Réponse :</strong>} {autoDeposit ? null : <a href={`mailto:${customerEmail}`}>{customerEmail}</a>}<br />
-        <strong>Montant :</strong> {((totalAmount || 0) + (studentDonation || 0)).toFixed(2)} $<br/>
+        <strong>Montant :</strong> {((totalAmount || 0) + (totalDonation || 0)).toFixed(2)} $<br />
         {autoDeposit ? <><strong>Message :</strong> #{orderId}</> : null}
       </p>
 
@@ -110,9 +127,9 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
       <p><strong>Email du vendeur :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a></p>
       <p><strong>Numéro de commande :</strong> #{orderId}</p>
       <p><strong>Date de la commande :</strong> {orderDate}</p>
- 
+
       <h3>Produits commandés :</h3>
-      
+
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
         <thead>
           <tr>
@@ -143,6 +160,24 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
               {(products.reduce((acc, item) => acc + item.quantity * 0.17, 0)).toFixed(2)}
             </td>
           </tr>
+          {/* Subtotal row (only show if different from totalAmount due to discount) */}
+          {hasDiscount && (
+            <tr>
+              <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold' }}>Sous-total produits :</td>
+              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right' }}>
+                ${subtotal.toFixed(2)}
+              </td>
+            </tr>
+          )}
+          {/* Discount row */}
+          {hasDiscount && (
+            <tr>
+              <td colSpan={3} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', fontWeight: 'bold', color: '#10B981' }}>Rabais ({((discount / subtotal) * 100).toFixed(0)}%) :</td>
+              <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'right', color: '#10B981' }}>
+                -${discount.toFixed(2)}
+              </td>
+            </tr>
+          )}
           {/* Donation row(s) */}
           {totalDonation > 0 && (
             <>
@@ -181,11 +216,11 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
           </tr>
         </tbody>
       </table>
-      
+
       <p>
         Merci de votre soutien, et si vous souhaitez ajouter des produits, vous avez jusqu'au <strong>{orderDeadline}</strong> pour envoyer votre commande et paiement.
       </p>
-      
+
       <p>
         Merci encore.
       </p>

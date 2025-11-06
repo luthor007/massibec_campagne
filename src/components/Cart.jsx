@@ -5,8 +5,9 @@ import { ShoppingBag, Trash2, Plus, Minus, Percent } from 'lucide-react'
 import CheckoutForm from './CheckoutForm'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Progress } from '@/components/ui/progress' // Ensure this component exists and is correctly implemented
+import { trackCheckoutReached } from '@/lib/analytics'
 
-export default function Cart({ id, campaignId, schoolId }) {
+export default function Cart({ id, campaignId, schoolId, campaignData, initialDeliveryOptions }) {
   const [items, setItems] = useState([])
   const [showCheckout, setShowCheckout] = useState(false)
   const [discount, setDiscount] = useState(0)
@@ -18,7 +19,7 @@ export default function Cart({ id, campaignId, schoolId }) {
       setDiscount(0)
       return
     }
-    
+
     const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0)
     if (totalItems >= 6) {
       setDiscount(0.05) // Only 5% discount, no 10% discount
@@ -37,7 +38,7 @@ export default function Cart({ id, campaignId, schoolId }) {
   // Fetch store data to get discount settings
   const fetchStoreData = useCallback(async () => {
     if (!id) return
-    
+
     try {
       const response = await fetch(`/api/stores/${id}`)
       if (response.ok) {
@@ -88,7 +89,16 @@ export default function Cart({ id, campaignId, schoolId }) {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('checkoutOpened'))
     }
-  }, [])
+    // Track checkout reached event
+    if (id) {
+      trackCheckoutReached({
+        storeId: id,
+        campaignId: campaignId || null,
+        schoolId: schoolId || null,
+        userId: null // Will be extracted from session in API
+      })
+    }
+  }, [id, campaignId, schoolId])
 
   // Remove a Specific Item
   const removeItem = useCallback((id) => {
@@ -168,47 +178,52 @@ export default function Cart({ id, campaignId, schoolId }) {
               Votre panier est vide.
             </motion.p>
           ) : (
-            <ul className="space-y-3 sm:space-y-4">
+            <ul className="space-y-2">
               {items.map((item) => (
                 <motion.li
-                  key={item.id} // Ensure 'id' is unique
+                  key={item.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 p-3 rounded-lg gap-3"
+                  className="flex items-center justify-between bg-gray-50 p-2.5 sm:p-3 rounded-lg gap-3"
                 >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800 text-sm sm:text-base">{item.name}</p>
-                    <p className="text-xs sm:text-sm text-gray-600">
-                      {item.quantity} x {item.price ? item.price.toFixed(2) : '0.00'}$
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-800 text-sm sm:text-base truncate">{item.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {item.price ? item.price.toFixed(2) : '0.00'}$ unitaire
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2 self-end sm:self-auto">
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                  <div className="flex items-center space-x-1.5">
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => updateQuantity(item.id, -1)}
-                      disabled={item.quantity <= 1} // Disable if quantity is 1
-                      className="h-8 w-8 sm:h-10 sm:w-10"
+                      disabled={item.quantity <= 1}
+                      className="h-7 w-7 sm:h-8 sm:w-8 border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Minus className="h-3 w-3 sm:h-4 sm:w-4" />
                     </Button>
-                    <span className="font-medium text-sm sm:text-base min-w-[2rem] text-center">{item.quantity}</span>
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
+                    <span className="font-semibold text-sm min-w-[1.5rem] text-center">{item.quantity}</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
                       onClick={() => updateQuantity(item.id, 1)}
-                      className="h-8 w-8 sm:h-10 sm:w-10"
+                      className="h-7 w-7 sm:h-8 sm:w-8 border-gray-300 hover:bg-gray-100"
                     >
                       <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm sm:text-base text-gray-900 whitespace-nowrap min-w-[3rem] text-right">
+                      {(item.quantity * item.price).toFixed(2)}$
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => removeItem(item.id)}
-                      className="h-8 w-8 sm:h-10 sm:w-10"
+                      className="h-7 w-7 sm:h-8 sm:w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
                     >
-                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
+                      <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </Button>
                   </div>
                 </motion.li>
@@ -233,8 +248,8 @@ export default function Cart({ id, campaignId, schoolId }) {
             <span>Total:</span>
             <span>{discountedTotal.toFixed(2)}$</span>
           </div>
-          <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg cart-checkout-button" 
+          <Button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg cart-checkout-button"
             data-testid="checkout-button"
             onClick={handleCheckout}
           >
@@ -245,11 +260,17 @@ export default function Cart({ id, campaignId, schoolId }) {
       {showCheckout && (
         <CheckoutForm
           total={discountedTotal}
+          originalTotal={total}
+          discount={discount}
+          discountAmount={total * discount}
           items={items}
           onClose={() => setShowCheckout(false)}
           removeAllItem={removeAllItems}
           campaignId={campaignId}
           schoolId={schoolId}
+          storeId={id}
+          initialCampaignData={campaignData}
+          initialDeliveryOptions={initialDeliveryOptions}
           className="sm:max-h-600px"
         />
       )}

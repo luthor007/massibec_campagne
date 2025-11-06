@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { 
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,15 +30,17 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
-import { 
-  Package, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
+import {
+  Package,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
   RefreshCw,
   DollarSign,
   Image as ImageIcon,
@@ -50,7 +52,8 @@ import {
   ChevronUp,
   ChevronDown,
   Upload,
-  Pencil
+  Pencil,
+  Info
 } from 'lucide-react';
 
 const ProductsPage = () => {
@@ -68,27 +71,32 @@ const ProductsPage = () => {
     cost: '',
     image: '',
     productId: '',
-    isDefault: false
+    isDefault: false,
+    ingredientsImage: '',
+    nutritionImage: ''
   });
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [editingRowId, setEditingRowId] = useState(null);
   const [editingData, setEditingData] = useState({});
   const [imageDialogOpen, setImageDialogOpen] = useState({});
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false);
+  const [infoDialogProduct, setInfoDialogProduct] = useState(null);
+  const [savingProductInfo, setSavingProductInfo] = useState(false);
 
   useEffect(() => {
     if (status === 'loading') return;
-    
+
     if (!session) {
       router.push('/connexion');
       return;
     }
-    
+
     // Vérifier si l'utilisateur a le rôle fournisseur
     if (session.user.role !== 'fournisseur') {
       router.push('/dashboard');
       return;
     }
-    
+
     fetchProducts();
   }, [session, status, router]);
 
@@ -103,18 +111,18 @@ const ProductsPage = () => {
           'Expires': '0'
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         // The API returns { products: [...], total, page, pages }
         // Products are already sorted by order from the API
         const fetchedProducts = Array.isArray(data.products) ? data.products : [];
-        
+
         // Ensure products have order field and sort by it
         const sortedProducts = fetchedProducts
           .map(p => ({ ...p, order: p.order || 0 }))
           .sort((a, b) => (a.order || 0) - (b.order || 0));
-        
+
         setProducts(sortedProducts);
       } else {
         console.error('Erreur lors de la récupération des produits');
@@ -137,14 +145,14 @@ const ProductsPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       const url = editingProduct ? `/api/products/${editingProduct.id || editingProduct._id}` : '/api/products';
       const method = editingProduct ? 'PUT' : 'POST';
-      
+
       // Let API handle productId generation if empty
       let submitData = { ...formData };
-      
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -159,20 +167,22 @@ const ProductsPage = () => {
 
       if (response.ok) {
         showNotification(
-          editingProduct ? 'Produit modifié avec succès!' : 'Produit créé avec succès!', 
+          editingProduct ? 'Produit modifié avec succès!' : 'Produit créé avec succès!',
           'success'
         );
         setShowForm(false);
         setEditingProduct(null);
-      setFormData({
-        name: '',
-        description: '',
-        price: '',
-        cost: '',
-        image: '',
-        productId: '',
-        isDefault: false
-      });
+        setFormData({
+          name: '',
+          description: '',
+          price: '',
+          cost: '',
+          image: '',
+          productId: '',
+          isDefault: false,
+          ingredientsImage: '',
+          nutritionImage: ''
+        });
         fetchProducts();
       } else {
         const error = await response.json();
@@ -186,15 +196,17 @@ const ProductsPage = () => {
 
   const handleEdit = (product) => {
     setEditingProduct(product);
-      setFormData({
-        name: product.name || '',
-        description: product.description || '',
-        price: product.price || '',
-        cost: product.cost || '',
-        image: product.image || '',
-        productId: product.productId || '',
-        isDefault: product.isDefault === true
-      });
+    setFormData({
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price || '',
+      cost: product.cost || '',
+      image: product.image || '',
+      productId: product.productId || '',
+      isDefault: product.isDefault === true,
+      ingredientsImage: product.ingredientsImage || '',
+      nutritionImage: product.nutritionImage || ''
+    });
     setShowForm(true);
   };
 
@@ -209,14 +221,14 @@ const ProductsPage = () => {
       },
       cancel: {
         label: 'Annuler',
-        onClick: () => {},
+        onClick: () => { },
       },
     });
     return;
   };
 
   const performDelete = async (productId) => {
-    
+
     try {
       const response = await fetch(`/api/products/${productId}`, {
         method: 'DELETE',
@@ -245,7 +257,9 @@ const ProductsPage = () => {
       productId: product.productId,
       isDefault: product.isDefault,
       description: product.description,
-      image: product.image
+      image: product.image,
+      ingredientsImage: product.ingredientsImage || '',
+      nutritionImage: product.nutritionImage || ''
     });
     setImageDialogOpen({ [productId]: false });
   };
@@ -279,6 +293,8 @@ const ProductsPage = () => {
           cost: parseFloat(editingData.cost),
           image: editingData.image,
           productId: editingData.productId,
+          ingredientsImage: editingData.ingredientsImage || '',
+          nutritionImage: editingData.nutritionImage || '',
           isDefault: editingData.isDefault
         }),
       });
@@ -298,10 +314,71 @@ const ProductsPage = () => {
     }
   };
 
+  const openInfoDialog = (product) => {
+    const normalizedId = product.id || product._id;
+    setInfoDialogProduct({
+      id: normalizedId,
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price || 0,
+      cost: product.cost || 0,
+      image: product.image || '',
+      productId: product.productId || '',
+      isDefault: product.isDefault === true,
+      ingredientsImage: product.ingredientsImage || '',
+      nutritionImage: product.nutritionImage || ''
+    });
+    setInfoDialogOpen(true);
+  };
+
+  const handleInfoChange = (field, value) => {
+    setInfoDialogProduct((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const saveProductInfo = async () => {
+    if (!infoDialogProduct) return;
+    setSavingProductInfo(true);
+
+    try {
+      const response = await fetch(`/api/products/${infoDialogProduct.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: infoDialogProduct.name,
+          description: infoDialogProduct.description,
+          price: parseFloat(infoDialogProduct.price),
+          cost: parseFloat(infoDialogProduct.cost),
+          image: infoDialogProduct.image,
+          productId: infoDialogProduct.productId,
+          isDefault: infoDialogProduct.isDefault,
+          ingredientsImage: infoDialogProduct.ingredientsImage || '',
+          nutritionImage: infoDialogProduct.nutritionImage || '',
+        }),
+      });
+
+      if (response.ok) {
+        showNotification('Informations nutritionnelles mises à jour!', 'success');
+        setInfoDialogOpen(false);
+        setInfoDialogProduct(null);
+        fetchProducts();
+      } else {
+        const error = await response.json();
+        showNotification(`Erreur: ${error.message}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error updating product info:', error);
+      showNotification('Erreur lors de la mise à jour des informations', 'error');
+    } finally {
+      setSavingProductInfo(false);
+    }
+  };
+
   const moveProduct = async (productId, direction) => {
     const currentIndex = products.findIndex(p => p.id === productId || p._id === productId);
     if (currentIndex === -1) return;
-    
+
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= products.length) return;
 
@@ -375,15 +452,14 @@ const ProductsPage = () => {
     <DashboardLayout>
       {/* Notification */}
       {notification.show && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
-          notification.type === 'success' 
-            ? 'bg-green-100 text-green-800 border border-green-200' 
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${notification.type === 'success'
+            ? 'bg-green-100 text-green-800 border border-green-200'
             : 'bg-red-100 text-red-800 border border-red-200'
-        }`}>
+          }`}>
           {notification.message}
         </div>
       )}
-      
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -391,7 +467,7 @@ const ProductsPage = () => {
             <h1 className="text-3xl font-bold text-gray-900">Gestion des Produits</h1>
             <p className="text-gray-600 mt-1">Gérez le catalogue de produits pour les campagnes</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -415,7 +491,7 @@ const ProductsPage = () => {
               <div className="text-2xl font-bold">{stats.total}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Par défaut</CardTitle>
@@ -425,7 +501,7 @@ const ProductsPage = () => {
               <div className="text-2xl font-bold text-green-600">{stats.default}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Personnalisés</CardTitle>
@@ -435,7 +511,7 @@ const ProductsPage = () => {
               <div className="text-2xl font-bold text-blue-600">{stats.custom}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Valeur Totale</CardTitle>
@@ -469,7 +545,7 @@ const ProductsPage = () => {
                       required
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="productId">ID Produit (optionnel)</Label>
                     <Input
@@ -479,7 +555,7 @@ const ProductsPage = () => {
                       placeholder="Ex: 03650 (auto-généré si vide)"
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="price">Prix de vente ($) *</Label>
                     <Input
@@ -491,7 +567,7 @@ const ProductsPage = () => {
                       required
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="cost">Coût ($)</Label>
                     <Input
@@ -502,7 +578,7 @@ const ProductsPage = () => {
                       onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="image">Image du produit</Label>
                     <ImageUpload
@@ -511,8 +587,32 @@ const ProductsPage = () => {
                       className="mt-2"
                     />
                   </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Liste d&apos;ingrédients</Label>
+                    <ImageUpload
+                      value={formData.ingredientsImage}
+                      onChange={(url) => setFormData({ ...formData, ingredientsImage: url })}
+                      className="mt-2"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Optionnel. Ajoutez une photo lisible de l&apos;étiquette des ingrédients.
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Tableau de valeur nutritive</Label>
+                    <ImageUpload
+                      value={formData.nutritionImage}
+                      onChange={(url) => setFormData({ ...formData, nutritionImage: url })}
+                      className="mt-2"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Optionnel. Téléversez le tableau nutritionnel officiel pour ce produit.
+                    </p>
+                  </div>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="description">Description *</Label>
                   <Textarea
@@ -523,7 +623,7 @@ const ProductsPage = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -545,26 +645,28 @@ const ProductsPage = () => {
                     <ProductCard product={formData} />
                   </div>
                 </div>
-                
+
                 <div className="flex gap-2">
                   <Button type="submit">
                     {editingProduct ? 'Modifier' : 'Créer'}
                   </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
                       setShowForm(false);
                       setEditingProduct(null);
-      setFormData({
-        name: '',
-        description: '',
-        price: '',
-        cost: '',
-        image: '',
-        productId: '',
-        isDefault: false
-      });
+                      setFormData({
+                        name: '',
+                        description: '',
+                        price: '',
+                        cost: '',
+                        image: '',
+                        productId: '',
+                        isDefault: false,
+                        ingredientsImage: '',
+                        nutritionImage: ''
+                      });
                     }}
                   >
                     Annuler
@@ -606,7 +708,7 @@ const ProductsPage = () => {
                 <Package className="w-12 h-12 mx-auto text-gray-300 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun produit trouvé</h3>
                 <p className="text-gray-500">
-                  {searchTerm 
+                  {searchTerm
                     ? 'Aucun produit ne correspond aux critères de recherche.'
                     : 'Aucun produit n\'a été créé pour le moment.'
                   }
@@ -623,290 +725,420 @@ const ProductsPage = () => {
                       <TableHead className="font-semibold text-gray-700">ID Produit</TableHead>
                       <TableHead className="font-semibold text-gray-700">Prix</TableHead>
                       <TableHead className="font-semibold text-gray-700">Coût</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Infos clients</TableHead>
                       <TableHead className="font-semibold text-gray-700">Statut</TableHead>
                       <TableHead className="text-right font-semibold text-gray-700">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProducts.map((product, index) => (
-                      <TableRow 
-                        key={product.id || product._id || product.productId || `product-${index}`}
-                        className="hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100"
-                      >
-                      <TableCell className="w-[80px]">
-                        <div className="flex flex-col items-center gap-1 min-h-[80px] justify-center">
-                          <button
-                            onClick={() => moveProduct(product.id || product._id, 'up')}
-                            disabled={index === 0}
-                            className="p-1.5 hover:bg-blue-50 hover:border-blue-200 border border-transparent rounded-md transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed group"
-                            title="Déplacer vers le haut"
-                          >
-                            <ChevronUp className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
-                          </button>
-                          <span className="font-mono text-sm font-bold px-3 py-1 bg-gradient-to-br from-blue-50 to-purple-50 text-gray-700 rounded-md shadow-sm min-w-[30px] text-center">{index + 1}</span>
-                          <button
-                            onClick={() => moveProduct(product.id || product._id, 'down')}
-                            disabled={index === filteredProducts.length - 1}
-                            className="p-1.5 hover:bg-blue-50 hover:border-blue-200 border border-transparent rounded-md transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed group"
-                            title="Déplacer vers le bas"
-                          >
-                            <ChevronDown className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
-                          </button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[80px]">
-                        {editingRowId === (product.id || product._id) ? (
-                          <Dialog 
-                            open={imageDialogOpen[product.id || product._id] || false} 
-                            onOpenChange={(open) => {
-                              const productId = product.id || product._id;
-                              setImageDialogOpen(prev => ({ ...prev, [productId]: open }));
-                            }}
-                          >
-                            <DialogTrigger asChild>
-                              <div className="relative group cursor-pointer w-12 h-12">
-                                {editingData.image ? (
-                                  <>
-                                    <img 
-                                      src={editingData.image} 
-                                      alt="Preview"
-                                      className="w-12 h-12 object-cover rounded border border-gray-200"
-                                    />
-                                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded transition-all duration-200 flex items-center justify-center">
-                                      <Pencil className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center group-hover:bg-gray-200 transition-colors duration-200 border-2 border-dashed border-gray-300 group-hover:border-gray-400">
-                                    <div className="flex flex-col items-center">
-                                      <ImageIcon className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                                      <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 mt-0.5" />
-                                    </div>
+                    {filteredProducts.map((product, index) => {
+                      const hasIngredients = editingRowId === (product.id || product._id)
+                        ? editingData.ingredientsImage
+                        : (product.ingredientsImage && product.ingredientsImage.trim().length > 0)
+                      const hasNutrition = editingRowId === (product.id || product._id)
+                        ? editingData.nutritionImage
+                        : (product.nutritionImage && product.nutritionImage.trim().length > 0)
+                      const hasCompleteInfo = hasIngredients && hasNutrition
+                      const hasPartialInfo = hasIngredients || hasNutrition
+
+                      return (
+                        <TableRow
+                          key={product.id || product._id || product.productId || `product-${index}`}
+                          className={`hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 ${hasCompleteInfo ? 'bg-green-50/30 border-l-4 border-l-green-400' :
+                              hasPartialInfo ? 'bg-yellow-50/30 border-l-4 border-l-yellow-400' :
+                                'bg-gray-50/20 border-l-4 border-l-gray-300'
+                            }`}
+                        >
+                          <TableCell className="w-[80px]">
+                            <div className="flex flex-col items-center gap-1 min-h-[80px] justify-center">
+                              <button
+                                onClick={() => moveProduct(product.id || product._id, 'up')}
+                                disabled={index === 0}
+                                className="p-1.5 hover:bg-blue-50 hover:border-blue-200 border border-transparent rounded-md transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed group"
+                                title="Déplacer vers le haut"
+                              >
+                                <ChevronUp className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                              </button>
+                              <span className="font-mono text-sm font-bold px-3 py-1 bg-gradient-to-br from-blue-50 to-purple-50 text-gray-700 rounded-md shadow-sm min-w-[30px] text-center">{index + 1}</span>
+                              <button
+                                onClick={() => moveProduct(product.id || product._id, 'down')}
+                                disabled={index === filteredProducts.length - 1}
+                                className="p-1.5 hover:bg-blue-50 hover:border-blue-200 border border-transparent rounded-md transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed group"
+                                title="Déplacer vers le bas"
+                              >
+                                <ChevronDown className="w-4 h-4 text-gray-600 group-hover:text-blue-600 transition-colors" />
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="w-[80px]">
+                            {editingRowId === (product.id || product._id) ? (
+                              <Dialog
+                                open={imageDialogOpen[product.id || product._id] || false}
+                                onOpenChange={(open) => {
+                                  const productId = product.id || product._id;
+                                  setImageDialogOpen(prev => ({ ...prev, [productId]: open }));
+                                }}
+                              >
+                                <DialogTrigger asChild>
+                                  <div className="relative group cursor-pointer w-12 h-12">
+                                    {editingData.image ? (
+                                      <>
+                                        <img
+                                          src={editingData.image}
+                                          alt="Preview"
+                                          className="w-12 h-12 object-cover rounded border border-gray-200"
+                                        />
+                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded transition-all duration-200 flex items-center justify-center">
+                                          <Pencil className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center group-hover:bg-gray-200 transition-colors duration-200 border-2 border-dashed border-gray-300 group-hover:border-gray-400">
+                                        <div className="flex flex-col items-center">
+                                          <ImageIcon className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
+                                          <Pencil className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 mt-0.5" />
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[500px]">
-                              <DialogHeader>
-                                <DialogTitle>Modifier l'image du produit</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                {editingData.image && (
-                                  <div className="flex items-center justify-center">
-                                    <img 
-                                      src={editingData.image} 
-                                      alt="Preview actuelle"
-                                      className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[500px]">
+                                  <DialogHeader>
+                                    <DialogTitle>Modifier l'image du produit</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    {editingData.image && (
+                                      <div className="flex items-center justify-center">
+                                        <img
+                                          src={editingData.image}
+                                          alt="Preview actuelle"
+                                          className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                                        />
+                                      </div>
+                                    )}
+                                    <ImageUpload
+                                      value={editingData.image || ''}
+                                      onChange={(url) => {
+                                        handleInlineChange('image', url);
+                                        const productId = product.id || product._id;
+                                        setImageDialogOpen(prev => ({ ...prev, [productId]: false }));
+                                      }}
+                                      showPreview={true}
                                     />
+                                    {editingData.image && (
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        onClick={() => {
+                                          handleInlineChange('image', '');
+                                          const productId = product.id || product._id;
+                                          setImageDialogOpen(prev => ({ ...prev, [productId]: false }));
+                                        }}
+                                        className="w-full"
+                                      >
+                                        <XCircle className="w-4 h-4 mr-2" />
+                                        Supprimer l'image
+                                      </Button>
+                                    )}
                                   </div>
-                                )}
-                                <ImageUpload
-                                  value={editingData.image || ''}
-                                  onChange={(url) => {
-                                    handleInlineChange('image', url);
-                                    const productId = product.id || product._id;
-                                    setImageDialogOpen(prev => ({ ...prev, [productId]: false }));
-                                  }}
-                                  showPreview={true}
+                                </DialogContent>
+                              </Dialog>
+                            ) : (
+                              product.image ? (
+                                <img
+                                  src={product.image}
+                                  alt={product.name}
+                                  className="w-12 h-12 object-cover rounded"
                                 />
-                                {editingData.image && (
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    onClick={() => {
-                                      handleInlineChange('image', '');
-                                      const productId = product.id || product._id;
-                                      setImageDialogOpen(prev => ({ ...prev, [productId]: false }));
-                                    }}
-                                    className="w-full"
-                                  >
-                                    <XCircle className="w-4 h-4 mr-2" />
-                                    Supprimer l'image
-                                  </Button>
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
+                                  <ImageIcon className="w-6 h-6 text-gray-400" />
+                                </div>
+                              )
+                            )}
+                          </TableCell>
+                          <TableCell className="min-w-[200px]">
+                            {editingRowId === (product.id || product._id) ? (
+                              <div className="space-y-2">
+                                <Input
+                                  value={editingData.name}
+                                  onChange={(e) => handleInlineChange('name', e.target.value)}
+                                  placeholder="Nom du produit"
+                                  className="w-full"
+                                />
+                                <Textarea
+                                  value={editingData.description || ''}
+                                  onChange={(e) => handleInlineChange('description', e.target.value)}
+                                  placeholder="Description"
+                                  rows={2}
+                                  className="w-full text-sm resize-none"
+                                />
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="font-medium">{product.name}</div>
+                                {product.description && (
+                                  <div className="text-sm text-gray-500 truncate max-w-xs">
+                                    {product.description}
+                                  </div>
                                 )}
                               </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          product.image ? (
-                            <img 
-                              src={product.image} 
-                              alt={product.name}
-                              className="w-12 h-12 object-cover rounded"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
-                              <ImageIcon className="w-6 h-6 text-gray-400" />
-                            </div>
-                          )
-                        )}
-                      </TableCell>
-                        <TableCell className="min-w-[200px]">
-                          {editingRowId === (product.id || product._id) ? (
-                            <div className="space-y-2">
+                            )}
+                          </TableCell>
+                          <TableCell className="w-[120px]">
+                            {editingRowId === (product.id || product._id) ? (
                               <Input
-                                value={editingData.name}
-                                onChange={(e) => handleInlineChange('name', e.target.value)}
-                                placeholder="Nom du produit"
-                                className="w-full"
+                                value={editingData.productId}
+                                onChange={(e) => handleInlineChange('productId', e.target.value)}
+                                className="w-full font-mono text-sm"
+                                placeholder="ID produit"
                               />
-                              <Textarea
-                                value={editingData.description || ''}
-                                onChange={(e) => handleInlineChange('description', e.target.value)}
-                                placeholder="Description"
-                                rows={2}
-                                className="w-full text-sm resize-none"
-                              />
+                            ) : (
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {product.productId || 'N/A'}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="w-[110px]">
+                            {editingRowId === (product.id || product._id) ? (
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingData.price}
+                                  onChange={(e) => handleInlineChange('price', e.target.value)}
+                                  className="w-full text-sm"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span className="font-medium text-sm">
+                                  {(product.price || 0).toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $
+                                </span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="w-[110px]">
+                            {editingRowId === (product.id || product._id) ? (
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={editingData.cost}
+                                  onChange={(e) => handleInlineChange('cost', e.target.value)}
+                                  className="w-full text-sm"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span className="text-sm">
+                                  {(product.cost || 0).toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $
+                                </span>
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="w-[180px]">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex flex-wrap gap-1">
+                                <Badge
+                                  variant={hasIngredients ? 'default' : 'outline'}
+                                  className={`text-xs ${hasIngredients
+                                      ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                      : 'bg-gray-50 text-gray-500 border-gray-300'
+                                    }`}
+                                >
+                                  Ingrédients
+                                  {hasIngredients && <CheckCircle className="w-3 h-3 ml-1" />}
+                                </Badge>
+                                <Badge
+                                  variant={hasNutrition ? 'default' : 'outline'}
+                                  className={`text-xs ${hasNutrition
+                                      ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                      : 'bg-gray-50 text-gray-500 border-gray-300'
+                                    }`}
+                                >
+                                  Valeur nutritive
+                                  {hasNutrition && <CheckCircle className="w-3 h-3 ml-1" />}
+                                </Badge>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-xs"
+                                onClick={() =>
+                                  openInfoDialog(
+                                    editingRowId === (product.id || product._id)
+                                      ? { ...product, ...editingData, id: product.id || product._id }
+                                      : product
+                                  )
+                                }
+                              >
+                                <Info className="w-3 h-3 mr-1" />
+                                Gérer
+                              </Button>
                             </div>
-                          ) : (
-                            <div>
-                              <div className="font-medium">{product.name}</div>
-                              {product.description && (
-                                <div className="text-sm text-gray-500 truncate max-w-xs">
-                                  {product.description}
-                                </div>
+                          </TableCell>
+                          <TableCell className="w-[130px]">
+                            {editingRowId === (product.id || product._id) ? (
+                              <Select
+                                value={editingData.isDefault ? 'true' : 'false'}
+                                onValueChange={(value) => handleInlineChange('isDefault', value === 'true')}
+                              >
+                                <SelectTrigger className="w-full text-sm">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="true">Par défaut</SelectItem>
+                                  <SelectItem value="false">Personnalisé</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Badge
+                                className={product.isDefault === true
+                                  ? 'bg-green-100 text-green-800 text-xs'
+                                  : 'bg-blue-100 text-blue-800 text-xs'
+                                }
+                              >
+                                {product.isDefault === true ? 'Par défaut' : 'Personnalisé'}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right w-[140px]">
+                            <div className="flex items-center justify-end gap-1">
+                              {editingRowId === (product.id || product._id) ? (
+                                <>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={saveInlineEdit}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Sauver
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={cancelInlineEdit}
+                                    className="h-8 px-2 text-xs"
+                                  >
+                                    <XCircle className="w-3 h-3 mr-1" />
+                                    Annuler
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => startInlineEdit(product)}
+                                    className="h-8 w-8 p-0"
+                                    title="Modifier"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDelete(product.id || product._id)}
+                                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Supprimer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </>
                               )}
                             </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="w-[120px]">
-                          {editingRowId === (product.id || product._id) ? (
-                            <Input
-                              value={editingData.productId}
-                              onChange={(e) => handleInlineChange('productId', e.target.value)}
-                              className="w-full font-mono text-sm"
-                              placeholder="ID produit"
-                            />
-                          ) : (
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {product.productId || 'N/A'}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="w-[110px]">
-                          {editingRowId === (product.id || product._id) ? (
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editingData.price}
-                                onChange={(e) => handleInlineChange('price', e.target.value)}
-                                className="w-full text-sm"
-                                placeholder="0.00"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <span className="font-medium text-sm">
-                                {(product.price || 0).toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $
-                              </span>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="w-[110px]">
-                          {editingRowId === (product.id || product._id) ? (
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <Input
-                                type="number"
-                                step="0.01"
-                                value={editingData.cost}
-                                onChange={(e) => handleInlineChange('cost', e.target.value)}
-                                className="w-full text-sm"
-                                placeholder="0.00"
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              <span className="text-sm">
-                                {(product.cost || 0).toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $
-                              </span>
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="w-[130px]">
-                          {editingRowId === (product.id || product._id) ? (
-                            <Select
-                              value={editingData.isDefault ? 'true' : 'false'}
-                              onValueChange={(value) => handleInlineChange('isDefault', value === 'true')}
-                            >
-                              <SelectTrigger className="w-full text-sm">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="true">Par défaut</SelectItem>
-                                <SelectItem value="false">Personnalisé</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge 
-                              className={product.isDefault === true 
-                                ? 'bg-green-100 text-green-800 text-xs' 
-                                : 'bg-blue-100 text-blue-800 text-xs'
-                              }
-                            >
-                              {product.isDefault === true ? 'Par défaut' : 'Personnalisé'}
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right w-[140px]">
-                          <div className="flex items-center justify-end gap-1">
-                            {editingRowId === (product.id || product._id) ? (
-                              <>
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  onClick={saveInlineEdit}
-                                  className="h-8 px-2 text-xs"
-                                >
-                                  <CheckCircle className="w-3 h-3 mr-1" />
-                                  Sauver
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={cancelInlineEdit}
-                                  className="h-8 px-2 text-xs"
-                                >
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Annuler
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => startInlineEdit(product)}
-                                  className="h-8 w-8 p-0"
-                                  title="Modifier"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(product.id || product._id)}
-                                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Supprimer"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
             )}
           </CardContent>
         </Card>
+        <Dialog
+          open={infoDialogOpen}
+          onOpenChange={(open) => {
+            setInfoDialogOpen(open);
+            if (!open) {
+              setInfoDialogProduct(null);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[620px]">
+            <DialogHeader>
+              <DialogTitle>Informations pour les clients</DialogTitle>
+              <DialogDescription>
+                Ajoutez ou mettez à jour les images de la liste d&apos;ingrédients et du tableau de valeur nutritive pour ce produit.
+              </DialogDescription>
+            </DialogHeader>
+            {infoDialogProduct && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">{infoDialogProduct.name}</h3>
+                  <p className="text-sm text-gray-500">
+                    Ces éléments apparaîtront dans la boutique lorsque le client consulte le produit.
+                  </p>
+                </div>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Liste d&apos;ingrédients</Label>
+                    <ImageUpload
+                      value={infoDialogProduct.ingredientsImage || ''}
+                      onChange={(url) => handleInfoChange('ingredientsImage', url)}
+                      className="mt-2"
+                      previewClassName="max-h-72 overflow-hidden"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Téléversez une photo nette de l&apos;étiquette des ingrédients. Laisser vide pour cacher cette section.
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Tableau de valeur nutritive</Label>
+                    <ImageUpload
+                      value={infoDialogProduct.nutritionImage || ''}
+                      onChange={(url) => handleInfoChange('nutritionImage', url)}
+                      className="mt-2"
+                      previewClassName="max-h-72 overflow-hidden"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Ajoutez le tableau nutritionnel officiel si disponible. Laisser vide pour aucun affichage.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setInfoDialogOpen(false);
+                  setInfoDialogProduct(null);
+                }}
+                disabled={savingProductInfo}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                onClick={saveProductInfo}
+                disabled={savingProductInfo || !infoDialogProduct}
+              >
+                {savingProductInfo ? 'Enregistrement...' : 'Enregistrer'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -31,6 +31,8 @@ export default async function handler(req, res) {
         price: product.price,
         cost: product.cost,
         image: sanitizeHtml(product.image),
+        ingredientsImage: sanitizeHtml(product.ingredientsImage || ''),
+        nutritionImage: sanitizeHtml(product.nutritionImage || ''),
         isDefault: product.isDefault,
         productId: product.productId,
         order: product.order || 0,
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
 
       res.status(200).json(sanitizedProduct);
     } else if (req.method === 'PUT') {
-      let { name, description, price, cost, image, isDefault, productId } = req.body;
+      let { name, description, price, cost, image, isDefault, productId, ingredientsImage, nutritionImage } = req.body;
 
       // Basic validation - check required fields exist and are valid types
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
 
       // Trim and validate the name
       name = name.trim();
-      
+
       // Check if name is valid (not just whitespace, not too long)
       if (name.length === 0 || name.length > 200) {
         return res.status(400).json({ message: 'Product name must be between 1 and 200 characters.' });
@@ -64,7 +66,7 @@ export default async function handler(req, res) {
       // Check for dangerous content but allow any characters
       // Remove only HTML/script tags, preserve the actual content
       name = sanitizeHtml(name, { allowedTags: [] }); // Strip only tags
-      
+
       // If sanitization left nothing, reject it
       if (!name || name.trim().length === 0) {
         return res.status(400).json({ message: 'Product name contains only invalid characters.' });
@@ -88,18 +90,45 @@ export default async function handler(req, res) {
         image = sanitizeHtml(image, { allowedTags: [] });
       }
 
+      const sanitizeOptionalUrl = (value, fieldName) => {
+        if (value === null || value === undefined || value === '') {
+          return '';
+        }
+        if (typeof value !== 'string') {
+          throw new Error(`${fieldName} must be a string.`);
+        }
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+          return '';
+        }
+        if (!validator.isURL(trimmed, { protocols: ['http', 'https'], require_protocol: false })) {
+          throw new Error(`${fieldName === 'ingredientsImage' ? 'Image des ingrédients' : 'Image nutritive'} must be a valid URL.`);
+        }
+        return sanitizeHtml(trimmed, { allowedTags: [] });
+      };
+
+      let sanitizedIngredientsImage = '';
+      let sanitizedNutritionImage = '';
+
+      try {
+        sanitizedIngredientsImage = sanitizeOptionalUrl(ingredientsImage, 'ingredientsImage');
+        sanitizedNutritionImage = sanitizeOptionalUrl(nutritionImage, 'nutritionImage');
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
+      }
+
       // Validate productId
       if (!productId || typeof productId !== 'string') {
         return res.status(400).json({ message: 'Product ID is required.' });
       }
       productId = productId.trim();
-      
+
       // Check if new productId already exists (excluding current product)
-      const existingProduct = await Product.findOne({ 
-        productId, 
-        _id: { $ne: id } 
+      const existingProduct = await Product.findOne({
+        productId,
+        _id: { $ne: id }
       });
-      
+
       if (existingProduct) {
         return res.status(400).json({ message: 'Product ID already exists' });
       }
@@ -127,37 +156,42 @@ export default async function handler(req, res) {
       if (image) {
         product.image = String(image);
       }
+      // Always update ingredientsImage and nutritionImage (they can be empty strings)
+      product.ingredientsImage = sanitizedIngredientsImage || '';
+      product.nutritionImage = sanitizedNutritionImage || '';
 
       // Save the updated product with error handling
       try {
         const updatedProduct = await product.save();
 
-      // Ensure all response fields are safe strings
-      const safeResponse = {
-        id: updatedProduct._id.toString(),
-        name: String(updatedProduct.name || ''),
-        description: updatedProduct.description ? String(updatedProduct.description) : null,
-        price: Number(updatedProduct.price || 0),
-        cost: Number(updatedProduct.cost || 0),
-        image: updatedProduct.image ? String(updatedProduct.image) : null,
-        isDefault: Boolean(updatedProduct.isDefault),
-        productId: String(updatedProduct.productId || ''),
-        order: Number(updatedProduct.order) || 0,
-      };
+        // Ensure all response fields are safe strings
+        const safeResponse = {
+          id: updatedProduct._id.toString(),
+          name: String(updatedProduct.name || ''),
+          description: updatedProduct.description ? String(updatedProduct.description) : null,
+          price: Number(updatedProduct.price || 0),
+          cost: Number(updatedProduct.cost || 0),
+          image: updatedProduct.image ? String(updatedProduct.image) : null,
+          ingredientsImage: updatedProduct.ingredientsImage ? String(updatedProduct.ingredientsImage) : '',
+          nutritionImage: updatedProduct.nutritionImage ? String(updatedProduct.nutritionImage) : '',
+          isDefault: Boolean(updatedProduct.isDefault),
+          productId: String(updatedProduct.productId || ''),
+          order: Number(updatedProduct.order) || 0,
+        };
 
         res.status(200).json(safeResponse);
       } catch (saveError) {
         console.error('Error saving product:', saveError);
-        
+
         // Check if it's an encoding issue
         if (saveError.message && saveError.message.includes('Invalid UTF-8')) {
-          return res.status(400).json({ 
-            message: 'Product name contains invalid characters. Please use only standard text characters.' 
+          return res.status(400).json({
+            message: 'Product name contains invalid characters. Please use only standard text characters.'
           });
         }
-        
-        return res.status(500).json({ 
-          message: 'Error saving product. Please check that all fields contain valid data.' 
+
+        return res.status(500).json({
+          message: 'Error saving product. Please check that all fields contain valid data.'
         });
       }
     } else if (req.method === 'DELETE') {

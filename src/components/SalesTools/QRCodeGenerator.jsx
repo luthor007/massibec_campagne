@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Download, Copy, QrCode, Share2, CheckCircle } from 'lucide-react';
 import QRCodeLib from 'qrcode';
+import { getFullStoreUrl } from '../../utils/storeUrlHelpers';
 
 export default function QRCodeGenerator({ storeInfo }) {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -17,7 +18,7 @@ export default function QRCodeGenerator({ storeInfo }) {
 
   const generateQRCode = async () => {
     try {
-      const storeUrl = `${window.location.origin}/boutique/${storeInfo.storeId}`;
+      const storeUrl = getFullStoreUrl(storeInfo);
       const url = await QRCodeLib.toDataURL(storeUrl, {
         width: 400,
         margin: 2,
@@ -34,7 +35,7 @@ export default function QRCodeGenerator({ storeInfo }) {
 
   const downloadQRCode = () => {
     if (!qrCodeUrl) return;
-    
+
     const link = document.createElement('a');
     link.download = `qr-code-${storeInfo?.name || 'boutique'}.png`;
     link.href = qrCodeUrl;
@@ -42,15 +43,15 @@ export default function QRCodeGenerator({ storeInfo }) {
   };
 
   const copyLink = () => {
-    const storeUrl = `${window.location.origin}/boutique/${storeInfo?.storeId}`;
+    const storeUrl = getFullStoreUrl(storeInfo);
     navigator.clipboard.writeText(storeUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const shareLink = async () => {
-    const storeUrl = `${window.location.origin}/boutique/${storeInfo?.storeId}`;
-    
+    const storeUrl = getFullStoreUrl(storeInfo);
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -66,6 +67,8 @@ export default function QRCodeGenerator({ storeInfo }) {
     }
   };
 
+  const storeUrl = getFullStoreUrl(storeInfo);
+
   return (
     <Card>
       <CardHeader>
@@ -80,9 +83,9 @@ export default function QRCodeGenerator({ storeInfo }) {
       <CardContent className="space-y-3 sm:space-y-4">
         <div className="flex justify-center p-4 sm:p-6 bg-white border-2 border-dashed border-gray-300 rounded-lg">
           {qrCodeUrl ? (
-            <img 
-              src={qrCodeUrl} 
-              alt="QR Code" 
+            <img
+              src={qrCodeUrl}
+              alt="QR Code"
               className="w-32 h-32 sm:w-48 sm:h-48"
             />
           ) : (
@@ -94,13 +97,13 @@ export default function QRCodeGenerator({ storeInfo }) {
 
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800 break-all">
-            <strong>Lien:</strong> {`${window.location.origin}/boutique/${storeInfo?.storeId}`}
+            <strong>Lien:</strong> {storeUrl}
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full"
             onClick={copyLink}
           >
@@ -116,9 +119,9 @@ export default function QRCodeGenerator({ storeInfo }) {
               </>
             )}
           </Button>
-          
-          <Button 
-            variant="outline" 
+
+          <Button
+            variant="outline"
             className="w-full"
             onClick={downloadQRCode}
             disabled={!qrCodeUrl}
@@ -127,8 +130,8 @@ export default function QRCodeGenerator({ storeInfo }) {
             Télécharger QR Code
           </Button>
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full"
             onClick={shareLink}
           >
@@ -146,6 +149,3 @@ export default function QRCodeGenerator({ storeInfo }) {
     </Card>
   );
 }
-
-
-

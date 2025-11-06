@@ -145,8 +145,8 @@ export default async function handler(req, res) {
           enabled: true,
           presets: [0, 2, 5],
           splitConfig: {
-            studentAccount: 60.0,
-            studentCash: 40.0
+            studentAccount: 0.0,
+            studentCash: 100.0
           }
         },
         donationsForSchool: donationsForSchool || {

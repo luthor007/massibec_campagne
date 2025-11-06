@@ -89,7 +89,7 @@ export default function Header() {
       },
       cancel: {
         label: "Annuler",
-        onClick: () => {},
+        onClick: () => { },
       },
     });
   };
@@ -107,214 +107,313 @@ export default function Header() {
     router.push('/');
   };
 
-  const headerClasses = `fixed w-full z-50 transition-all duration-300 ${
-    isScrolled ? 'bg-white' : 'bg-primary/90 backdrop-blur-sm'
-  }`;
+  const headerClasses = `fixed w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-white' : 'bg-primary/90 backdrop-blur-sm'
+    }`;
 
   const logoClasses = `text-2xl font-bold tracking-tight transition-colors text-primary-foreground`;
 
   return (
     <>
-    <header className={headerClasses}>
-      <div className="container mx-auto px-4 py-4 sm:px-10 lg:px-12">
-        <nav className="flex justify-between items-center">
-          <Link href="/" className={logoClasses}>
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <div className="relative h-full overflow-hidden">
-                <img
-                  src="/images/logo_massibec.png"
-                  alt="Massibec Fundraising Logo"
-                  className="object-cover h-[calc(100%-20%)] max-h-16 md:max-h-20 pb-4" // Adjust height for mobile
-                  style={{ objectPosition: 'center top' }}
-                />
-              </div>
-            </motion.div>
-          </Link>
+      <header className={`${headerClasses} h-16 md:h-20`}>
+        <div className="container mx-auto px-4 py-3 sm:px-10 lg:px-12 h-full flex items-center">
+          <nav className="flex justify-between items-center w-full">
+            <Link href="/" className={logoClasses}>
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <div className="relative flex items-center h-full">
+                  <img
+                    src="/images/logo_massibec.png"
+                    alt="Massibec Fundraising Logo"
+                    className="object-cover h-10 md:h-14"
+                    style={{ objectPosition: 'center top' }}
+                  />
+                </div>
+              </motion.div>
+            </Link>
 
-          <div className="hidden md:flex items-center space-x-4">
-            <AnimatePresence>
-              {session ? (
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center space-x-4"
-                >
-                  {/* Navigation buttons for school managers */}
-                  {isSchoolManager ? (
-                    <>
-                      <Link href="/dashboard-manager" passHref>
-                        <Button 
-                          variant={router.pathname === '/dashboard-manager' ? 'default' : 'outline'} 
-                          size="sm"
-                          className="flex items-center space-x-2"
-                        >
-                          <Building2 className="h-4 w-4" />
-                          <span className="hidden sm:inline">Portail Organisation</span>
-                          <span className="sm:hidden">Organisation</span>
-                        </Button>
-                      </Link>
+            <div className="hidden md:flex items-center space-x-4">
+              <AnimatePresence>
+                {session ? (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex items-center space-x-4"
+                  >
+                    {/* Navigation buttons for school managers */}
+                    {isSchoolManager ? (
+                      <>
+                        <Link href="/dashboard-manager" passHref>
+                          <Button
+                            variant={router.pathname === '/dashboard-manager' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex items-center space-x-2"
+                          >
+                            <Building2 className="h-4 w-4" />
+                            <span className="hidden sm:inline">Portail Organisation</span>
+                            <span className="sm:hidden">Organisation</span>
+                          </Button>
+                        </Link>
+                        <Link href="/dashboard" passHref>
+                          <Button
+                            variant={router.pathname === '/dashboard' ? 'default' : 'outline'}
+                            size="sm"
+                            className="flex items-center space-x-2"
+                          >
+                            <ShoppingBag className="h-4 w-4" />
+                            <span className="hidden sm:inline">Portail Vendeur</span>
+                            <span className="sm:hidden">Vendeur</span>
+                          </Button>
+                        </Link>
+                      </>
+                    ) : (
                       <Link href="/dashboard" passHref>
-                        <Button 
-                          variant={router.pathname === '/dashboard' ? 'default' : 'outline'} 
-                          size="sm"
-                          className="flex items-center space-x-2"
-                        >
-                          <ShoppingBag className="h-4 w-4" />
-                          <span className="hidden sm:inline">Portail Vendeur</span>
-                          <span className="sm:hidden">Vendeur</span>
+                        <Button variant="secondary" size="sm">
+                          Tableau de bord
                         </Button>
                       </Link>
-                    </>
-                  ) : (
-                    <Link href="/dashboard" passHref>
+                    )}
+
+                    {/* Profile Menu Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="flex items-center space-x-2 hover:bg-gray-100">
+                          <Avatar className="w-8 h-8 border-2 border-gray-200">
+                            <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
+                            <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                              {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="hidden lg:inline">{session.user?.name}</span>
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-xl rounded-lg">
+                        <div className="px-3 py-2 border-b border-gray-100">
+                          <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
+                        </div>
+                        <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5">
+                          <User className="mr-2 h-4 w-4 text-gray-600" />
+                          <span className="text-sm">Profil</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-gray-100" />
+                        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5">
+                          <LogOut className="mr-2 h-4 w-4" />
+                          <span className="text-sm font-medium">Déconnexion</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex items-center space-x-4"
+                  >
+                    <Link href="/inscription" passHref>
                       <Button variant="secondary" size="sm">
-                        Tableau de bord
+                        S&apos;inscrire
                       </Button>
                     </Link>
-                  )}
-                  
-                  {/* Profile Menu Dropdown */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="flex items-center space-x-2 hover:bg-gray-100">
-                        <Avatar className="w-8 h-8 border-2 border-gray-200">
-                          <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
-                          <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
-                            {session.user?.name?.[0]?.toUpperCase() || 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="hidden lg:inline">{session.user?.name}</span>
-                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                    <Link href="/connexion" passHref>
+                      <Button variant="secondary" size="sm">
+                        <User className="mr-2 h-4 w-4" />
+                        Connexion
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-xl rounded-lg">
-                      <div className="px-3 py-2 border-b border-gray-100">
-                        <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
-                        <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
-                      </div>
-                      <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5">
-                        <User className="mr-2 h-4 w-4 text-gray-600" />
-                        <span className="text-sm">Profil</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-gray-100" />
-                      <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5">
-                        <LogOut className="mr-2 h-4 w-4" />
-                        <span className="text-sm font-medium">Déconnexion</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </motion.div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex items-center space-x-4"
-                >
-                  <Link href="/inscription" passHref>
-                    <Button variant="secondary" size="sm">
-                      S&apos;inscrire
-                    </Button>
-                  </Link>
-                  <Link href="/connexion" passHref>
-                    <Button variant="secondary" size="sm">
-                      <User className="mr-2 h-4 w-4" />
-                      Connexion
-                    </Button>
-                  </Link>
-                  <Link href="/inscription-manager" passHref>
-                    <Button variant="secondary" size="sm">
-                      Inscrire mon école
-                    </Button>
-                  </Link>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    </Link>
+                    <Link href="/inscription-manager" passHref>
+                      <Button variant="secondary" size="sm">
+                        Inscrire mon école
+                      </Button>
+                    </Link>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden text-primary-foreground"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
-        </nav>
-
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="md:hidden mt-4 space-y-4 bg-white p-4 rounded-lg"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden text-primary-foreground"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
+              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </Button>
+          </nav>
+        </div>
+      </header>
+
+      {/* Mobile menu dropdown with overlay - outside header */}
+      {isMobileMenuOpen && (
+        <>
+          {/* Overlay backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          {/* Mobile menu */}
+          <div className="md:hidden fixed top-0 right-0 h-screen w-80 max-w-[85vw] bg-white shadow-2xl z-[70] overflow-y-auto overflow-x-hidden">
+            <div className="p-4 space-y-4">
+              {/* Close button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  aria-label="Close menu"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
               {session ? (
                 <>
+                  {/* Profile Info */}
+                  <div className="pb-4 border-b border-gray-200">
+                    <div className="flex items-center space-x-3 p-3">
+                      <Avatar className="w-10 h-10 border-2 border-gray-200">
+                        <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
+                        <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                          {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{session.user.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
+                      </div>
+                    </div>
+                  </div>
+
                   {isSchoolManager ? (
                     <>
+                      {/* Portail Organisation */}
                       <Link href="/dashboard-manager" passHref>
-                        <Button variant={router.pathname === '/dashboard-manager' ? 'default' : 'ghost'} size="lg" className="w-full justify-start text-xl">
-                          <Building2 className="mr-2 h-5 w-5" />
+                        <Button
+                          variant={router.pathname === '/dashboard-manager' ? 'default' : 'outline'}
+                          size="sm"
+                          className="w-full justify-start border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <Building2 className="h-4 w-4 mr-2" />
                           Portail Organisation
                         </Button>
                       </Link>
-                      <Link href="/dashboard" passHref>
-                        <Button variant={router.pathname === '/dashboard' ? 'default' : 'ghost'} size="lg" className="w-full justify-start text-xl">
-                          <ShoppingBag className="mr-2 h-5 w-5" />
-                          Portail Vendeur
-                        </Button>
-                      </Link>
+                      {/* Portail Vendeur */}
+                      <Button
+                        variant={router.pathname === '/dashboard' ? 'default' : 'outline'}
+                        size="sm"
+                        className="w-full justify-start border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          router.push('/dashboard');
+                        }}
+                      >
+                        <ShoppingBag className="h-4 w-4 mr-2" />
+                        Portail Vendeur
+                      </Button>
+                      <DropdownMenuSeparator className="bg-gray-100" />
+                      {/* Profile */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                        onClick={() => {
+                          handleProfileClick();
+                          setIsMobileMenuOpen(false);
+                        }}
+                      >
+                        <User className="h-4 w-4 mr-2" />
+                        Profil
+                      </Button>
                     </>
                   ) : (
-                    <Link href="/dashboard" passHref>
-                      <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
-                        Tableau de bord
+                    <>
+                      <Link href="/dashboard" passHref>
+                        <Button
+                          variant={router.pathname === '/dashboard' ? 'default' : 'ghost'}
+                          size="sm"
+                          className="w-full justify-start text-xl"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Tableau de bord
+                        </Button>
+                      </Link>
+                      <DropdownMenuSeparator className="bg-gray-100" />
+                      {/* Profile */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                        onClick={() => {
+                          handleProfileClick();
+                          setIsMobileMenuOpen(false);
+                        }}
+                      >
+                        <User className="h-4 w-4 mr-2" />
+                        Profil
                       </Button>
-                    </Link>
+                    </>
                   )}
+
+                  {/* Logout */}
                   <Button
+                    onClick={() => {
+                      handleLogout();
+                      setIsMobileMenuOpen(false);
+                    }}
                     variant="ghost"
-                    size="lg"
-                    className="w-full justify-start text-primary-foreground text-xl"
-                    onClick={handleLogout}
+                    size="sm"
+                    className="w-full justify-start text-red-600 hover:bg-red-50"
                   >
-                    <LogOut className="mr-2 h-4 w-4" /> Déconnexion
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Déconnexion
                   </Button>
                 </>
               ) : (
                 <>
                   <Link href="/inscription" passHref>
-                    <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
                       S&apos;inscrire
                     </Button>
                   </Link>
                   <Link href="/connexion" passHref>
-                    <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
-                      <User className="mr-2 h-4 w-4" /> Connexion
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <User className="h-4 w-4 mr-2" />
+                      Connexion
                     </Button>
                   </Link>
                   <Link href="/inscription-manager" passHref>
-                    <Button variant="ghost" size="lg" className="w-full justify-start text-primary-foreground text-xl">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-gray-700 hover:bg-gray-100"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
                       Inscrire mon école
                     </Button>
                   </Link>
                 </>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </header>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Profile Modal */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
@@ -347,6 +446,6 @@ export default function Header() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      </>
+    </>
   );
 }

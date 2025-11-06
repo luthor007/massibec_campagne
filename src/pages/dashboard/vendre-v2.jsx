@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
+import { getUserCampaignContext } from '@/utils/campaignHelpers';
 import PDFGenerator from '../../components/SalesTools/PDFGenerator';
 import QRCodeGenerator from '../../components/SalesTools/QRCodeGenerator';
 import ClientManager from '../../components/SalesTools/ClientManager';
@@ -35,12 +36,33 @@ export default function VendrePage() {
   const [selectedClients, setSelectedClients] = useState([]);
   const [salesStats, setSalesStats] = useState({ total: 0, thisMonth: 0, growth: 0 });
   const [loading, setLoading] = useState(true);
+  const [campaignContext, setCampaignContext] = useState(null);
+
+  // Fetch campaign context
+  useEffect(() => {
+    const fetchCampaignContext = async () => {
+      if (!session?.user) return;
+
+      try {
+        const response = await fetch('/api/users/campaigns');
+        if (response.ok) {
+          const data = await response.json();
+          const context = getUserCampaignContext(data);
+          setCampaignContext(context);
+        }
+      } catch (error) {
+        console.error('Error fetching campaign context:', error);
+      }
+    };
+
+    fetchCampaignContext();
+  }, [session]);
 
   useEffect(() => {
-    if (session) {
+    if (session && campaignContext?.activeCampaignId) {
       fetchStoreInfo();
     }
-  }, [session]);
+  }, [session, campaignContext?.activeCampaignId]);
 
   useEffect(() => {
     if (storeInfo?.storeId) {
@@ -50,11 +72,16 @@ export default function VendrePage() {
   }, [storeInfo]);
 
   const fetchStoreInfo = async () => {
+    if (!session?.user || !campaignContext?.activeCampaignId) {
+      return;
+    }
     try {
       const response = await fetch('/api/get-store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: session.user.id }),
+        body: JSON.stringify({
+          campaignId: campaignContext.activeCampaignId
+        }),
       });
       const data = await response.json();
       setStoreInfo(data);
@@ -141,7 +168,7 @@ export default function VendrePage() {
 
   if (loading) {
     return (
-      <Layout className="pt-8">
+      <Layout>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
@@ -155,8 +182,8 @@ export default function VendrePage() {
   }
 
   return (
-    <Layout className="pt-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <Layout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
@@ -177,7 +204,7 @@ export default function VendrePage() {
               <p className="text-xs text-muted-foreground mt-1">commandes</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Ce Mois</CardTitle>
@@ -188,7 +215,7 @@ export default function VendrePage() {
               <p className="text-xs text-muted-foreground mt-1">commandes</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-l-4 border-l-purple-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Croissance</CardTitle>
@@ -201,7 +228,7 @@ export default function VendrePage() {
               <p className="text-xs text-muted-foreground mt-1">vs mois dernier</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-l-4 border-l-orange-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Clients</CardTitle>
@@ -249,7 +276,7 @@ export default function VendrePage() {
                     </div>
                     <p className="text-sm text-gray-600">Publiez quotidiennement sur Facebook, Instagram et TikTok avec nos templates</p>
                   </div>
-                  
+
                   <div className="p-4 bg-white rounded-lg shadow-sm">
                     <div className="flex items-center mb-2">
                       <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
@@ -259,7 +286,7 @@ export default function VendrePage() {
                     </div>
                     <p className="text-sm text-gray-600">Envoyez des emails personnalisés à vos anciens clients chaque semaine</p>
                   </div>
-                  
+
                   <div className="p-4 bg-white rounded-lg shadow-sm">
                     <div className="flex items-center mb-2">
                       <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
@@ -277,7 +304,7 @@ export default function VendrePage() {
           {/* Clients Tab */}
           <TabsContent value="clients" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <EmailCampaign 
+              <EmailCampaign
                 selectedClients={selectedClients}
                 storeId={storeInfo?.storeId}
                 onSuccess={() => {
@@ -285,7 +312,7 @@ export default function VendrePage() {
                   fetchClients();
                 }}
               />
-              
+
               <Card>
                 <CardHeader>
                   <CardTitle>Clients Sélectionnés</CardTitle>
@@ -316,7 +343,7 @@ export default function VendrePage() {
               </Card>
             </div>
 
-            <ClientManager 
+            <ClientManager
               clients={clients}
               storeId={storeInfo?.storeId}
               onRefresh={fetchClients}
@@ -345,9 +372,9 @@ export default function VendrePage() {
                         <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-gray-600">{template.tip}</p>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => copyToClipboard(template.text)}
                         className="w-full"
                       >
@@ -378,9 +405,9 @@ export default function VendrePage() {
                         <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-gray-600">{template.tip}</p>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => copyToClipboard(template.text)}
                         className="w-full"
                       >
@@ -411,9 +438,9 @@ export default function VendrePage() {
                         <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-gray-600">{template.tip}</p>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => copyToClipboard(template.text)}
                         className="w-full"
                       >

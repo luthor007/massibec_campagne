@@ -47,6 +47,16 @@ const ProductSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  ingredientsImage: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  nutritionImage: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   productId: { 
     type: String, 
     required: true,
@@ -79,6 +89,12 @@ ProductSchema.pre('save', function(next) {
   }
   if (this.image && typeof this.image === 'string') {
     this.image = Buffer.from(this.image, 'utf8').toString('utf8');
+  }
+  if (this.ingredientsImage && typeof this.ingredientsImage === 'string') {
+    this.ingredientsImage = Buffer.from(this.ingredientsImage, 'utf8').toString('utf8');
+  }
+  if (this.nutritionImage && typeof this.nutritionImage === 'string') {
+    this.nutritionImage = Buffer.from(this.nutritionImage, 'utf8').toString('utf8');
   }
   if (this.productId && typeof this.productId === 'string') {
     this.productId = Buffer.from(this.productId, 'utf8').toString('utf8');

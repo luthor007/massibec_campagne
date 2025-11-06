@@ -16,13 +16,22 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
   const organizationType = school?.organizationType || campaign?.organizationType || 'school';
   const terminology = getTerminology(organizationType);
 
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('fr-CA', {
+  const QUEBEC_TIMEZONE = 'America/Montreal';
+
+  const formatDateWithTimezone = (date) => {
+    if (!date) return '';
+    const dateObj = new Date(date);
+    if (Number.isNaN(dateObj.getTime())) return '';
+
+    return new Intl.DateTimeFormat('fr-CA', {
+      timeZone: QUEBEC_TIMEZONE,
       year: 'numeric',
       month: 'long',
       day: 'numeric'
-    });
+    }).format(dateObj);
   };
+
+  const formatDate = (date) => formatDateWithTimezone(date);
 
   const formatTime = (date) => {
     return new Date(date).toLocaleTimeString('fr-CA', {
@@ -140,13 +149,7 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
   const anyDonationsEnabled = studentDonationsEnabled || schoolDonationsEnabled;
   
   // Format order dates and times
-  const formatDateLong = (date) => {
-    return new Date(date).toLocaleDateString('fr-CA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  const formatDateLong = (date) => formatDateWithTimezone(date);
   
   // Format order time range
   const orderTimeRange = "minuit et midi";

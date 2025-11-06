@@ -1,8 +1,9 @@
 // pages/dashboard/vendre.jsx - Version Production Ready
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
+import { getServerSession } from 'next-auth/next';
 import { motion } from 'framer-motion';
 import Layout from '../../components/Layout';
 import PDFGenerator from '../../components/SalesTools/PDFGenerator';
@@ -14,6 +15,8 @@ import JoinCampaignModal from '../../components/Dashboard/JoinCampaignModal';
 import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip';
 import useOnboarding from '../../hooks/useOnboarding';
 import { getUserCampaignContext } from '../../utils/campaignHelpers';
+import { getDashboardSSRData } from '../../lib/dashboardSSR';
+import { authOptions } from '../api/auth/[...nextauth]';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,25 +37,30 @@ import {
   ArrowLeft
 } from 'lucide-react';
 
-export default function VendrePage() {
+export default function VendrePage({
+  initialCampaignContext,
+  initialStoreInfo
+}) {
   const { data: session } = useSession();
   const router = useRouter();
-  const [storeInfo, setStoreInfo] = useState(null);
+
+  // State declarations - must come before handlers that use them
+  const [storeInfo, setStoreInfo] = useState(initialStoreInfo || null);
   const [clients, setClients] = useState([]);
   const [selectedClients, setSelectedClients] = useState([]);
   const [salesStats, setSalesStats] = useState({ total: 0, thisMonth: 0, growth: 0 });
-  const [loading, setLoading] = useState(true);
-  
-  // Campaign-related state
-  const [campaignContext, setCampaignContext] = useState(null);
+  const [loading, setLoading] = useState(!initialStoreInfo);
+
+  // Campaign-related state - initialize from SSR props
+  const [campaignContext, setCampaignContext] = useState(initialCampaignContext || null);
   const [showJoinCampaignModal, setShowJoinCampaignModal] = useState(false);
-  
+
   // Onboarding state
   const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
   const [tooltipTarget, setTooltipTarget] = useState(null);
   const toolsTabsRef = useRef(null);
-  
-  // Use onboarding hook
+
+  // Use onboarding hook - must come before handlers that use its values
   const {
     progress,
     currentStep,
@@ -61,17 +69,109 @@ export default function VendrePage() {
     getStepContent
   } = useOnboarding();
 
-  useEffect(() => {
-    if (session) {
-      fetchStoreInfo();
-    }
-  }, [session]);
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleCampaignSwitch = useCallback((campaignId) => {
+    window.location.reload(); // Simple refresh for now
+  }, []);
 
-  // Fetch campaign context
+  const handleJoinCampaignClick = useCallback(() => {
+    setShowJoinCampaignModal(true);
+  }, []);
+
+  const handleJoinCampaignSuccess = useCallback((campaign) => {
+    setShowJoinCampaignModal(false);
+    window.location.reload();
+  }, []);
+
+  const handleBackNavigation = useCallback((e) => {
+    e.preventDefault();
+    router.push('/dashboard');
+  }, [router]);
+
+  const handleOnboardingNext = useCallback(async () => {
+    if (currentStep?.key === 'viewedTools') {
+      const success = await markStepComplete('viewedTools', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  }, [currentStep, markStepComplete]);
+
+  const handleOnboardingSkip = useCallback(async () => {
+    if (currentStep?.key === 'viewedTools') {
+      const success = await markStepComplete('viewedTools', true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  }, [currentStep, markStepComplete]);
+
+  const handleOnboardingClose = useCallback(() => {
+    setShowOnboardingTooltip(false);
+  }, []);
+
+  const handleCloseJoinCampaignModal = useCallback(() => {
+    setShowJoinCampaignModal(false);
+  }, []);
+
+  // Memoize campaign selector props
+  const campaignSelectorProps = useMemo(() => ({
+    onCampaignSwitch: handleCampaignSwitch,
+    onJoinCampaign: handleJoinCampaignClick,
+    initialCampaigns: initialCampaignContext?.campaigns || [],
+  }), [handleCampaignSwitch, handleJoinCampaignClick, initialCampaignContext]);
+
+  // Optimized prefetching for instant return navigation
   useEffect(() => {
+    // Aggressive prefetching
+    router.prefetch('/dashboard');
+    router.prefetch('/dashboard');
+    const timeoutId = setTimeout(() => {
+      router.prefetch('/dashboard');
+    }, 100);
+
+    // Prefetch on hover/touch
+    const backLink = document.querySelector('a[href="/dashboard"], button[onclick*="dashboard"]');
+    if (backLink) {
+      const prefetchDashboard = () => router.prefetch('/dashboard');
+      backLink.addEventListener('mouseenter', prefetchDashboard, { once: true, passive: true });
+      backLink.addEventListener('touchstart', prefetchDashboard, { once: true, passive: true });
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [router]);
+
+  // Onboarding logic for tools page
+  useEffect(() => {
+    if (!onboardingLoading && currentStep?.key === 'viewedTools') {
+      setShowOnboardingTooltip(true);
+      setTooltipTarget(toolsTabsRef.current);
+    } else {
+      setShowOnboardingTooltip(false);
+    }
+  }, [currentStep, onboardingLoading]);
+
+  useEffect(() => {
+    // If initialStoreInfo has all required fields, use it directly
+    if (initialStoreInfo && initialStoreInfo.ownerName && initialStoreInfo.schoolName !== undefined) {
+      setStoreInfo(initialStoreInfo);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise fetch store info if session and campaign are available
+    if (session && campaignContext?.activeCampaignId && !initialStoreInfo) {
+      fetchStoreInfo();
+    } else if (initialStoreInfo) {
+      setLoading(false);
+    }
+  }, [session, campaignContext?.activeCampaignId, initialStoreInfo]);
+
+  // Refresh campaign context on client-side updates (only if not provided via SSR)
+  useEffect(() => {
+    if (!session?.user || initialCampaignContext) return;
+
     const fetchCampaignContext = async () => {
-      if (!session?.user) return;
-      
       try {
         const response = await fetch('/api/users/campaigns');
         if (response.ok) {
@@ -85,50 +185,7 @@ export default function VendrePage() {
     };
 
     fetchCampaignContext();
-  }, [session]);
-
-  // Campaign handlers
-  const handleCampaignSwitch = (campaignId) => {
-    window.location.reload(); // Simple refresh for now
-  };
-
-  const handleJoinCampaignSuccess = (campaign) => {
-    setShowJoinCampaignModal(false);
-    window.location.reload();
-  };
-
-  // Onboarding logic for tools page
-  useEffect(() => {
-    if (!onboardingLoading && currentStep?.key === 'viewedTools') {
-      setShowOnboardingTooltip(true);
-      setTooltipTarget(toolsTabsRef.current);
-    } else {
-      setShowOnboardingTooltip(false);
-    }
-  }, [currentStep, onboardingLoading]);
-
-  // Onboarding handlers
-  const handleOnboardingNext = async () => {
-    if (currentStep?.key === 'viewedTools') {
-      const success = await markStepComplete('viewedTools', true);
-      if (success) {
-        setShowOnboardingTooltip(false);
-      }
-    }
-  };
-
-  const handleOnboardingSkip = async () => {
-    if (currentStep?.key === 'viewedTools') {
-      const success = await markStepComplete('viewedTools', true);
-      if (success) {
-        setShowOnboardingTooltip(false);
-      }
-    }
-  };
-
-  const handleOnboardingClose = () => {
-    setShowOnboardingTooltip(false);
-  };
+  }, [session, initialCampaignContext]);
 
   useEffect(() => {
     if (storeInfo?.storeId) {
@@ -138,14 +195,50 @@ export default function VendrePage() {
   }, [storeInfo]);
 
   const fetchStoreInfo = async () => {
+    if (!session?.user || !campaignContext?.activeCampaignId) {
+      return;
+    }
     try {
-      const response = await fetch('/api/get-store', {
+      // First get storeId from /api/get-store
+      const storeResponse = await fetch('/api/get-store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: session.user.id }),
+        body: JSON.stringify({
+          campaignId: campaignContext.activeCampaignId
+        }),
       });
-      const data = await response.json();
-      setStoreInfo(data);
+
+      if (!storeResponse.ok) {
+        throw new Error('Failed to fetch store');
+      }
+
+      const storeData = await storeResponse.json();
+
+      // Then fetch full store details using storeId
+      if (storeData.storeId) {
+        const fullStoreResponse = await fetch(`/api/stores/${storeData.storeId}`);
+        if (fullStoreResponse.ok) {
+          const fullStoreData = await fullStoreResponse.json();
+          const normalizedStoreId = (() => {
+            if (typeof storeData.storeId === 'string') return storeData.storeId;
+            if (storeData.storeId?._id) return storeData.storeId._id.toString?.() || storeData.storeId._id;
+            if (storeData.storeId?.toString) return storeData.storeId.toString();
+            if (fullStoreData?._id) return fullStoreData._id.toString?.() || fullStoreData._id;
+            return '';
+          })();
+
+          setStoreInfo({
+            ...storeData,
+            ...fullStoreData,
+            storeId: normalizedStoreId,
+          });
+        } else {
+          // Fallback to basic store data if full fetch fails
+          setStoreInfo(storeData);
+        }
+      } else {
+        setStoreInfo(storeData);
+      }
     } catch (error) {
       console.error('Error fetching store info:', error);
     } finally {
@@ -154,8 +247,18 @@ export default function VendrePage() {
   };
 
   const fetchClients = async () => {
+    const resolvedStoreId = storeInfo?.storeId || storeInfo?._id;
+    const storeIdParam = typeof resolvedStoreId === 'string'
+      ? resolvedStoreId
+      : resolvedStoreId?.toString?.();
+
+    if (!storeIdParam) {
+      console.warn('fetchClients: Missing storeId, skipping fetch');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/clients?storeId=${storeInfo.storeId}`);
+      const response = await fetch(`/api/clients?storeId=${storeIdParam}`);
       if (response.ok) {
         const data = await response.json();
         setClients(data);
@@ -166,8 +269,18 @@ export default function VendrePage() {
   };
 
   const fetchSalesStats = async () => {
+    const resolvedStoreId = storeInfo?.storeId || storeInfo?._id;
+    const storeIdParam = typeof resolvedStoreId === 'string'
+      ? resolvedStoreId
+      : resolvedStoreId?.toString?.();
+
+    if (!storeIdParam) {
+      console.warn('fetchSalesStats: Missing storeId, skipping fetch');
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/sales-stats?storeId=${storeInfo.storeId}`);
+      const response = await fetch(`/api/sales-stats?storeId=${storeIdParam}`);
       if (response.ok) {
         const data = await response.json();
         setSalesStats(data);
@@ -229,7 +342,7 @@ export default function VendrePage() {
 
   if (loading) {
     return (
-      <Layout className="pt-8">
+      <Layout>
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
@@ -238,27 +351,27 @@ export default function VendrePage() {
   }
 
   if (!session) {
-    router.push('/connexion');
+    // If no session, show loading or null - redirect is handled by getServerSideProps
     return null;
   }
 
   return (
-    <Layout className="pt-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <Layout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-16 md:pt-20 overflow-x-hidden">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           {/* Back Arrow */}
           <div className="mb-4">
-            <Button 
-              variant="ghost" 
-              onClick={() => router.push('/dashboard')}
+            <Button
+              variant="ghost"
+              onClick={handleBackNavigation}
               className="flex items-center space-x-2 text-gray-600 hover:text-gray-900"
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Retour au tableau de bord</span>
             </Button>
           </div>
-          
+
           <div className="flex justify-between items-start mb-4">
             <div>
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
@@ -266,10 +379,7 @@ export default function VendrePage() {
               </h1>
               <p className="text-gray-600 text-sm sm:text-base lg:text-lg">Boostez vos ventes avec nos outils marketing prêts à utiliser</p>
             </div>
-            <CampaignSelector 
-              onCampaignSwitch={handleCampaignSwitch}
-              onJoinCampaign={() => setShowJoinCampaignModal(true)}
-            />
+            <CampaignSelector {...campaignSelectorProps} />
           </div>
         </div>
 
@@ -285,7 +395,7 @@ export default function VendrePage() {
               <p className="text-xs text-muted-foreground mt-1">commandes</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">Ce Mois</CardTitle>
@@ -296,7 +406,7 @@ export default function VendrePage() {
               <p className="text-xs text-muted-foreground mt-1">commandes</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-l-4 border-l-purple-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">Croissance</CardTitle>
@@ -309,7 +419,7 @@ export default function VendrePage() {
               <p className="text-xs text-muted-foreground mt-1">vs mois dernier</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-l-4 border-l-orange-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">Clients</CardTitle>
@@ -334,320 +444,324 @@ export default function VendrePage() {
             ease: "easeInOut"
           }}
         >
-        <Tabs defaultValue="marketing" className={`space-y-4 sm:space-y-6 ${currentStep?.key === 'viewedTools' ? 'ring-4 ring-blue-500 rounded-lg p-4' : ''}`}>
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
-            <TabsTrigger value="marketing" className="text-xs sm:text-sm">🎨 Marketing</TabsTrigger>
-            <TabsTrigger value="clients" className="text-xs sm:text-sm">👥 Clients</TabsTrigger>
-            <TabsTrigger value="social" className="text-xs sm:text-sm">📱 Réseaux</TabsTrigger>
-            <TabsTrigger value="tips" className="text-xs sm:text-sm">💡 Conseils</TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="marketing" className={`space-y-4 sm:space-y-6 ${currentStep?.key === 'viewedTools' ? 'ring-4 ring-blue-500 rounded-lg p-4' : ''}`}>
+            <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
+              <TabsTrigger value="marketing" className="text-xs sm:text-sm">🎨 Marketing</TabsTrigger>
+              <TabsTrigger value="clients" className="text-xs sm:text-sm">👥 Clients</TabsTrigger>
+              <TabsTrigger value="social" className="text-xs sm:text-sm">📱 Réseaux</TabsTrigger>
+              <TabsTrigger value="tips" className="text-xs sm:text-sm">💡 Conseils</TabsTrigger>
+            </TabsList>
 
-          {/* Marketing Tab */}
-          <TabsContent value="marketing" className="space-y-4 sm:space-y-6">
-            {/* PDF Generator prend toute la largeur car il a sa propre grille 2 colonnes */}
-            <PDFGenerator storeInfo={storeInfo} products={null} />
-            
-            {/* QR Code Generator en dessous */}
-            <QRCodeGenerator storeInfo={storeInfo} />
+            {/* Marketing Tab */}
+            <TabsContent value="marketing" className="space-y-4 sm:space-y-6">
+              {/* PDF Generator prend toute la largeur car il a sa propre grille 2 colonnes */}
+              <PDFGenerator storeInfo={storeInfo} products={null} />
 
-            {/* Marketing Tips */}
-            <Card className="bg-gradient-to-br from-blue-50 to-purple-50">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Target className="h-5 w-5 mr-2 text-purple-600" />
-                  Stratégies Marketing Gagnantes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="p-4 bg-white rounded-lg shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-blue-600 font-bold">1</span>
-                      </div>
-                      <h4 className="font-semibold">Réseaux Sociaux</h4>
-                    </div>
-                    <p className="text-sm text-gray-600">Publiez quotidiennement sur Facebook, Instagram et TikTok avec nos templates</p>
-                  </div>
-                  
-                  <div className="p-4 bg-white rounded-lg shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-green-600 font-bold">2</span>
-                      </div>
-                      <h4 className="font-semibold">Email Marketing</h4>
-                    </div>
-                    <p className="text-sm text-gray-600">Envoyez des emails personnalisés à vos anciens clients chaque semaine</p>
-                  </div>
-                  
-                  <div className="p-4 bg-white rounded-lg shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-purple-600 font-bold">3</span>
-                      </div>
-                      <h4 className="font-semibold">Affichage Local</h4>
-                    </div>
-                    <p className="text-sm text-gray-600">Imprimez et affichez vos PDF dans des lieux stratégiques de votre quartier</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              {/* QR Code Generator en dessous */}
+              <QRCodeGenerator storeInfo={storeInfo} />
 
-          {/* Clients Tab */}
-          <TabsContent value="clients" className="space-y-4 sm:space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <EmailCampaign 
-                selectedClients={selectedClients}
-                storeId={storeInfo?.storeId}
-                onSuccess={() => {
-                  setSelectedClients([]);
-                  fetchClients();
-                }}
-              />
-              
-              <Card>
+              {/* Marketing Tips */}
+              <Card className="bg-gradient-to-br from-blue-50 to-purple-50">
                 <CardHeader>
-                  <CardTitle>Clients Sélectionnés</CardTitle>
-                  <CardDescription>
-                    {selectedClients.length} client{selectedClients.length > 1 ? 's' : ''} sélectionné{selectedClients.length > 1 ? 's' : ''}
-                  </CardDescription>
+                  <CardTitle className="flex items-center">
+                    <Target className="h-5 w-5 mr-2 text-purple-600" />
+                    Stratégies Marketing Gagnantes
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {selectedClients.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-gray-500">Sélectionnez des clients ci-dessous pour envoyer des emails</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {clients.filter(c => selectedClients.includes(c._id)).map(client => (
-                        <div key={client._id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                          <div>
-                            <p className="font-medium">{client.name}</p>
-                            <p className="text-sm text-gray-600">{client.email}</p>
-                          </div>
-                          <CheckCircle className="h-5 w-5 text-blue-600" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="p-4 bg-white rounded-lg shadow-sm">
+                      <div className="flex items-center mb-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                          <span className="text-blue-600 font-bold">1</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <ClientManager 
-              clients={clients}
-              storeId={storeInfo?.storeId}
-              onRefresh={fetchClients}
-            />
-          </TabsContent>
-
-          {/* Social Media Tab */}
-          <TabsContent value="social" className="space-y-4 sm:space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-              {/* Facebook */}
-              <Card>
-                <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                  <CardTitle className="flex items-center">
-                    <Facebook className="h-5 w-5 mr-2" />
-                    Facebook
-                  </CardTitle>
-                  <CardDescription className="text-blue-100">
-                    Posts pour votre mur et groupes
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  {socialTemplates.facebook.map((template, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-sm mb-2">{template.text}</p>
-                      <div className="flex items-start space-x-2 mb-2">
-                        <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-gray-600">{template.tip}</p>
+                        <h4 className="font-semibold">Réseaux Sociaux</h4>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => copyToClipboard(template.text)}
-                        className="w-full"
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copier
-                      </Button>
+                      <p className="text-sm text-gray-600">Publiez quotidiennement sur Facebook, Instagram et TikTok avec nos templates</p>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
 
-              {/* Instagram */}
-              <Card>
-                <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white">
-                  <CardTitle className="flex items-center">
-                    <Instagram className="h-5 w-5 mr-2" />
-                    Instagram
-                  </CardTitle>
-                  <CardDescription className="text-pink-100">
-                    Stories et posts attractifs
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  {socialTemplates.instagram.map((template, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-sm mb-2">{template.text}</p>
-                      <div className="flex items-start space-x-2 mb-2">
-                        <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-gray-600">{template.tip}</p>
+                    <div className="p-4 bg-white rounded-lg shadow-sm">
+                      <div className="flex items-center mb-2">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                          <span className="text-green-600 font-bold">2</span>
+                        </div>
+                        <h4 className="font-semibold">Email Marketing</h4>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => copyToClipboard(template.text)}
-                        className="w-full"
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copier
-                      </Button>
+                      <p className="text-sm text-gray-600">Envoyez des emails personnalisés à vos anciens clients chaque semaine</p>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
 
-              {/* TikTok */}
-              <Card>
-                <CardHeader className="bg-gradient-to-r from-gray-800 to-black text-white">
-                  <CardTitle className="flex items-center">
-                    <Music className="h-5 w-5 mr-2" />
-                    TikTok
-                  </CardTitle>
-                  <CardDescription className="text-gray-300">
-                    Contenu viral pour jeunes
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  {socialTemplates.tiktok.map((template, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-sm mb-2">{template.text}</p>
-                      <div className="flex items-start space-x-2 mb-2">
-                        <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-gray-600">{template.tip}</p>
+                    <div className="p-4 bg-white rounded-lg shadow-sm">
+                      <div className="flex items-center mb-2">
+                        <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                          <span className="text-purple-600 font-bold">3</span>
+                        </div>
+                        <h4 className="font-semibold">Affichage Local</h4>
                       </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => copyToClipboard(template.text)}
-                        className="w-full"
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copier
-                      </Button>
+                      <p className="text-sm text-gray-600">Imprimez et affichez vos PDF dans des lieux stratégiques de votre quartier</p>
                     </div>
-                  ))}
+                  </div>
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          {/* Tips Tab */}
-          <TabsContent value="tips" className="space-y-4 sm:space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              <Card className="border-l-4 border-l-blue-500">
+            {/* Clients Tab */}
+            <TabsContent value="clients" className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <EmailCampaign
+                  selectedClients={selectedClients}
+                  storeId={storeInfo?.storeId}
+                  onSuccess={() => {
+                    setSelectedClients([]);
+                    fetchClients();
+                  }}
+                />
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Clients Sélectionnés</CardTitle>
+                    <CardDescription>
+                      {selectedClients.length} client{selectedClients.length > 1 ? 's' : ''} sélectionné{selectedClients.length > 1 ? 's' : ''}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedClients.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-500">Sélectionnez des clients ci-dessous pour envoyer des emails</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {clients.filter(c => selectedClients.includes(c._id)).map(client => (
+                          <div key={client._id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                            <div>
+                              <p className="font-medium">{client.name}</p>
+                              <p className="text-sm text-gray-600">{client.email}</p>
+                            </div>
+                            <CheckCircle className="h-5 w-5 text-blue-600" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <ClientManager
+                clients={clients}
+                storeId={
+                  typeof (storeInfo?.storeId || storeInfo?._id) === 'string'
+                    ? (storeInfo?.storeId || storeInfo?._id)
+                    : (storeInfo?.storeId || storeInfo?._id)?.toString?.()
+                }
+                onRefresh={fetchClients}
+              />
+            </TabsContent>
+
+            {/* Social Media Tab */}
+            <TabsContent value="social" className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+                {/* Facebook */}
+                <Card>
+                  <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+                    <CardTitle className="flex items-center">
+                      <Facebook className="h-5 w-5 mr-2" />
+                      Facebook
+                    </CardTitle>
+                    <CardDescription className="text-blue-100">
+                      Posts pour votre mur et groupes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4">
+                    {socialTemplates.facebook.map((template, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm mb-2">{template.text}</p>
+                        <div className="flex items-start space-x-2 mb-2">
+                          <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-gray-600">{template.tip}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(template.text)}
+                          className="w-full"
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copier
+                        </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* Instagram */}
+                <Card>
+                  <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white">
+                    <CardTitle className="flex items-center">
+                      <Instagram className="h-5 w-5 mr-2" />
+                      Instagram
+                    </CardTitle>
+                    <CardDescription className="text-pink-100">
+                      Stories et posts attractifs
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4">
+                    {socialTemplates.instagram.map((template, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm mb-2">{template.text}</p>
+                        <div className="flex items-start space-x-2 mb-2">
+                          <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-gray-600">{template.tip}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(template.text)}
+                          className="w-full"
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copier
+                        </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* TikTok */}
+                <Card>
+                  <CardHeader className="bg-gradient-to-r from-gray-800 to-black text-white">
+                    <CardTitle className="flex items-center">
+                      <Music className="h-5 w-5 mr-2" />
+                      TikTok
+                    </CardTitle>
+                    <CardDescription className="text-gray-300">
+                      Contenu viral pour jeunes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4">
+                    {socialTemplates.tiktok.map((template, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm mb-2">{template.text}</p>
+                        <div className="flex items-start space-x-2 mb-2">
+                          <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-gray-600">{template.tip}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyToClipboard(template.text)}
+                          className="w-full"
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copier
+                        </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Tips Tab */}
+            <TabsContent value="tips" className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <Card className="border-l-4 border-l-blue-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-blue-600">
+                      <Target className="h-5 w-5 mr-2" />
+                      Maximiser Vos Ventes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Publiez sur les réseaux sociaux tous les jours</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Envoyez des emails de relance chaque semaine</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Affichez vos PDF dans des lieux publics</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Partagez votre QR code partout</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Organisez des concours sur les réseaux sociaux</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-l-4 border-l-purple-500">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-purple-600">
+                      <Gift className="h-5 w-5 mr-2" />
+                      Idées Créatives
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Créez un défi TikTok avec vos produits</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Offrez une tarte gratuite pour 5 commandes</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Filmez des témoignages de clients satisfaits</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Créez un compte à rebours pour la fin de campagne</span>
+                      </li>
+                      <li className="flex items-start">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm">Partagez votre progression vers l'objectif</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center text-blue-600">
-                    <Target className="h-5 w-5 mr-2" />
-                    Maximiser Vos Ventes
+                  <CardTitle className="flex items-center text-orange-600">
+                    <TrendingUp className="h-5 w-5 mr-2" />
+                    Plan d'Action Hebdomadaire
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="space-y-3">
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Publiez sur les réseaux sociaux tous les jours</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Envoyez des emails de relance chaque semaine</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Affichez vos PDF dans des lieux publics</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Partagez votre QR code partout</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Organisez des concours sur les réseaux sociaux</span>
-                    </li>
-                  </ul>
+                  <div className="space-y-4">
+                    {[
+                      { day: 'Lundi', action: 'Envoyez des emails à vos clients' },
+                      { day: 'Mardi', action: 'Publiez sur Facebook et Instagram' },
+                      { day: 'Mercredi', action: 'Créez une vidéo TikTok' },
+                      { day: 'Jeudi', action: 'Partagez votre QR code en story' },
+                      { day: 'Vendredi', action: 'Relancez les clients qui n\'ont pas commandé' },
+                      { day: 'Samedi', action: 'Organisez un concours sur les réseaux' },
+                      { day: 'Dimanche', action: 'Planifiez la semaine suivante' }
+                    ].map((item, index) => (
+                      <div key={index} className="flex items-center p-3 bg-white rounded-lg shadow-sm">
+                        <div className="w-24 font-semibold text-orange-600">{item.day}</div>
+                        <div className="flex-1 text-sm">{item.action}</div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
-
-              <Card className="border-l-4 border-l-purple-500">
-                <CardHeader>
-                  <CardTitle className="flex items-center text-purple-600">
-                    <Gift className="h-5 w-5 mr-2" />
-                    Idées Créatives
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3">
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Créez un défi TikTok avec vos produits</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Offrez une tarte gratuite pour 5 commandes</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Filmez des témoignages de clients satisfaits</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Créez un compte à rebours pour la fin de campagne</span>
-                    </li>
-                    <li className="flex items-start">
-                      <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">Partagez votre progression vers l'objectif</span>
-                    </li>
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200">
-              <CardHeader>
-                <CardTitle className="flex items-center text-orange-600">
-                  <TrendingUp className="h-5 w-5 mr-2" />
-                  Plan d'Action Hebdomadaire
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { day: 'Lundi', action: 'Envoyez des emails à vos clients' },
-                    { day: 'Mardi', action: 'Publiez sur Facebook et Instagram' },
-                    { day: 'Mercredi', action: 'Créez une vidéo TikTok' },
-                    { day: 'Jeudi', action: 'Partagez votre QR code en story' },
-                    { day: 'Vendredi', action: 'Relancez les clients qui n\'ont pas commandé' },
-                    { day: 'Samedi', action: 'Organisez un concours sur les réseaux' },
-                    { day: 'Dimanche', action: 'Planifiez la semaine suivante' }
-                  ].map((item, index) => (
-                    <div key={index} className="flex items-center p-3 bg-white rounded-lg shadow-sm">
-                      <div className="w-24 font-semibold text-orange-600">{item.day}</div>
-                      <div className="flex-1 text-sm">{item.action}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
         </motion.div>
       </div>
-      
+
       {/* Onboarding Tooltip */}
       {showOnboardingTooltip && currentStep && tooltipTarget && (
         <OnboardingTooltip
@@ -669,11 +783,49 @@ export default function VendrePage() {
       )}
 
       {/* Join Campaign Modal */}
-      <JoinCampaignModal 
+      <JoinCampaignModal
         isOpen={showJoinCampaignModal}
-        onClose={() => setShowJoinCampaignModal(false)}
+        onClose={handleCloseJoinCampaignModal}
         onSuccess={handleJoinCampaignSuccess}
       />
     </Layout>
   );
+}
+
+export async function getServerSideProps(context) {
+  try {
+    const session = await getServerSession(context.req, context.res, authOptions);
+    if (!session || !session.user) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    const dashboardData = await getDashboardSSRData(session);
+    if (!dashboardData) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    return {
+      props: dashboardData,
+    };
+  } catch (error) {
+    console.error('Error in getServerSideProps (vendre):', error);
+    return {
+      props: {
+        initialCampaignContext: { campaigns: [], activeCampaignId: null, mode: 'none' },
+        initialStoreInfo: null,
+        initialSchoolData: null,
+        initialCampaignData: null
+      },
+    };
+  }
 }

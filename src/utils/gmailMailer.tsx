@@ -210,7 +210,12 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
     hoursAvailable,
     products,
     totalAmount,
+    discount,
+    originalSubtotal,
     tip,
+    studentDonation,
+    schoolDonation,
+    studentDonationSplit,
     autoDeposit,
     orderId,
     orderDate,
@@ -221,6 +226,10 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
     sellerName,
     sellerPhone,
     sellerEmail,
+    organizationType,
+    deliveryOption,
+    customDeliveryOption,
+    customerDeliveryAddress,
   } = params;
 
   try {
@@ -233,7 +242,12 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
         hoursAvailable={hoursAvailable}
         products={products}
         totalAmount={totalAmount}
+        discount={discount}
+        originalSubtotal={originalSubtotal}
         tip={tip}
+        studentDonation={studentDonation}
+        schoolDonation={schoolDonation}
+        studentDonationSplit={studentDonationSplit}
         autoDeposit={autoDeposit}
         orderId={orderId}
         orderDate={orderDate}
@@ -244,6 +258,10 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
         sellerName={sellerName}
         sellerPhone={sellerPhone}
         sellerEmail={sellerEmail}
+        organizationType={organizationType}
+        deliveryOption={deliveryOption}
+        customDeliveryOption={customDeliveryOption}
+        customerDeliveryAddress={customerDeliveryAddress}
       />
     );
 
@@ -557,17 +575,17 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
 };
 
 // Exportation des fonctions
-export { 
-  sendEmail, 
-  sendDeletionEmail, 
-  sendStudentOrderEmail, 
-  sendPasswordResetEmail, 
-  sendVerificationEmail, 
-  sendSaleNotificationEmail 
+export {
+  sendEmail,
+  sendDeletionEmail,
+  sendStudentOrderEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendSaleNotificationEmail
 };
 
 // Exportation des nouvelles fonctions SendGrid spécifiques
-export { 
+export {
   sendSchoolConfirmationEmail,
   sendStudentConfirmationEmail,
   sendOrderConfirmationEmail,

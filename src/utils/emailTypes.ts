@@ -21,6 +21,8 @@ export interface SendEmailParams {
   hoursAvailable: string;
   products: ProductItemEmail[];
   totalAmount: number;
+  discount?: number; // Discount amount
+  originalSubtotal?: number; // Original subtotal before discount
   tip?: number; // Legacy field
   studentDonation?: number;
   schoolDonation?: number;
@@ -67,6 +69,9 @@ export interface SendEmailParams {
   totalRaffleBenefit?: number;
   email: string;
   organizationType?: string; // New field for dynamic terminology
+  deliveryOption?: string; // Option de livraison choisie
+  customDeliveryOption?: string; // Option personnalisée si "Autre" est sélectionné
+  customerDeliveryAddress?: string; // Adresse du client pour livraison
 }
 
 

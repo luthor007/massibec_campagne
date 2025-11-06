@@ -195,3 +195,4 @@ const CreateSchoolModal = ({ isOpen, onClose, onSchoolCreated }) => {
 
 export default CreateSchoolModal;
 
+

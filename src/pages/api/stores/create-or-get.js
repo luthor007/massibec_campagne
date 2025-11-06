@@ -26,21 +26,8 @@ export default async function handler(req, res) {
       return res.status(403).json({ message: 'Accès réservé aux gestionnaires d\'école' });
     }
 
-    // Try to find existing store
-    let store = await Store.findOne({ user: userId });
-
-    if (store) {
-      return res.status(200).json({ 
-        storeId: store._id.toString(),
-        created: false
-      });
-    }
-
-    // Get school info for store name
-    let schoolName = 'Notre organisation';
+    // Get active campaign for this school manager
     let activeCampaignId = null;
-
-    // Try to get school from SchoolManager first
     const SchoolManager = (await import('../../../models/SchoolManager')).default;
     const schoolManager = await SchoolManager.findOne({
       user: userId,
@@ -48,12 +35,9 @@ export default async function handler(req, res) {
     }).populate('school', 'name');
 
     if (schoolManager?.school) {
-      schoolName = schoolManager.school.name;
-      const school = schoolManager.school;
-
       // Try to find active campaign for this school
       const activeCampaign = await Campaign.findOne({
-        school: school._id,
+        school: schoolManager.school._id,
         isActive: true
       }).sort({ campaignNumber: -1 });
 
@@ -64,8 +48,6 @@ export default async function handler(req, res) {
       // Fallback to legacy schoolManagerInfo
       const school = await School.findById(user.schoolManagerInfo.organisme);
       if (school) {
-        schoolName = school.name;
-
         // Try to find active campaign
         const activeCampaign = await Campaign.findOne({
           school: school._id,
@@ -78,9 +60,43 @@ export default async function handler(req, res) {
       }
     }
 
-    // Create new store
+    // Try to find existing store for the active campaign
+    let store = null;
+    if (activeCampaignId) {
+      store = await Store.findOne({ user: userId, campaignId: activeCampaignId });
+    }
+
+    if (store) {
+      return res.status(200).json({
+        storeId: store._id.toString(),
+        created: false
+      });
+    }
+
+    // Get school info for store name
+    let schoolName = 'Notre organisation';
+
+    if (schoolManager?.school) {
+      schoolName = schoolManager.school.name;
+    } else if (user.schoolManagerInfo?.organisme) {
+      // Fallback to legacy schoolManagerInfo
+      const school = await School.findById(user.schoolManagerInfo.organisme);
+      if (school) {
+        schoolName = school.name;
+      }
+    }
+
+    // If no active campaign found, return error
+    if (!activeCampaignId) {
+      return res.status(400).json({
+        message: 'Aucune campagne active trouvée pour cette école. Veuillez créer une campagne d\'abord.'
+      });
+    }
+
+    // Create new store for this campaign
     const newStore = new Store({
       user: userId,
+      campaignId: activeCampaignId,
       name: `Boutique de ${schoolName}`,
       description: "🎉 Profitez des pâtés exclusifs de Massibec (viande et poulet) ainsi que d'un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !",
       autoDeposit: false,
@@ -90,13 +106,7 @@ export default async function handler(req, res) {
 
     await newStore.save();
 
-    // Update user's store reference if not set
-    if (!user.store) {
-      user.store = newStore._id;
-      await user.save();
-    }
-
-    return res.status(201).json({ 
+    return res.status(201).json({
       storeId: newStore._id.toString(),
       created: true
     });

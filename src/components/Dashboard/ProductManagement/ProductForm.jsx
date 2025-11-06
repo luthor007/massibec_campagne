@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Upload, DollarSign, ShoppingCart, School } from 'lucide-react'
+import { Loader2, Upload, DollarSign, ShoppingCart, School, Info } from 'lucide-react'
+import ImageUpload from '@/components/ImageUpload'
 
 const ProductForm = ({ product = {}, onSave }) => {
   const [formData, setFormData] = useState({
@@ -25,6 +26,8 @@ const ProductForm = ({ product = {}, onSave }) => {
     school: product.school || '',
     isDefault: product.isDefault || false,
     productId: product.productId || '',
+    ingredientsImage: product.ingredientsImage || '',
+    nutritionImage: product.nutritionImage || '',
   })
 
   const [imagePreview, setImagePreview] = useState(product.image || '')
@@ -126,7 +129,9 @@ const ProductForm = ({ product = {}, onSave }) => {
 
       const savedProduct = await response.json()
       toast.success('Product saved successfully!')
-      onSave(savedProduct)
+      if (onSave) {
+        onSave(savedProduct)
+      }
     } catch (error) {
       console.error('Error saving product:', error)
       toast.error(`Error: ${error.message}`)
@@ -250,6 +255,44 @@ const ProductForm = ({ product = {}, onSave }) => {
                 )}
               </div>
               {uploadError && <p className="mt-2 text-sm text-red-500">{uploadError}</p>}
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4 text-blue-500" />
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Informations pour la boutique
+                </h3>
+              </div>
+              <p className="text-xs text-gray-500">
+                Ajoutez des images claires de l&apos;étiquette d&apos;ingrédients et du tableau de valeur nutritive. Elles seront visibles par les clients.
+              </p>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Liste d&apos;ingrédients</Label>
+                  <ImageUpload
+                    value={formData.ingredientsImage}
+                    onChange={(url) => setFormData((prev) => ({ ...prev, ingredientsImage: url }))}
+                    className="mt-2"
+                    previewClassName="max-h-64 overflow-hidden"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Optionnel, mais recommandé pour aider les clients ayant des restrictions alimentaires.
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Tableau de valeur nutritive</Label>
+                  <ImageUpload
+                    value={formData.nutritionImage}
+                    onChange={(url) => setFormData((prev) => ({ ...prev, nutritionImage: url }))}
+                    className="mt-2"
+                    previewClassName="max-h-64 overflow-hidden"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Téléversez le tableau nutritionnel officiel lorsque disponible.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div>

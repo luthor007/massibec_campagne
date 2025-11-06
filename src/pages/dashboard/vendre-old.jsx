@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
+import { getUserCampaignContext } from '@/utils/campaignHelpers';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,21 +48,47 @@ export default function VendrePage() {
   const [emailTemplate, setEmailTemplate] = useState('');
   const [selectedClients, setSelectedClients] = useState([]);
   const [salesStats, setSalesStats] = useState({ total: 0, thisMonth: 0, growth: 0 });
+  const [campaignContext, setCampaignContext] = useState(null);
+
+  // Fetch campaign context
+  useEffect(() => {
+    const fetchCampaignContext = async () => {
+      if (!session?.user) return;
+
+      try {
+        const response = await fetch('/api/users/campaigns');
+        if (response.ok) {
+          const data = await response.json();
+          const context = getUserCampaignContext(data);
+          setCampaignContext(context);
+        }
+      } catch (error) {
+        console.error('Error fetching campaign context:', error);
+      }
+    };
+
+    fetchCampaignContext();
+  }, [session]);
 
   useEffect(() => {
-    if (session) {
+    if (session && campaignContext?.activeCampaignId) {
       fetchStoreInfo();
       fetchClients();
       fetchSalesStats();
     }
-  }, [session]);
+  }, [session, campaignContext?.activeCampaignId]);
 
   const fetchStoreInfo = async () => {
+    if (!session?.user || !campaignContext?.activeCampaignId) {
+      return;
+    }
     try {
       const response = await fetch('/api/get-store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: session.user.id }),
+        body: JSON.stringify({
+          campaignId: campaignContext.activeCampaignId
+        }),
       });
       const data = await response.json();
       setStoreInfo(data);
@@ -112,7 +139,7 @@ export default function VendrePage() {
         { name: 'Tarte aux framboises', price: '15.99$', description: 'Tarte aux framboises sucrées' }
       ]
     };
-    
+
     // Ici on pourrait utiliser une librairie comme jsPDF pour générer le PDF
     console.log('Génération du PDF avec:', pdfContent);
     toast.info('PDF généré ! (Fonctionnalité à implémenter avec jsPDF)');
@@ -128,7 +155,7 @@ export default function VendrePage() {
           storeId: storeInfo?.storeId
         }),
       });
-      
+
       if (response.ok) {
         setNewClient({ name: '', email: '', phone: '', notes: '' });
         fetchClients();
@@ -149,7 +176,7 @@ export default function VendrePage() {
           storeId: storeInfo?.storeId
         }),
       });
-      
+
       if (response.ok) {
         toast.success('Emails envoyés avec succès !');
         setSelectedClients([]);
@@ -185,8 +212,8 @@ export default function VendrePage() {
   }
 
   return (
-    <Layout className="pt-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <Layout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Outils de Vente</h1>
@@ -292,15 +319,15 @@ export default function VendrePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-center">
-                    <img 
-                      src={generateQRCode()} 
-                      alt="QR Code" 
+                    <img
+                      src={generateQRCode()}
+                      alt="QR Code"
                       className="w-32 h-32 border rounded"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full"
                       onClick={() => copyToClipboard(`${window.location.origin}/boutique/${storeInfo?.storeId}`)}
                     >
@@ -360,7 +387,7 @@ export default function VendrePage() {
                     <Input
                       id="clientName"
                       value={newClient.name}
-                      onChange={(e) => setNewClient({...newClient, name: e.target.value})}
+                      onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
                       placeholder="Nom du client"
                     />
                   </div>
@@ -370,7 +397,7 @@ export default function VendrePage() {
                       id="clientEmail"
                       type="email"
                       value={newClient.email}
-                      onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                      onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
                       placeholder="email@example.com"
                     />
                   </div>
@@ -379,7 +406,7 @@ export default function VendrePage() {
                     <Input
                       id="clientPhone"
                       value={newClient.phone}
-                      onChange={(e) => setNewClient({...newClient, phone: e.target.value})}
+                      onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
                       placeholder="(555) 123-4567"
                     />
                   </div>
@@ -388,7 +415,7 @@ export default function VendrePage() {
                     <Textarea
                       id="clientNotes"
                       value={newClient.notes}
-                      onChange={(e) => setNewClient({...newClient, notes: e.target.value})}
+                      onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })}
                       placeholder="Notes sur le client..."
                     />
                   </div>
@@ -426,8 +453,8 @@ export default function VendrePage() {
                       <li>{'{lien}'} - Lien vers votre boutique</li>
                     </ul>
                   </div>
-                  <Button 
-                    onClick={sendEmailToClients} 
+                  <Button
+                    onClick={sendEmailToClients}
                     disabled={selectedClients.length === 0}
                     className="w-full"
                   >
@@ -498,9 +525,9 @@ export default function VendrePage() {
                   {socialTemplates.facebook.map((template, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm mb-2">{template}</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => copyToClipboard(template)}
                         className="w-full"
                       >
@@ -524,9 +551,9 @@ export default function VendrePage() {
                   {socialTemplates.instagram.map((template, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm mb-2">{template}</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => copyToClipboard(template)}
                         className="w-full"
                       >
@@ -550,9 +577,9 @@ export default function VendrePage() {
                   {socialTemplates.tiktok.map((template, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm mb-2">{template}</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => copyToClipboard(template)}
                         className="w-full"
                       >

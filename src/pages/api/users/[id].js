@@ -39,7 +39,8 @@ export default async function handler(req, res) {
       const user = await User.findById(name.id)
         .populate('campaigns.campaignId', 'startDate endDate deliveryDate')
         .populate('campaigns.schoolId', 'name')
-        .populate('school', 'name');
+        .populate('school', 'name')
+        .populate('store', '_id name');
       if (!user) {
         return res.status(404).json({ message: 'User non trouvée.' });
       }

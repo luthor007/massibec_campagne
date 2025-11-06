@@ -109,3 +109,4 @@ export async function canEditCampaigns(schoolId, userId) {
   return hasPermission;
 }
 
+

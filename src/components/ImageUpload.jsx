@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { Button } from './ui/button';
@@ -11,10 +11,14 @@ const ImageUpload = ({
   previewClassName = '',
   showPreview = true,
   maxSize = 5 * 1024 * 1024, // 5MB
-  acceptedTypes = ['image/jpeg', 'image/png', 'image/webp']
+  acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'],
+  inputId
 }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const internalId = useId();
+  const fileInputRef = useRef(null);
+  const resolvedInputId = inputId || `image-upload-${internalId}`;
 
   const handleFileSelect = async (file) => {
     if (!file) return;
@@ -120,11 +124,12 @@ const ImageUpload = ({
               </p>
             </div>
             <input
+              ref={fileInputRef}
               type="file"
               accept={acceptedTypes.join(',')}
               onChange={(e) => handleFileSelect(e.target.files[0])}
               className="hidden"
-              id="image-upload"
+              id={resolvedInputId}
               disabled={uploading}
             />
             <Button
@@ -133,7 +138,7 @@ const ImageUpload = ({
               size="sm"
               disabled={uploading}
               className="cursor-pointer"
-              onClick={() => document.getElementById('image-upload').click()}
+              onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? 'Upload...' : 'Sélectionner'}
             </Button>

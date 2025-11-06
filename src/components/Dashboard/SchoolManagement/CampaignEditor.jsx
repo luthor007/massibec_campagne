@@ -6,11 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Toggle } from '@/components/ui/toggle';
-import { 
-  Edit3, 
-  Save, 
-  X, 
-  Lock, 
+import {
+  Edit3,
+  Save,
+  X,
+  Lock,
   DollarSign,
   Calendar,
   Package,
@@ -22,13 +22,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { getTerminology } from '@/utils/organizationHelpers';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
-  DialogFooter 
+  DialogFooter
 } from '@/components/ui/dialog';
 
 const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
@@ -48,19 +48,19 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
   const [products, setProducts] = useState([]);
   const [customPrices, setCustomPrices] = useState({});
   const [profitSplits, setProfitSplits] = useState({});
-  
+
   // Student donations configuration
   const [studentDonationsEnabled, setStudentDonationsEnabled] = useState(true);
   const [studentDonationPresets, setStudentDonationPresets] = useState([0, 5, 10, 20]);
   const [studentDonationSplit, setStudentDonationSplit] = useState({
-    studentAccount: 60.0,
-    studentCash: 40.0
+    studentAccount: 0.0,
+    studentCash: 100.0
   });
-  
+
   // School donations configuration
   const [schoolDonationsEnabled, setSchoolDonationsEnabled] = useState(true);
   const [schoolDonationPresets, setSchoolDonationPresets] = useState([0, 5, 10, 20]);
-  
+
   const [saving, setSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -73,40 +73,40 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     schoolProject: 0.75,
     raffle: 0.25
   });
-  
+
   // Initialize global profit settings from campaign or localStorage
   useEffect(() => {
     if (campaign?.profitSplits && campaign.profitSplits.length > 0) {
       // Try to infer global settings from campaign profit splits
       const firstSplit = campaign.profitSplits[0];
-      const allSame = campaign.profitSplits.every(ps => 
+      const allSame = campaign.profitSplits.every(ps =>
         ps.studentCash === firstSplit.studentCash &&
         ps.studentSchoolAccount === firstSplit.studentSchoolAccount &&
         ps.schoolProject === firstSplit.schoolProject &&
         ps.raffle === firstSplit.raffle
       );
-      
+
       if (allSame && products.length > 0) {
         // All products have the same splits - likely from global controls
         // Calculate average profit per product from custom prices
         let totalProfit = 0;
         let productCount = 0;
-        
+
         products.forEach(product => {
           const campaignPrice = campaign?.customPrices?.find(cp => {
             const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
             return cpProductId === product.id;
           })?.price;
-          
+
           if (campaignPrice !== undefined) {
             const profit = campaignPrice - (product.cost || 0);
             totalProfit += profit;
             productCount++;
           }
         });
-        
+
         const avgProfit = productCount > 0 ? totalProfit / productCount : 0;
-        
+
         // Use inferred settings from campaign
         const inferredSettings = {
           profitPerProduct: avgProfit || 3.00,
@@ -115,9 +115,9 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
           schoolProject: firstSplit.schoolProject !== undefined && firstSplit.schoolProject !== null ? firstSplit.schoolProject : 0.75,
           raffle: firstSplit.raffle !== undefined && firstSplit.raffle !== null ? firstSplit.raffle : 0.25
         };
-        
+
         setGlobalProfitSettings(inferredSettings);
-        
+
         // Also save to localStorage for future use
         if (typeof window !== 'undefined') {
           localStorage.setItem('globalProfitSettings', JSON.stringify(inferredSettings));
@@ -125,7 +125,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
         return;
       }
     }
-    
+
     // If no campaign data to infer from, load from localStorage
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('globalProfitSettings');
@@ -160,7 +160,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
           // Initialize custom prices and profit splits
           const initialPrices = {};
           const initialProfitSplits = {};
-          
+
           productsData.forEach(product => {
             // Use campaign custom prices if available, otherwise default prices
             const campaignPrice = campaign?.customPrices?.find(cp => {
@@ -168,7 +168,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               return cpProductId === product.id;
             })?.price;
             initialPrices[product.id] = campaignPrice || product.price;
-            
+
             // Use campaign profit splits if available, otherwise defaults
             const campaignSplit = campaign?.profitSplits?.find(ps => {
               const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
@@ -195,7 +195,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               };
             }
           });
-          
+
           setCustomPrices(initialPrices);
           setProfitSplits(initialProfitSplits);
         }
@@ -219,15 +219,15 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
         distributionStartHour: campaign.distributionStartHour || '',
         distributionEndHour: campaign.distributionEndHour || ''
       });
-      
+
       // Initialize student donation configuration
       setStudentDonationsEnabled(campaign.donationsForStudents?.enabled ?? true);
       setStudentDonationPresets(campaign.donationsForStudents?.presets || [0, 5, 10, 20]);
       setStudentDonationSplit(campaign.donationsForStudents?.splitConfig || {
-        studentAccount: 60.0,
-        studentCash: 40.0
+        studentAccount: 0.0,
+        studentCash: 100.0
       });
-      
+
       // Initialize school donation configuration
       setSchoolDonationsEnabled(campaign.donationsForSchool?.enabled ?? true);
       setSchoolDonationPresets(campaign.donationsForSchool?.presets || [0, 5, 10, 20]);
@@ -247,7 +247,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     setCustomPrices(prev => {
       const updated = {
         ...prev,
-        [productId]: isNaN(parsedPrice) ? 0 : parsedPrice
+        [productId]: price === '' ? '' : (price === '-' ? '-' : (isNaN(parsedPrice) ? '' : price))
       };
       console.log(`[CampaignEditor] Updated customPrices for ${productId}:`, updated[productId]);
       return updated;
@@ -259,7 +259,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
       ...prev,
       [productId]: {
         ...prev[productId],
-        [type]: value === '' ? '' : parseFloat(value) || 0
+        [type]: value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value))
       }
     }));
   };
@@ -269,11 +269,15 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     setGlobalProfitSettings(prev => {
       const updated = {
         ...prev,
-        [field]: parseFloat(value) || 0
+        [field]: value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value))
       };
-      // Save to localStorage whenever it changes
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('globalProfitSettings', JSON.stringify(updated));
+      // Save to localStorage whenever it changes (only if valid number)
+      if (typeof window !== 'undefined' && value !== '' && !isNaN(parseFloat(value))) {
+        const numValue = parseFloat(value);
+        localStorage.setItem('globalProfitSettings', JSON.stringify({
+          ...prev,
+          [field]: numValue
+        }));
       }
       return updated;
     });
@@ -285,36 +289,43 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     const newProfitSplits = { ...profitSplits };
 
     products.forEach(product => {
-      const desiredProfit = globalProfitSettings.profitPerProduct;
+      const desiredProfit = parseFloat(globalProfitSettings.profitPerProduct) || 0;
       const sellingPrice = (product.cost || 0) + desiredProfit;
 
       // Update custom price
       newCustomPrices[product.id] = parseFloat(sellingPrice.toFixed(2));
 
-      // Use absolute values from global settings
+      // Use absolute values from global settings, converting empty strings to numbers
       newProfitSplits[product.id] = {
-        studentCash: globalProfitSettings.studentCash,
-        studentSchoolAccount: globalProfitSettings.studentSchoolAccount,
-        schoolProject: globalProfitSettings.schoolProject,
-        raffle: globalProfitSettings.raffle
+        studentCash: parseFloat(globalProfitSettings.studentCash) || 0,
+        studentSchoolAccount: parseFloat(globalProfitSettings.studentSchoolAccount) || 0,
+        schoolProject: parseFloat(globalProfitSettings.schoolProject) || 0,
+        raffle: parseFloat(globalProfitSettings.raffle) || 0
       };
     });
 
     setCustomPrices(newCustomPrices);
     setProfitSplits(newProfitSplits);
-    
-    // Save global profit settings to localStorage
+
+    // Save global profit settings to localStorage (only numeric values)
     if (typeof window !== 'undefined') {
-      localStorage.setItem('globalProfitSettings', JSON.stringify(globalProfitSettings));
+      const numericSettings = {
+        profitPerProduct: parseFloat(globalProfitSettings.profitPerProduct) || 0,
+        studentCash: parseFloat(globalProfitSettings.studentCash) || 0,
+        studentSchoolAccount: parseFloat(globalProfitSettings.studentSchoolAccount) || 0,
+        schoolProject: parseFloat(globalProfitSettings.schoolProject) || 0,
+        raffle: parseFloat(globalProfitSettings.raffle) || 0
+      };
+      localStorage.setItem('globalProfitSettings', JSON.stringify(numericSettings));
     }
-    
+
     toast.success('Répartition des profits appliquée à tous les produits');
   };
 
   // Student donation handlers
   const handleStudentDonationPresetChange = (index, value) => {
     const newPresets = [...studentDonationPresets];
-    newPresets[index] = parseFloat(value) || 0;
+    newPresets[index] = value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value));
     setStudentDonationPresets(newPresets);
   };
 
@@ -334,14 +345,14 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
   const handleStudentDonationSplitChange = (type, value) => {
     setStudentDonationSplit(prev => ({
       ...prev,
-      [type]: parseFloat(value) || 0
+      [type]: value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value))
     }));
   };
 
   // School donation handlers
   const handleSchoolDonationPresetChange = (index, value) => {
     const newPresets = [...schoolDonationPresets];
-    newPresets[index] = parseFloat(value) || 0;
+    newPresets[index] = value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value));
     setSchoolDonationPresets(newPresets);
   };
 
@@ -423,11 +434,11 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     if (formData.distributionStartHour && formData.distributionEndHour) {
       const startMatch = formData.distributionStartHour.match(/(\d{2})h(\d{2})/);
       const endMatch = formData.distributionEndHour.match(/(\d{2})h(\d{2})/);
-      
+
       if (startMatch && endMatch) {
         const startMinutes = parseInt(startMatch[1]) * 60 + parseInt(startMatch[2]);
         const endMinutes = parseInt(endMatch[1]) * 60 + parseInt(endMatch[2]);
-        
+
         if (endMinutes <= startMinutes) {
           toast.error('L\'heure de fin doit être après l\'heure de début');
           return false;
@@ -445,7 +456,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     console.log('handleSave called');
     console.log('Form data:', formData);
     console.log('Campaign ID:', campaign?._id);
-    
+
     if (!validateForm()) {
       console.log('Validation failed');
       return;
@@ -453,7 +464,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
 
     console.log('Validation passed, starting save...');
     setSaving(true);
-    
+
     try {
       const updateData = {
         name: formData.name || undefined,
@@ -462,9 +473,19 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
         deliveryDate: formData.deliveryDate,
         distributionStartHour: formData.distributionStartHour,
         distributionEndHour: formData.distributionEndHour,
-        financialGoal: parseFloat(formData.financialGoal),
+        financialGoal: formData.financialGoal === '' || isNaN(parseFloat(formData.financialGoal))
+          ? 0
+          : parseFloat(formData.financialGoal),
         customPrices: Object.entries(customPrices).map(([productId, price]) => {
           const parsedPrice = parseFloat(price);
+          if (isNaN(parsedPrice) || price === '') {
+            // If empty, set to 0 or use default product price
+            const product = products.find(p => p.id === productId);
+            return {
+              productId,
+              price: product ? product.price : 0
+            };
+          }
           console.log(`[CampaignEditor] Sending custom price for product ${productId}: ${parsedPrice}`);
           return {
             productId,
@@ -472,31 +493,38 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
           };
         }),
         profitSplits: Object.entries(profitSplits).map(([productId, splits]) => {
-          // Parse values, preserving 0 as a valid value (don't use || which treats 0 as falsy)
-          const parseValue = (value, defaultValue) => {
+          // Parse values, converting empty strings to 0
+          const parseValue = (value, defaultValue = 0) => {
             if (value === '' || value === null || value === undefined) {
               return defaultValue;
             }
             const parsed = parseFloat(value);
             return isNaN(parsed) ? defaultValue : parsed;
           };
-          
+
           return {
             productId,
-            studentCash: parseValue(splits.studentCash, 1.00),
+            studentCash: parseValue(splits.studentCash, 0),
             studentSchoolAccount: parseValue(splits.studentSchoolAccount, 0),
-            schoolProject: parseValue(splits.schoolProject, 0.75),
-            raffle: parseValue(splits.raffle, 0.25)
+            schoolProject: parseValue(splits.schoolProject, 0),
+            raffle: parseValue(splits.raffle, 0)
           };
         }),
         donationsForStudents: {
           enabled: studentDonationsEnabled,
-          presets: studentDonationPresets,
-          splitConfig: studentDonationSplit
+          presets: studentDonationPresets.map(p => p === '' || isNaN(parseFloat(p)) ? 0 : parseFloat(p)),
+          splitConfig: {
+            studentAccount: studentDonationSplit.studentAccount === '' || isNaN(parseFloat(studentDonationSplit.studentAccount))
+              ? 0.0
+              : parseFloat(studentDonationSplit.studentAccount),
+            studentCash: studentDonationSplit.studentCash === '' || isNaN(parseFloat(studentDonationSplit.studentCash))
+              ? 100.0
+              : parseFloat(studentDonationSplit.studentCash)
+          }
         },
         donationsForSchool: {
           enabled: schoolDonationsEnabled,
-          presets: schoolDonationPresets
+          presets: schoolDonationPresets.map(p => p === '' || isNaN(parseFloat(p)) ? 0 : parseFloat(p))
         }
       };
 
@@ -518,7 +546,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
       if (response.ok) {
         const result = await response.json();
         console.log('Campaign update successful:', result);
-        
+
         // Update local state with the updated campaign data
         if (result.campaign) {
           // Update form data with saved values
@@ -531,7 +559,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
             distributionStartHour: result.campaign.distributionStartHour || formData.distributionStartHour,
             distributionEndHour: result.campaign.distributionEndHour || formData.distributionEndHour
           });
-          
+
           // Update custom prices and profit splits from saved campaign
           if (result.campaign.customPrices) {
             const updatedPrices = {};
@@ -543,7 +571,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
             });
             setCustomPrices(prev => ({ ...prev, ...updatedPrices }));
           }
-          
+
           if (result.campaign.profitSplits) {
             const updatedSplits = {};
             result.campaign.profitSplits.forEach(ps => {
@@ -560,7 +588,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
             });
             setProfitSplits(prev => ({ ...prev, ...updatedSplits }));
           }
-          
+
           // Update donation settings
           if (result.campaign.donationsForStudents) {
             setStudentDonationsEnabled(result.campaign.donationsForStudents.enabled ?? true);
@@ -570,41 +598,41 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               studentCash: 40.0
             });
           }
-          
+
           if (result.campaign.donationsForSchool) {
             setSchoolDonationsEnabled(result.campaign.donationsForSchool.enabled ?? true);
             setSchoolDonationPresets(result.campaign.donationsForSchool.presets || [0, 5, 10, 20]);
           }
         }
-        
-          toast.success('Campagne mise à jour avec succès');
-          setIsEditing(false);
-          onUpdate && onUpdate(result.campaign);
-        } else {
-          let errorMessage = 'Erreur lors de la mise à jour de la campagne';
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-            console.error('Campaign update failed:', {
-              status: response.status,
-              statusText: response.statusText,
-              error: errorData,
-              errorMessage: errorData.message,
-              fullError: JSON.stringify(errorData, null, 2)
-            });
-          } catch (e) {
-            console.error('Error parsing error response:', e);
-            errorMessage = `Erreur ${response.status}: ${response.statusText}`;
-          }
-          toast.error(errorMessage);
+
+        toast.success('Campagne mise à jour avec succès');
+        setIsEditing(false);
+        onUpdate && onUpdate(result.campaign);
+      } else {
+        let errorMessage = 'Erreur lors de la mise à jour de la campagne';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('Campaign update failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+            errorMessage: errorData.message,
+            fullError: JSON.stringify(errorData, null, 2)
+          });
+        } catch (e) {
+          console.error('Error parsing error response:', e);
+          errorMessage = `Erreur ${response.status}: ${response.statusText}`;
         }
-      } catch (error) {
-        console.error('Error updating campaign:', error);
-        toast.error('Erreur de connexion. Veuillez réessayer.');
-      } finally {
-        setSaving(false);
+        toast.error(errorMessage);
       }
-    };
+    } catch (error) {
+      console.error('Error updating campaign:', error);
+      toast.error('Erreur de connexion. Veuillez réessayer.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleCancel = () => {
     setIsEditing(false);
@@ -681,9 +709,8 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
   return (
     <div className="max-w-5xl mx-auto p-3 sm:p-4 lg:p-6 bg-white rounded-lg shadow-md overflow-x-hidden">
       <div className="text-center mb-6 sm:mb-8">
-        <div className={`inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-4 ${
-          isApproved ? 'bg-gray-400' : 'bg-gradient-to-r from-orange-500 to-orange-600'
-        }`}>
+        <div className={`inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full mb-3 sm:mb-4 ${isApproved ? 'bg-gray-400' : 'bg-gradient-to-r from-orange-500 to-orange-600'
+          }`}>
           <Edit3 className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
         </div>
         <h2 className={`text-xl sm:text-2xl lg:text-3xl font-bold mb-2 px-2 break-words ${isApproved ? 'text-gray-600' : 'text-gray-900'}`}>
@@ -692,7 +719,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
         <p className={`text-sm sm:text-base lg:text-lg px-2 ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
           Gérez les détails de votre campagne de financement
         </p>
-        
+
         {/* Message d'approbation */}
         {isApproved && (
           <div className="mt-4 p-3 sm:p-4 bg-orange-50 border-2 border-orange-300 rounded-lg mx-2 sm:mx-0">
@@ -725,11 +752,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                 onChange={(e) => handleInputChange('name', e.target.value)}
                 placeholder={`Ex: ${school?.name || 'Organisation'} - Janvier 2025`}
                 maxLength={200}
-                className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                  isApproved 
-                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                    : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                }`}
+                className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                  ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                  : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                  }`}
                 disabled={isApproved}
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -756,11 +782,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                   type="date"
                   value={formData.startDate}
                   onChange={(e) => handleInputChange('startDate', e.target.value)}
-                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                    isApproved 
-                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                      : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                  }`}
+                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                    : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                    }`}
                   disabled={isApproved || campaign.datesLocked}
                 />
               </div>
@@ -771,11 +796,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                   type="date"
                   value={formData.endDate}
                   onChange={(e) => handleInputChange('endDate', e.target.value)}
-                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                    isApproved 
-                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                      : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                  }`}
+                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                    : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                    }`}
                   disabled={isApproved || campaign.datesLocked}
                 />
               </div>
@@ -787,11 +811,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                   value={formData.deliveryDate}
                   onChange={(e) => handleInputChange('deliveryDate', e.target.value)}
                   min={getMinDeliveryDate()}
-                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                    isApproved 
-                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                      : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                  }`}
+                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                    : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                    }`}
                   disabled={isApproved || campaign.datesLocked}
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -809,11 +832,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                     onValueChange={(value) => handleInputChange('distributionStartHour', value)}
                     disabled={isApproved || campaign.datesLocked}
                   >
-                    <SelectTrigger className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                      isApproved 
-                        ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                        : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                    }`}>
+                    <SelectTrigger className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                      : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                      }`}>
                       <SelectValue placeholder="Sélectionnez une heure" />
                     </SelectTrigger>
                     <SelectContent>
@@ -838,11 +860,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                     onValueChange={(value) => handleInputChange('distributionEndHour', value)}
                     disabled={isApproved || campaign.datesLocked}
                   >
-                    <SelectTrigger className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                      isApproved 
-                        ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                        : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                    }`}>
+                    <SelectTrigger className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                      : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                      }`}>
                       <SelectValue placeholder="Sélectionnez une heure" />
                     </SelectTrigger>
                     <SelectContent>
@@ -851,7 +872,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                         const hour = Math.floor(totalMinutes / 60);
                         const minutes = totalMinutes % 60;
                         const hourStr = hour < 10 ? `0${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}` : `${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}`;
-                        
+
                         // Only show times after the start hour (at least 15 minutes later)
                         if (formData.distributionStartHour) {
                           const startMatch = formData.distributionStartHour.match(/(\d{2})h(\d{2})/);
@@ -859,14 +880,14 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                             const startHour = parseInt(startMatch[1]);
                             const startMinutes = parseInt(startMatch[2]);
                             const startTotalMinutes = startHour * 60 + startMinutes;
-                            
+
                             // Only show if at least 15 minutes after start
                             if (totalMinutes <= startTotalMinutes) {
                               return null;
                             }
                           }
                         }
-                        
+
                         return (
                           <SelectItem key={hourStr} value={hourStr}>
                             {hourStr}
@@ -899,11 +920,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                   value={formData.financialGoal}
                   onChange={(e) => handleInputChange('financialGoal', e.target.value)}
                   placeholder="0.00"
-                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${
-                    isApproved 
-                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                      : 'border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-200'
-                  }`}
+                  className={`mt-1 border-2 rounded-lg transition-all duration-200 ${isApproved
+                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                    : 'border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-200'
+                    }`}
                   disabled={isApproved}
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -1019,9 +1039,9 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="text-xs text-gray-500 pt-2 border-t border-blue-200">
-                        Total distribué: ${(globalProfitSettings.studentCash + globalProfitSettings.studentSchoolAccount + globalProfitSettings.schoolProject + globalProfitSettings.raffle).toFixed(2)}
+                        Total distribué: ${((parseFloat(globalProfitSettings.studentCash) || 0) + (parseFloat(globalProfitSettings.studentSchoolAccount) || 0) + (parseFloat(globalProfitSettings.schoolProject) || 0) + (parseFloat(globalProfitSettings.raffle) || 0)).toFixed(2)}
                       </div>
                     </div>
 
@@ -1038,21 +1058,22 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 overflow-x-hidden">
                 {products.map((product) => {
-                  const sellingPrice = customPrices[product.id] || product.price;
-                  const profit = sellingPrice - product.cost;
+                  const sellingPrice = customPrices[product.id] !== undefined && customPrices[product.id] !== ''
+                    ? customPrices[product.id]
+                    : product.price;
+                  const profit = typeof sellingPrice === 'number' ? sellingPrice - product.cost : (parseFloat(sellingPrice) || 0) - product.cost;
 
                   return (
-                    <div key={product.id} className={`border-0 rounded-xl p-3 sm:p-4 lg:p-5 shadow-md transition-all duration-200 overflow-x-hidden ${
-                      isApproved 
-                        ? 'bg-gray-100 opacity-75' 
-                        : 'bg-gradient-to-br from-white to-gray-50 hover:shadow-lg hover:scale-[1.02]'
-                    }`}>
+                    <div key={product.id} className={`border-0 rounded-xl p-3 sm:p-4 lg:p-5 shadow-md transition-all duration-200 overflow-x-hidden ${isApproved
+                      ? 'bg-gray-100 opacity-75'
+                      : 'bg-gradient-to-br from-white to-gray-50 hover:shadow-lg hover:scale-[1.02]'
+                      }`}>
                       <div className="flex items-start space-x-4">
                         {/* Product Image */}
                         <div className="flex-shrink-0">
                           <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-gray-200 shadow-sm">
-                            <img 
-                              src={product.image} 
+                            <img
+                              src={product.image}
                               alt={product.name}
                               className="w-full h-full object-cover"
                               onError={(e) => {
@@ -1081,7 +1102,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Profit par unité:</span>
                               <span className={`font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                ${profit.toFixed(2)}
+                                ${typeof profit === 'number' ? profit.toFixed(2) : (parseFloat(profit) || 0).toFixed(2)}
                               </span>
                             </div>
                           </div>
@@ -1099,11 +1120,10 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                                 min="0"
                                 value={sellingPrice}
                                 onChange={(e) => handlePriceChange(product.id, e.target.value)}
-                                className={`text-sm h-9 border-2 rounded-lg transition-all duration-200 ${
-                                  isApproved 
-                                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                                    : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
-                                }`}
+                                className={`text-sm h-9 border-2 rounded-lg transition-all duration-200 ${isApproved
+                                  ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                                  : 'border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200'
+                                  }`}
                                 disabled={isApproved || campaign.profitSplitLocked}
                               />
                             </div>
@@ -1113,7 +1133,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                           <div className="mt-2 text-right">
                             <span className="text-xs text-gray-500">Nouveau profit: </span>
                             <span className={`text-xs font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ${profit.toFixed(2)}
+                              ${typeof profit === 'number' ? profit.toFixed(2) : (parseFloat(profit) || 0).toFixed(2)}
                             </span>
                           </div>
 
@@ -1130,13 +1150,12 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                                   type="number"
                                   step="0.25"
                                   min="0"
-                                  value={profitSplits[product.id]?.studentCash ?? 1.00}
+                                  value={profitSplits[product.id]?.studentCash ?? ''}
                                   onChange={(e) => handleProfitSplitChange(product.id, 'studentCash', e.target.value)}
-                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${
-                                    isApproved 
-                                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                                      : 'border-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-200'
-                                  }`}
+                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${isApproved
+                                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                                    : 'border-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-200'
+                                    }`}
                                   disabled={isApproved || campaign.profitSplitLocked}
                                 />
                               </div>
@@ -1149,13 +1168,12 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                                   type="number"
                                   step="0.25"
                                   min="0"
-                                  value={profitSplits[product.id]?.studentSchoolAccount ?? 1.00}
+                                  value={profitSplits[product.id]?.studentSchoolAccount ?? ''}
                                   onChange={(e) => handleProfitSplitChange(product.id, 'studentSchoolAccount', e.target.value)}
-                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${
-                                    isApproved 
-                                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                                      : 'border-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-200'
-                                  }`}
+                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${isApproved
+                                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                                    : 'border-gray-200 focus:border-green-500 focus:ring-1 focus:ring-green-200'
+                                    }`}
                                   disabled={isApproved || campaign.profitSplitLocked}
                                 />
                               </div>
@@ -1168,13 +1186,12 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                                   type="number"
                                   step="0.25"
                                   min="0"
-                                  value={profitSplits[product.id]?.schoolProject ?? 0.75}
+                                  value={profitSplits[product.id]?.schoolProject ?? ''}
                                   onChange={(e) => handleProfitSplitChange(product.id, 'schoolProject', e.target.value)}
-                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${
-                                    isApproved 
-                                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                                      : 'border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200'
-                                  }`}
+                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${isApproved
+                                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                                    : 'border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200'
+                                    }`}
                                   disabled={isApproved || campaign.profitSplitLocked}
                                 />
                               </div>
@@ -1187,13 +1204,12 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                                   type="number"
                                   step="0.25"
                                   min="0"
-                                  value={profitSplits[product.id]?.raffle ?? 0.25}
+                                  value={profitSplits[product.id]?.raffle ?? ''}
                                   onChange={(e) => handleProfitSplitChange(product.id, 'raffle', e.target.value)}
-                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${
-                                    isApproved 
-                                      ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed' 
-                                      : 'border-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-200'
-                                  }`}
+                                  className={`text-xs h-7 border-2 rounded-md transition-all duration-200 ${isApproved
+                                    ? 'border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed'
+                                    : 'border-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-200'
+                                    }`}
                                   disabled={isApproved || campaign.profitSplitLocked}
                                 />
                               </div>
@@ -1201,11 +1217,11 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                               {/* Profit Distribution Summary */}
                               <div className="mt-2 pt-2 border-t border-gray-100">
                                 {(() => {
-                                  const splits = profitSplits[product.id] || { 
-                                    studentCash: 1.00, 
-                                    studentSchoolAccount: 1.00, 
-                                    schoolProject: 0.75, 
-                                    raffle: 0.25 
+                                  const splits = profitSplits[product.id] || {
+                                    studentCash: 1.00,
+                                    studentSchoolAccount: 1.00,
+                                    schoolProject: 0.75,
+                                    raffle: 0.25
                                   };
                                   const studentCashValue = splits.studentCash === '' ? 0 : (splits.studentCash || 0);
                                   const studentSchoolAccountValue = splits.studentSchoolAccount === '' ? 0 : (splits.studentSchoolAccount || 0);
@@ -1246,7 +1262,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
             </div>
 
             {/* Donation Configuration - Split into Two Sections */}
-            
+
             {/* Student Donations Configuration */}
             <div className={`space-y-4 ${isApproved ? 'opacity-75' : ''}`}>
               <div className="flex items-center justify-between">
@@ -1271,14 +1287,14 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               {!studentDonationsEnabled && (
                 <p className="text-sm text-gray-500 mt-2">Cette section est désactivée. Les dons pour les {terminology.participants} ne seront pas affichés au checkout.</p>
               )}
-              
+
               {isApproved && (
                 <Badge variant="outline" className="text-xs inline-flex items-center">
                   <Lock className="h-3 w-3 mr-1" />
                   Approuvée et verrouillée
                 </Badge>
               )}
-              
+
               {studentDonationsEnabled && (
                 <>
                   <p className={`text-sm ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
@@ -1350,7 +1366,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                             step="0.1"
                             min="0"
                             max="100"
-                            value={studentDonationSplit.studentAccount}
+                            value={studentDonationSplit.studentAccount ?? ''}
                             onChange={(e) => handleStudentDonationSplitChange('studentAccount', e.target.value)}
                             className={`text-sm ${isApproved ? 'bg-gray-100' : ''}`}
                             disabled={isApproved}
@@ -1369,7 +1385,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                             step="0.1"
                             min="0"
                             max="100"
-                            value={studentDonationSplit.studentCash}
+                            value={studentDonationSplit.studentCash ?? ''}
                             onChange={(e) => handleStudentDonationSplitChange('studentCash', e.target.value)}
                             className={`text-sm ${isApproved ? 'bg-gray-100' : ''}`}
                             disabled={isApproved}
@@ -1378,7 +1394,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Student Donation Split Preview */}
                     <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                       <h5 className="text-sm font-semibold text-blue-800 mb-2">Aperçu - Don de 10$:</h5>
@@ -1431,7 +1447,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               {!schoolDonationsEnabled && (
                 <p className="text-sm text-gray-500 mt-2">Cette section est désactivée. Les dons pour {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization} ne seront pas affichés au checkout.</p>
               )}
-              
+
               {schoolDonationsEnabled && (
                 <>
                   <p className={`text-sm ${isApproved ? 'text-gray-500' : 'text-gray-600'}`}>
@@ -1494,7 +1510,7 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
         {/* Action Buttons */}
         <div className="flex justify-center pt-6 sm:pt-8">
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
-            <Button 
+            <Button
               type="button"
               onClick={(e) => {
                 e.preventDefault();
@@ -1505,8 +1521,8 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
               disabled={saving || isApproved}
               className={`
                 relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-xl
-                ${isApproved 
-                  ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
+                ${isApproved
+                  ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
                   : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl'
                 }
                 transform transition-all duration-200 ease-in-out
@@ -1530,22 +1546,21 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
                   </>
                 )}
               </div>
-              
+
               {/* Subtle glow effect */}
               {!isApproved && (
                 <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-green-400 to-green-500 opacity-0 hover:opacity-20 transition-opacity duration-200 pointer-events-none"></div>
               )}
             </Button>
 
-            <Button 
+            <Button
               onClick={handleCancel}
               variant="outline"
               disabled={isApproved}
-              className={`px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-xl border-2 transition-all duration-200 w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px] ${
-                isApproved 
-                  ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50' 
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
-              }`}
+              className={`px-4 sm:px-6 lg:px-8 py-3 sm:py-4 text-base sm:text-lg font-semibold rounded-xl border-2 transition-all duration-200 w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px] ${isApproved
+                ? 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'
+                : 'border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
+                }`}
             >
               <X className="h-4 w-4 sm:h-5 sm:w-5 sm:mr-2" />
               <span className="text-sm sm:text-base">Annuler</span>

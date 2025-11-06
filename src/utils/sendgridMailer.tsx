@@ -486,23 +486,23 @@ export const sendSaleNotificationEmail = async (
   params:
     | { to: string; cc?: string; subject: string; saleData: any }
     | ({
-        to: string;
-        cc?: string;
-        subject?: string;
-        studentName: string;
-        firstName: string;
-        customerEmail: string;
-        customerPhone: string;
-        schoolName?: string;
-        schoolAddress?: string;
-        deliveryDate?: string;
-        products: ProductItemEmail[];
-        totalAmount: number;
-        tip: number;
-        autoDeposit: boolean;
-        orderId: string;
-        orderDate: string;
-      })
+      to: string;
+      cc?: string;
+      subject?: string;
+      studentName: string;
+      firstName: string;
+      customerEmail: string;
+      customerPhone: string;
+      schoolName?: string;
+      schoolAddress?: string;
+      deliveryDate?: string;
+      products: ProductItemEmail[];
+      totalAmount: number;
+      tip: number;
+      autoDeposit: boolean;
+      orderId: string;
+      orderDate: string;
+    })
 ) => {
   try {
     const isLegacy = (p: any): p is { to: string; cc?: string; subject: string; saleData: any } =>
@@ -621,7 +621,7 @@ export const sendEmail = async (params: SendEmailParams) => {
     // Import React and ReactDOMServer for HTML generation
     const React = require('react');
     const ReactDOMServer = require('react-dom/server');
-    
+
     // Import the EmailTemplate component (default export)
     const EmailTemplate = require('../components/EmailTemplate').default;
 
@@ -645,18 +645,18 @@ export const sendEmail = async (params: SendEmailParams) => {
       organizationBenefit: 0,
       raffleBenefit: 0,
     };
-    
+
     if (params.profitSplits && params.customPrices) {
       // Calculate totals from campaign-specific data
       const totalUnits = params.products.reduce((sum, product) => sum + product.quantity, 0);
       let totalStudentBenefit = 0;
       let totalOrganizationBenefit = 0;
       let totalRaffleBenefit = 0;
-      
+
       params.products.forEach(product => {
         const customPrice = params.customPrices?.find(cp => cp.productId === product.productId);
         const profitSplit = params.profitSplits?.find(ps => ps.productId === product.productId);
-        
+
         if (customPrice && profitSplit && product.cost !== undefined) {
           const productProfit = (customPrice.price - product.cost) * product.quantity;
           // Use new fields with fallback to old
@@ -664,14 +664,14 @@ export const sendEmail = async (params: SendEmailParams) => {
           const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 0;
           const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0;
           const raffle = Number(profitSplit.raffle) || 0;
-          
+
           // Total student benefit is cash + school account
           totalStudentBenefit += (studentCash + studentSchoolAccount) * product.quantity;
           totalOrganizationBenefit += schoolProject * product.quantity;
           totalRaffleBenefit += raffle * product.quantity;
         }
       });
-      
+
       calculatedLegacyFields = {
         totalUnits,
         totalStudentBenefit,
@@ -707,6 +707,10 @@ export const sendEmail = async (params: SendEmailParams) => {
         sellerName: params.sellerName,
         sellerEmail: params.sellerEmail,
         sellerPhone: params.sellerPhone,
+        organizationType: params.organizationType,
+        deliveryOption: params.deliveryOption,
+        customDeliveryOption: params.customDeliveryOption,
+        customerDeliveryAddress: params.customerDeliveryAddress,
         // Use calculated legacy fields or provided ones
         studentPercentage: calculatedLegacyFields.studentPercentage || params.studentPercentage || 0,
         studentBenefit: calculatedLegacyFields.studentBenefit || params.studentBenefit || 0,

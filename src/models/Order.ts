@@ -31,6 +31,9 @@ export interface IOrder extends Document {
   orderId: string;
   tip?: number;
   discount?: number;
+  deliveryOption?: string; // Option de livraison choisie
+  customDeliveryOption?: string; // Option personnalisée si "Autre" est sélectionné
+  customerDeliveryAddress?: string; // Adresse du client pour livraison
 }
 
 const OrderSchema: Schema = new Schema({
@@ -43,7 +46,7 @@ const OrderSchema: Schema = new Schema({
     product: { type: mongoose.Schema.Types.ObjectId, ref: Product, required: true },
     quantity: { type: Number, required: true },
     productName: { type: String, required: true },
-    productCost: { type: Number, required: true},
+    productCost: { type: Number, required: true },
     productPrice: { type: Number, required: true },
   }],
   totalAmount: { type: Number, required: true },
@@ -53,8 +56,11 @@ const OrderSchema: Schema = new Schema({
   status: { type: String, enum: ['En attente', 'Payé', 'Commander', 'Complété'], default: 'En attente' },
   createdAt: { type: Date, default: Date.now },
   orderId: { type: String },
-  tip: { type: Number},
+  tip: { type: Number },
   discount: { type: Number },
+  deliveryOption: { type: String, default: '' },
+  customDeliveryOption: { type: String, default: '' },
+  customerDeliveryAddress: { type: String, default: '' },
 });
 
 // Générer un orderId unique avant de sauvegarder le document

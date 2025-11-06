@@ -179,6 +179,8 @@ export default async function handler(req, res) {
           originalPrice: Number(product.price) || 0, // Keep original price for reference
           cost: Number(product.cost) || 0,
           image: sanitizeHtml(String(product.image || '')),
+          ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
+          nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
           school: product.school,
           isDefault: Boolean(product.isDefault),
           productId: String(product.productId || ''),
@@ -219,6 +221,8 @@ export default async function handler(req, res) {
         image,
         isDefault,
         productId,
+        ingredientsImage,
+        nutritionImage,
       } = req.body;
 
       // Validate required fields
@@ -239,6 +243,33 @@ export default async function handler(req, res) {
         return res.status(400).json({ message: 'Product ID already exists' });
       }
 
+      const sanitizeOptionalUrl = (value, fieldName) => {
+        if (value === null || value === undefined || value === '') {
+          return '';
+        }
+        if (typeof value !== 'string') {
+          throw new Error(`Invalid type for ${fieldName}.`);
+        }
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+          return '';
+        }
+        if (!validator.isURL(trimmed, { protocols: ['http', 'https'], require_protocol: false })) {
+          throw new Error(`${fieldName === 'ingredientsImage' ? 'Image des ingrédients' : 'Image nutritive'} must be a valid URL.`);
+        }
+        return sanitizeHtml(trimmed, { allowedTags: [] });
+      };
+
+      let sanitizedIngredientsImage = '';
+      let sanitizedNutritionImage = '';
+
+      try {
+        sanitizedIngredientsImage = sanitizeOptionalUrl(ingredientsImage, 'ingredientsImage');
+        sanitizedNutritionImage = sanitizeOptionalUrl(nutritionImage, 'nutritionImage');
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
+      }
+
       // Get the highest order value to place new product at the end
       const maxOrderProduct = await Product.findOne().sort({ order: -1 }).lean();
       const nextOrder = maxOrderProduct ? (maxOrderProduct.order + 1) : 0;
@@ -253,9 +284,23 @@ export default async function handler(req, res) {
         isDefault,
         productId: finalProductId,
         order: nextOrder,
+        ingredientsImage: sanitizedIngredientsImage,
+        nutritionImage: sanitizedNutritionImage,
       });
 
-      res.status(201).json(product);
+      res.status(201).json({
+        id: product._id.toString(),
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        cost: product.cost,
+        image: product.image,
+        productId: product.productId,
+        isDefault: product.isDefault,
+        order: product.order,
+        ingredientsImage: product.ingredientsImage || '',
+        nutritionImage: product.nutritionImage || ''
+      });
     } catch (error) {
       console.error('Error creating product:', error);
       res.status(500).json({ message: 'Error creating product' });

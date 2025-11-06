@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Plus, 
+import {
+  Plus,
   Calendar,
   DollarSign,
   Percent,
@@ -37,22 +37,22 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   const [products, setProducts] = useState([]);
   const [customPrices, setCustomPrices] = useState({});
   const [profitSplits, setProfitSplits] = useState({});
-  
+
   // Student donations configuration
   const [studentDonationsEnabled, setStudentDonationsEnabled] = useState(true);
   const [studentDonationPresets, setStudentDonationPresets] = useState([0, 5, 10, 20]);
   const [studentDonationSplit, setStudentDonationSplit] = useState({
-    studentAccount: 60.0,
-    studentCash: 40.0
+    studentAccount: 0.0,
+    studentCash: 100.0
   });
-  
+
   // School donations configuration
   const [schoolDonationsEnabled, setSchoolDonationsEnabled] = useState(true);
   const [schoolDonationPresets, setSchoolDonationPresets] = useState([0, 5, 10, 20]);
-  
+
   const [showParentLetterModal, setShowParentLetterModal] = useState(false);
   const [createdCampaign, setCreatedCampaign] = useState(null);
-  
+
   // Global profit settings - load from localStorage or defaults
   const [globalProfitSettings, setGlobalProfitSettings] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -94,7 +94,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
           // Extract products array from the response
           const productsData = data.products || [];
           setProducts(productsData);
-          
+
           // Initialize custom prices with default prices
           const initialPrices = {};
           const initialProfitSplits = {};
@@ -130,7 +130,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   const handlePriceChange = (productId, price) => {
     setCustomPrices(prev => ({
       ...prev,
-      [productId]: parseFloat(price) || 0
+      [productId]: price === '' ? '' : (price === '-' ? '-' : (isNaN(parseFloat(price)) ? '' : price))
     }));
   };
 
@@ -139,7 +139,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
       ...prev,
       [productId]: {
         ...prev[productId],
-        [type]: value === '' ? '' : parseFloat(value) || 0
+        [type]: value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value))
       }
     }));
   };
@@ -149,11 +149,15 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
     setGlobalProfitSettings(prev => {
       const updated = {
         ...prev,
-        [field]: parseFloat(value) || 0
+        [field]: value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value))
       };
-      // Save to localStorage whenever it changes
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('globalProfitSettings', JSON.stringify(updated));
+      // Save to localStorage whenever it changes (only if valid number)
+      if (typeof window !== 'undefined' && value !== '' && !isNaN(parseFloat(value))) {
+        const numValue = parseFloat(value);
+        localStorage.setItem('globalProfitSettings', JSON.stringify({
+          ...prev,
+          [field]: numValue
+        }));
       }
       return updated;
     });
@@ -165,33 +169,40 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
     const newProfitSplits = { ...profitSplits };
 
     products.forEach(product => {
-      const desiredProfit = globalProfitSettings.profitPerProduct;
+      const desiredProfit = parseFloat(globalProfitSettings.profitPerProduct) || 0;
       const sellingPrice = (product.cost || 0) + desiredProfit;
 
       // Update custom price
       newCustomPrices[product.id] = parseFloat(sellingPrice.toFixed(2));
 
-      // Use absolute values from global settings
+      // Use absolute values from global settings, converting empty strings to numbers
       newProfitSplits[product.id] = {
-        studentCash: globalProfitSettings.studentCash,
-        studentSchoolAccount: globalProfitSettings.studentSchoolAccount,
-        schoolProject: globalProfitSettings.schoolProject,
-        raffle: globalProfitSettings.raffle
+        studentCash: parseFloat(globalProfitSettings.studentCash) || 0,
+        studentSchoolAccount: parseFloat(globalProfitSettings.studentSchoolAccount) || 0,
+        schoolProject: parseFloat(globalProfitSettings.schoolProject) || 0,
+        raffle: parseFloat(globalProfitSettings.raffle) || 0
       };
     });
 
     setCustomPrices(newCustomPrices);
     setProfitSplits(newProfitSplits);
-    
-    // Save global profit settings to localStorage
+
+    // Save global profit settings to localStorage (only numeric values)
     if (typeof window !== 'undefined') {
-      localStorage.setItem('globalProfitSettings', JSON.stringify(globalProfitSettings));
+      const numericSettings = {
+        profitPerProduct: parseFloat(globalProfitSettings.profitPerProduct) || 0,
+        studentCash: parseFloat(globalProfitSettings.studentCash) || 0,
+        studentSchoolAccount: parseFloat(globalProfitSettings.studentSchoolAccount) || 0,
+        schoolProject: parseFloat(globalProfitSettings.schoolProject) || 0,
+        raffle: parseFloat(globalProfitSettings.raffle) || 0
+      };
+      localStorage.setItem('globalProfitSettings', JSON.stringify(numericSettings));
     }
-    
+
     // Show visual feedback
     setSettingsApplied(true);
     toast.success('Répartition des profits appliquée à tous les produits');
-    
+
     // Reset visual feedback after animation
     setTimeout(() => {
       setSettingsApplied(false);
@@ -201,7 +212,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   // Student donation handlers
   const handleStudentDonationPresetChange = (index, value) => {
     const newPresets = [...studentDonationPresets];
-    newPresets[index] = parseFloat(value) || 0;
+    newPresets[index] = value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value));
     setStudentDonationPresets(newPresets);
   };
 
@@ -221,14 +232,14 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   const handleStudentDonationSplitChange = (type, value) => {
     setStudentDonationSplit(prev => ({
       ...prev,
-      [type]: parseFloat(value) || 0
+      [type]: value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value))
     }));
   };
 
   // School donation handlers
   const handleSchoolDonationPresetChange = (index, value) => {
     const newPresets = [...schoolDonationPresets];
-    newPresets[index] = parseFloat(value) || 0;
+    newPresets[index] = value === '' ? '' : (value === '-' ? '-' : (isNaN(parseFloat(value)) ? '' : value));
     setSchoolDonationPresets(newPresets);
   };
 
@@ -259,11 +270,11 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
     if (!formData.endDate) {
       return '';
     }
-    
+
     const endDate = new Date(formData.endDate + 'T00:00:00');
     const threeWeeksInMillis = 21 * 24 * 60 * 60 * 1000;
     const minDeliveryDate = new Date(endDate.getTime() + threeWeeksInMillis);
-    
+
     const year = minDeliveryDate.getFullYear();
     const month = String(minDeliveryDate.getMonth() + 1).padStart(2, '0');
     const day = String(minDeliveryDate.getDate()).padStart(2, '0');
@@ -273,7 +284,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   const validateForm = () => {
     const { startDate, endDate, deliveryDate, financialGoal } = formData;
     console.log('Validating form:', formData);
-    
+
     if (!startDate || !endDate || !deliveryDate || !financialGoal) {
       console.log('Missing required fields:', { startDate, endDate, deliveryDate, financialGoal });
       toast.error('Tous les champs sont requis');
@@ -286,7 +297,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
     const delivery = new Date(deliveryDate + 'T00:00:00');
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
-    
+
     // Also normalize start date for comparison
     start.setHours(0, 0, 0, 0);
     end.setHours(0, 0, 0, 0);
@@ -321,20 +332,20 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
     if (formData.distributionStartHour && formData.distributionEndHour) {
       const startMatch = formData.distributionStartHour.match(/(\d{2})h(\d{2})/);
       const endMatch = formData.distributionEndHour.match(/(\d{2})h(\d{2})/);
-      
-      console.log('Distribution hours validation:', { 
-        distributionStartHour: formData.distributionStartHour, 
+
+      console.log('Distribution hours validation:', {
+        distributionStartHour: formData.distributionStartHour,
         distributionEndHour: formData.distributionEndHour,
-        startMatch, 
-        endMatch 
+        startMatch,
+        endMatch
       });
-      
+
       if (startMatch && endMatch) {
         const startMinutes = parseInt(startMatch[1]) * 60 + parseInt(startMatch[2]);
         const endMinutes = parseInt(endMatch[1]) * 60 + parseInt(endMatch[2]);
-        
+
         console.log('Distribution hours comparison:', { startMinutes, endMinutes, valid: endMinutes > startMinutes });
-        
+
         if (endMinutes <= startMinutes) {
           console.log('Distribution hours validation failed');
           toast.error('L\'heure de fin doit être après l\'heure de début');
@@ -350,12 +361,12 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     console.log('Form submitted!', formData);
-    
+
     if (!validateForm()) {
       console.log('Validation failed');
       return;
     }
-    
+
     console.log('Validation passed, creating campaign...');
     setCreating(true);
     try {
@@ -365,37 +376,57 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
         deliveryDate: formData.deliveryDate,
         distributionStartHour: formData.distributionStartHour,
         distributionEndHour: formData.distributionEndHour,
-        financialGoal: parseFloat(formData.financialGoal),
-        customPrices: Object.entries(customPrices).map(([productId, price]) => ({
-          productId,
-          price: parseFloat(price)
-        })),
+        financialGoal: formData.financialGoal === '' || isNaN(parseFloat(formData.financialGoal))
+          ? 0
+          : parseFloat(formData.financialGoal),
+        customPrices: Object.entries(customPrices).map(([productId, price]) => {
+          const parsedPrice = parseFloat(price);
+          if (isNaN(parsedPrice) || price === '') {
+            // If empty, set to 0 or use default product price
+            const product = products.find(p => p.id === productId);
+            return {
+              productId,
+              price: product ? product.price : 0
+            };
+          }
+          return {
+            productId,
+            price: parsedPrice
+          };
+        }),
         profitSplits: Object.entries(profitSplits).map(([productId, splits]) => {
-          // Preserve 0 values - don't use || which treats 0 as falsy
-          const parseValue = (value, defaultValue) => {
+          // Parse values, converting empty strings to 0
+          const parseValue = (value, defaultValue = 0) => {
             if (value === '' || value === null || value === undefined) {
               return defaultValue;
             }
             const parsed = parseFloat(value);
             return isNaN(parsed) ? defaultValue : parsed;
           };
-          
+
           return {
             productId,
-            studentCash: parseValue(splits.studentCash, 1.00),
-            studentSchoolAccount: parseValue(splits.studentSchoolAccount, 1.00),
-            schoolProject: parseValue(splits.schoolProject, 0.75),
-            raffle: parseValue(splits.raffle, 0.25)
+            studentCash: parseValue(splits.studentCash, 0),
+            studentSchoolAccount: parseValue(splits.studentSchoolAccount, 0),
+            schoolProject: parseValue(splits.schoolProject, 0),
+            raffle: parseValue(splits.raffle, 0)
           };
         }),
         donationsForStudents: {
           enabled: studentDonationsEnabled,
-          presets: studentDonationPresets,
-          splitConfig: studentDonationSplit
+          presets: studentDonationPresets.map(p => p === '' || isNaN(parseFloat(p)) ? 0 : parseFloat(p)),
+          splitConfig: {
+            studentAccount: studentDonationSplit.studentAccount === '' || isNaN(parseFloat(studentDonationSplit.studentAccount))
+              ? 0.0
+              : parseFloat(studentDonationSplit.studentAccount),
+            studentCash: studentDonationSplit.studentCash === '' || isNaN(parseFloat(studentDonationSplit.studentCash))
+              ? 100.0
+              : parseFloat(studentDonationSplit.studentCash)
+          }
         },
         donationsForSchool: {
           enabled: schoolDonationsEnabled,
-          presets: schoolDonationPresets
+          presets: schoolDonationPresets.map(p => p === '' || isNaN(parseFloat(p)) ? 0 : parseFloat(p))
         },
         schoolId: school?.id || school?._id // Pass school ID to ensure correct school association
       };
@@ -411,11 +442,11 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
       if (response.ok) {
         const result = await response.json();
         toast.success('Campagne créée avec succès! En attente d\'approbation de Massibec.');
-        
+
         // Store the created campaign and show parent letter modal
         setCreatedCampaign(result.campaign);
         setShowParentLetterModal(true);
-        
+
         // Reset form
         setFormData({
           startDate: '',
@@ -477,14 +508,14 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="startDate" className="text-sm font-medium text-gray-700">Date de début *</Label>
-        <Input
-          id="startDate"
-          type="date"
-          value={formData.startDate}
-          onChange={(e) => handleInputChange('startDate', e.target.value)}
-          className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-          required
-        />
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => handleInputChange('startDate', e.target.value)}
+                  className="mt-1 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                  required
+                />
               </div>
               <div>
                 <Label htmlFor="endDate" className="text-sm font-medium text-gray-700">Date de fin *</Label>
@@ -555,7 +586,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                         const hour = Math.floor(totalMinutes / 60);
                         const minutes = totalMinutes % 60;
                         const hourStr = hour < 10 ? `0${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}` : `${hour}h${minutes === 0 ? '00' : minutes < 10 ? `0${minutes}` : minutes}`;
-                        
+
                         // Only show times after the start hour (at least 15 minutes later)
                         if (formData.distributionStartHour) {
                           const startMatch = formData.distributionStartHour.match(/(\d{2})h(\d{2})/);
@@ -563,14 +594,14 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                             const startHour = parseInt(startMatch[1]);
                             const startMinutes = parseInt(startMatch[2]);
                             const startTotalMinutes = startHour * 60 + startMinutes;
-                            
+
                             // Only show if at least 15 minutes after start
                             if (totalMinutes <= startTotalMinutes) {
                               return null;
                             }
                           }
                         }
-                        
+
                         return (
                           <SelectItem key={hourStr} value={hourStr}>
                             {hourStr}
@@ -626,7 +657,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                 <p className="text-sm text-gray-600">
                   Personnalisez les prix de vente pour chaque produit. Ces prix seront utilisés lors de la vente.
                 </p>
-                
+
                 {/* Profit Split Templates and Global Controls */}
                 <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
                   <CardHeader className="pb-3">
@@ -717,20 +748,19 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                           />
                         </div>
                       </div>
-                      
+
                       <div className="text-xs text-gray-500 pt-2 border-t border-blue-200">
-                        Total distribué: ${(globalProfitSettings.studentCash + globalProfitSettings.studentSchoolAccount + globalProfitSettings.schoolProject + globalProfitSettings.raffle).toFixed(2)}
+                        Total distribué: ${((parseFloat(globalProfitSettings.studentCash) || 0) + (parseFloat(globalProfitSettings.studentSchoolAccount) || 0) + (parseFloat(globalProfitSettings.schoolProject) || 0) + (parseFloat(globalProfitSettings.raffle) || 0)).toFixed(2)}
                       </div>
                     </div>
 
                     <Button
                       type="button"
                       onClick={applyGlobalProfitSettings}
-                      className={`w-full text-white transition-all duration-300 ${
-                        settingsApplied 
-                          ? 'bg-green-600 hover:bg-green-700 scale-105 shadow-lg ring-4 ring-green-300 ring-opacity-50' 
-                          : 'bg-blue-600 hover:bg-blue-700'
-                      }`}
+                      className={`w-full text-white transition-all duration-300 ${settingsApplied
+                        ? 'bg-green-600 hover:bg-green-700 scale-105 shadow-lg ring-4 ring-green-300 ring-opacity-50'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
                     >
                       <div className="flex items-center justify-center space-x-2">
                         {settingsApplied ? (
@@ -745,186 +775,187 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                     </Button>
                   </CardContent>
                 </Card>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {products.map((product) => {
-                   const sellingPrice = customPrices[product.id] || product.price;
-                   const profit = sellingPrice - product.cost;
-                   
-                   return (
-                     <div 
-                       key={product.id} 
-                       className={`border-0 rounded-xl p-5 bg-gradient-to-br from-white to-gray-50 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.02] ${
-                         settingsApplied 
-                           ? 'ring-2 ring-green-400 ring-opacity-75 bg-gradient-to-br from-green-50 to-gray-50' 
-                           : ''
-                       }`}
-                     >
-                       <div className="flex items-start space-x-4">
-                         {/* Product Image */}
-                         <div className="flex-shrink-0">
-                           <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-gray-200 shadow-sm">
-                             <img 
-                               src={product.image} 
-                               alt={product.name}
-                               className="w-full h-full object-cover"
-                               onError={(e) => {
-                                 e.target.src = '/images/placeholder-product.svg';
-                               }}
-                             />
-                           </div>
-                         </div>
-                         
-                         {/* Product Info */}
-                         <div className="flex-1 min-w-0">
-                           <Label htmlFor={`price-${product.id}`} className="text-sm font-semibold text-gray-900 block mb-2">
-                             {product.name}
-                           </Label>
-                           
-                           {/* Financial Info */}
-                           <div className="space-y-1 mb-3">
-                             <div className="flex justify-between text-xs">
-                               <span className="text-gray-500">Coût:</span>
-                               <span className="font-medium text-gray-700">${product.cost.toFixed(2)}</span>
-                             </div>
-                             <div className="flex justify-between text-xs">
-                               <span className="text-gray-500">Prix par défaut:</span>
-                               <span className="font-medium text-gray-700">${product.price.toFixed(2)}</span>
-                             </div>
-                             <div className="flex justify-between text-xs">
-                               <span className="text-gray-500">Profit par unité:</span>
-                               <span className={`font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                 ${profit.toFixed(2)}
-                               </span>
-                             </div>
-                           </div>
-                           
-                           {/* Price Input */}
-                           <div className="flex items-center space-x-2">
-                             <Label htmlFor={`price-${product.id}`} className="text-xs text-gray-600 whitespace-nowrap">
-                               Prix de vente:
-                             </Label>
-                             <div className="flex-1">
-                               <Input
-                                 id={`price-${product.id}`}
-                                 type="number"
-                                 step="0.25"
-                                 min="0"
-                                 value={sellingPrice}
-                                 onChange={(e) => handlePriceChange(product.id, e.target.value)}
-                                 className="text-sm h-9 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-                               />
-                             </div>
-                           </div>
-                           
-                           {/* Updated Profit Display */}
-                           <div className="mt-2 text-right">
-                             <span className="text-xs text-gray-500">Nouveau profit: </span>
-                             <span className={`text-xs font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                               ${profit.toFixed(2)}
-                             </span>
-                           </div>
-                           
-                           {/* Profit Distribution */}
-                           <div className="mt-3 pt-3 border-t border-gray-200">
-                             <h4 className="text-xs font-semibold text-gray-700 mb-2">Répartition des profits:</h4>
-                             <div className="space-y-2">
-                               <div className="flex items-center gap-2">
-                                 <Label htmlFor={`studentCash-${product.id}`} className="text-xs text-gray-600 w-20">
-                                   {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} comptant:
-                                 </Label>
-                                 <Input
-                                   id={`studentCash-${product.id}`}
-                                   type="number"
-                                   step="0.25"
-                                   min="0"
-                                   value={profitSplits[product.id]?.studentCash ?? 1.00}
-                                   onChange={(e) => handleProfitSplitChange(product.id, 'studentCash', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200 flex-1"
-                                 />
-                               </div>
-                               <div className="flex items-center gap-2">
-                                 <Label htmlFor={`studentSchoolAccount-${product.id}`} className="text-xs text-gray-600 w-20">
-                                   {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} compte {terminology.organization}:
-                                 </Label>
-                                 <Input
-                                   id={`studentSchoolAccount-${product.id}`}
-                                   type="number"
-                                   step="0.25"
-                                   min="0"
-                                   value={profitSplits[product.id]?.studentSchoolAccount ?? 1.00}
-                                   onChange={(e) => handleProfitSplitChange(product.id, 'studentSchoolAccount', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200 flex-1"
-                                 />
-                               </div>
-                               <div className="flex items-center gap-2">
-                                 <Label htmlFor={`school-${product.id}`} className="text-xs text-gray-600 w-16">
-                                   {terminology.organizationLabel}:
-                                 </Label>
-                                 <Input
-                                   id={`school-${product.id}`}
-                                   type="number"
-                                   step="0.25"
-                                   min="0"
-                                   value={profitSplits[product.id]?.schoolProject ?? 0.75}
-                                   onChange={(e) => handleProfitSplitChange(product.id, 'schoolProject', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all duration-200 flex-1"
-                                 />
-                               </div>
-                               <div className="flex items-center gap-2">
-                                 <Label htmlFor={`raffle-${product.id}`} className="text-xs text-gray-600 w-16">
-                                   Tirage:
-                                 </Label>
-                                 <Input
-                                   id={`raffle-${product.id}`}
-                                   type="number"
-                                   step="0.25"
-                                   min="0"
-                                   value={profitSplits[product.id]?.raffle ?? 0.25}
-                                   onChange={(e) => handleProfitSplitChange(product.id, 'raffle', e.target.value)}
-                                   className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-purple-500 focus:ring-1 focus:ring-purple-200 transition-all duration-200 flex-1"
-                                 />
-                               </div>
-                               
-                               {/* Profit Distribution Summary */}
-                               <div className="mt-2 pt-2 border-t border-gray-100">
-                                 {(() => {
-                                   const splits = profitSplits[product.id] || { studentCash: 1.00, studentSchoolAccount: 1.00, schoolProject: 0.75, raffle: 0.25 };
-                                   const studentCashValue = splits.studentCash === '' ? 0 : (splits.studentCash || 0);
-                                   const studentSchoolAccountValue = splits.studentSchoolAccount === '' ? 0 : (splits.studentSchoolAccount || 0);
-                                   const schoolValue = splits.schoolProject === '' ? 0 : (splits.schoolProject || 0);
-                                   const raffleValue = splits.raffle === '' ? 0 : (splits.raffle || 0);
-                                   const totalDistributed = studentCashValue + studentSchoolAccountValue + schoolValue + raffleValue;
-                                   const remaining = profit - totalDistributed;
-                                   
-                                   return (
-                                     <div className="text-xs">
-                                       <div className="flex justify-between">
-                                         <span className="text-gray-500">Total distribué:</span>
-                                         <span className="font-medium">${totalDistributed.toFixed(2)}</span>
-                                       </div>
-                                       <div className="flex justify-between">
-                                         <span className="text-gray-500">Reste:</span>
-                                         <span className={`font-medium ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                           ${remaining.toFixed(2)}
-                                         </span>
-                                       </div>
-                                       {remaining < 0 && (
-                                         <div className="text-red-500 text-xs mt-1">
-                                           ⚠️ Vous distribuez plus que le profit disponible
-                                         </div>
-                                       )}
-                                     </div>
-                                   );
-                                 })()}
-                               </div>
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-                     </div>
-                   );
-                 })}
+                  {products.map((product) => {
+                    const sellingPrice = customPrices[product.id] !== undefined && customPrices[product.id] !== ''
+                      ? customPrices[product.id]
+                      : product.price;
+                    const profit = typeof sellingPrice === 'number' ? sellingPrice - product.cost : (parseFloat(sellingPrice) || 0) - product.cost;
+
+                    return (
+                      <div
+                        key={product.id}
+                        className={`border-0 rounded-xl p-5 bg-gradient-to-br from-white to-gray-50 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-[1.02] ${settingsApplied
+                          ? 'ring-2 ring-green-400 ring-opacity-75 bg-gradient-to-br from-green-50 to-gray-50'
+                          : ''
+                          }`}
+                      >
+                        <div className="flex items-start space-x-4">
+                          {/* Product Image */}
+                          <div className="flex-shrink-0">
+                            <div className="w-16 h-16 rounded-xl overflow-hidden border-2 border-gray-200 shadow-sm">
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.src = '/images/placeholder-product.svg';
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Product Info */}
+                          <div className="flex-1 min-w-0">
+                            <Label htmlFor={`price-${product.id}`} className="text-sm font-semibold text-gray-900 block mb-2">
+                              {product.name}
+                            </Label>
+
+                            {/* Financial Info */}
+                            <div className="space-y-1 mb-3">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-500">Coût:</span>
+                                <span className="font-medium text-gray-700">${product.cost.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-500">Prix par défaut:</span>
+                                <span className="font-medium text-gray-700">${product.price.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-500">Profit par unité:</span>
+                                <span className={`font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  ${typeof profit === 'number' ? profit.toFixed(2) : (parseFloat(profit) || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Price Input */}
+                            <div className="flex items-center space-x-2">
+                              <Label htmlFor={`price-${product.id}`} className="text-xs text-gray-600 whitespace-nowrap">
+                                Prix de vente:
+                              </Label>
+                              <div className="flex-1">
+                                <Input
+                                  id={`price-${product.id}`}
+                                  type="number"
+                                  step="0.25"
+                                  min="0"
+                                  value={sellingPrice}
+                                  onChange={(e) => handlePriceChange(product.id, e.target.value)}
+                                  className="text-sm h-9 border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Updated Profit Display */}
+                            <div className="mt-2 text-right">
+                              <span className="text-xs text-gray-500">Nouveau profit: </span>
+                              <span className={`text-xs font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                ${typeof profit === 'number' ? profit.toFixed(2) : (parseFloat(profit) || 0).toFixed(2)}
+                              </span>
+                            </div>
+
+                            {/* Profit Distribution */}
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <h4 className="text-xs font-semibold text-gray-700 mb-2">Répartition des profits:</h4>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor={`studentCash-${product.id}`} className="text-xs text-gray-600 w-20">
+                                    {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} comptant:
+                                  </Label>
+                                  <Input
+                                    id={`studentCash-${product.id}`}
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={profitSplits[product.id]?.studentCash ?? ''}
+                                    onChange={(e) => handleProfitSplitChange(product.id, 'studentCash', e.target.value)}
+                                    className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200 flex-1"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor={`studentSchoolAccount-${product.id}`} className="text-xs text-gray-600 w-20">
+                                    {terminology.participantLabel.charAt(0).toUpperCase() + terminology.participantLabel.slice(1)} compte {terminology.organization}:
+                                  </Label>
+                                  <Input
+                                    id={`studentSchoolAccount-${product.id}`}
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={profitSplits[product.id]?.studentSchoolAccount ?? ''}
+                                    onChange={(e) => handleProfitSplitChange(product.id, 'studentSchoolAccount', e.target.value)}
+                                    className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-200 transition-all duration-200 flex-1"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor={`school-${product.id}`} className="text-xs text-gray-600 w-16">
+                                    {terminology.organizationLabel}:
+                                  </Label>
+                                  <Input
+                                    id={`school-${product.id}`}
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={profitSplits[product.id]?.schoolProject ?? ''}
+                                    onChange={(e) => handleProfitSplitChange(product.id, 'schoolProject', e.target.value)}
+                                    className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all duration-200 flex-1"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor={`raffle-${product.id}`} className="text-xs text-gray-600 w-16">
+                                    Tirage:
+                                  </Label>
+                                  <Input
+                                    id={`raffle-${product.id}`}
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    value={profitSplits[product.id]?.raffle ?? ''}
+                                    onChange={(e) => handleProfitSplitChange(product.id, 'raffle', e.target.value)}
+                                    className="text-xs h-7 border-2 border-gray-200 rounded-md focus:border-purple-500 focus:ring-1 focus:ring-purple-200 transition-all duration-200 flex-1"
+                                  />
+                                </div>
+
+                                {/* Profit Distribution Summary */}
+                                <div className="mt-2 pt-2 border-t border-gray-100">
+                                  {(() => {
+                                    const splits = profitSplits[product.id] || { studentCash: 1.00, studentSchoolAccount: 1.00, schoolProject: 0.75, raffle: 0.25 };
+                                    const studentCashValue = splits.studentCash === '' ? 0 : (splits.studentCash || 0);
+                                    const studentSchoolAccountValue = splits.studentSchoolAccount === '' ? 0 : (splits.studentSchoolAccount || 0);
+                                    const schoolValue = splits.schoolProject === '' ? 0 : (splits.schoolProject || 0);
+                                    const raffleValue = splits.raffle === '' ? 0 : (splits.raffle || 0);
+                                    const totalDistributed = studentCashValue + studentSchoolAccountValue + schoolValue + raffleValue;
+                                    const remaining = profit - totalDistributed;
+
+                                    return (
+                                      <div className="text-xs">
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-500">Total distribué:</span>
+                                          <span className="font-medium">${totalDistributed.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-500">Reste:</span>
+                                          <span className={`font-medium ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            ${remaining.toFixed(2)}
+                                          </span>
+                                        </div>
+                                        {remaining < 0 && (
+                                          <div className="text-red-500 text-xs mt-1">
+                                            ⚠️ Vous distribuez plus que le profit disponible
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </CardContent>
@@ -1024,7 +1055,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                             step="0.1"
                             min="0"
                             max="100"
-                            value={studentDonationSplit.studentAccount}
+                            value={studentDonationSplit.studentAccount ?? ''}
                             onChange={(e) => handleStudentDonationSplitChange('studentAccount', e.target.value)}
                             className="text-sm"
                           />
@@ -1042,7 +1073,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                             step="0.1"
                             min="0"
                             max="100"
-                            value={studentDonationSplit.studentCash}
+                            value={studentDonationSplit.studentCash ?? ''}
                             onChange={(e) => handleStudentDonationSplitChange('studentCash', e.target.value)}
                             className="text-sm"
                           />
@@ -1050,7 +1081,7 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Student Donation Split Preview */}
                     <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                       <h5 className="text-sm font-semibold text-blue-800 mb-2">Aperçu - Don de 10$:</h5>
@@ -1164,8 +1195,8 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
         </div>
 
         <div className="flex justify-center pt-6 sm:pt-8">
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={creating}
             onClick={(e) => {
               console.log('Button clicked!', e);
@@ -1196,13 +1227,13 @@ const CampaignCreator = ({ onCampaignCreated, school }) => {
                 </>
               )}
             </div>
-            
+
             {/* Subtle glow effect */}
             <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-400 to-blue-500 opacity-0 hover:opacity-20 transition-opacity duration-200 pointer-events-none"></div>
           </Button>
         </div>
       </form>
-      
+
       {/* Parent Letter Modal */}
       <ParentLetterModal
         isOpen={showParentLetterModal}

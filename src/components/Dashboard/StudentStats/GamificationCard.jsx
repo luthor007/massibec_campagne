@@ -81,11 +81,11 @@ const achievementBadges = [
 function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStudentEarning, orders = [] }) {
   // Use totalStudentEarning if provided, otherwise fallback to totalProfit
   const currentProfit = totalStudentEarning !== undefined ? totalStudentEarning : totalProfit
-  
+
   // Calculate streak from orders
   const calculateStreak = useMemo(() => {
     if (!orders || orders.length === 0) return 0
-    
+
     // Get unique dates when orders were placed (as date strings for comparison)
     const orderDateSet = new Set(
       orders.map(order => {
@@ -96,16 +96,16 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
         return d.getTime()
       })
     )
-    
+
     if (orderDateSet.size === 0) return 0
-    
+
     // Start checking from today
     let currentDate = new Date()
     currentDate.setHours(0, 0, 0, 0)
     const today = currentDate.getTime()
-    
+
     let streak = 0
-    
+
     // Check if today has an order
     if (orderDateSet.has(today)) {
       streak = 1
@@ -114,13 +114,13 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
       // If no order today, start from yesterday
       currentDate.setDate(currentDate.getDate() - 1)
     }
-    
+
     // Count consecutive days with orders going backwards
     while (orderDateSet.has(currentDate.getTime())) {
       streak++
       currentDate.setDate(currentDate.getDate() - 1)
     }
-    
+
     return streak
   }, [orders])
   // Calculate accumulated rewards
@@ -156,10 +156,10 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
       const level = profitRewards[key]
       const levelNumber = parseInt(key.replace('level', ''))
       const isUnlocked = currentProfit >= level.minimum
-      const isCurrent = currentProfit >= level.minimum && 
-                       (index === Object.keys(profitRewards).length - 1 || 
-                        currentProfit < profitRewards[`level${levelNumber + 1}`]?.minimum)
-      
+      const isCurrent = currentProfit >= level.minimum &&
+        (index === Object.keys(profitRewards).length - 1 ||
+          currentProfit < profitRewards[`level${levelNumber + 1}`]?.minimum)
+
       return {
         ...level,
         levelNumber,
@@ -173,7 +173,7 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
   // Calculate unlocked achievements
   const unlockedAchievements = useMemo(() => {
     const unlocked = []
-    
+
     // Product-based achievements
     achievementBadges.forEach(badge => {
       if (badge.threshold && totalProductsSold >= badge.threshold) {
@@ -182,7 +182,7 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
         unlocked.push(badge)
       }
     })
-    
+
     return unlocked
   }, [totalProductsSold, userRank])
 
@@ -203,18 +203,18 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
     if (accumulatedRewards.length === 0) {
       return { current: 0, next: profitRewards.level1.minimum, percentage: 0 }
     }
-    
+
     const currentLevelReward = accumulatedRewards[accumulatedRewards.length - 1]
     const nextLevelReward = getNextReward(currentProfit)
-    
+
     if (!nextLevelReward.minimum) {
       return { current: currentProfit, next: currentProfit, percentage: 100 }
     }
-    
+
     const levelRange = nextLevelReward.minimum - currentLevelReward.minimum
     const progressInLevel = currentProfit - currentLevelReward.minimum
     const percentage = Math.min(100, (progressInLevel / levelRange) * 100)
-    
+
     return {
       current: currentProfit,
       next: nextLevelReward.minimum,
@@ -227,10 +227,10 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
   const levelProgress = getLevelProgress()
   const accumulatedProfitRewards = getAccumulatedRewards(currentProfit)
   const nextProfitReward = getNextReward(currentProfit)
-  
+
   // Estimate products needed based on average profit per product
   const averageProfitPerProduct = totalProductsSold > 0 ? currentProfit / totalProductsSold : 2.5
-  
+
   const streak = calculateStreak
 
   return (
@@ -261,7 +261,7 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
           </div>
         </CardTitle>
       </CardHeader>
-      
+
       <CardContent className="p-6 bg-white flex-1 flex flex-col overflow-hidden">
         {/* Streak Section */}
         {streak > 0 && (
@@ -283,7 +283,7 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
                     Streak de {streak} jour{streak > 1 ? 's' : ''} consécutif{streak > 1 ? 's' : ''}!
                   </h3>
                   <p className="text-sm text-orange-700">
-                    Continue comme ça pour maintenir ton streak! 🔥
+                    Fais une vente par jour pour maintenir ton streak! 🔥
                   </p>
                 </div>
               </div>
@@ -294,7 +294,7 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
             </div>
           </motion.div>
         )}
-        
+
         {/* Timeline of Levels */}
         <ScrollArea className="flex-1 pr-4">
           <div className="space-y-3">
@@ -302,13 +302,13 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
               <Trophy className="mr-2 h-4 w-4 text-indigo-600" />
               Timeline des Niveaux
             </h3>
-            
+
             {allLevels.map((level, index) => {
               const productsNeeded = Math.ceil(level.minimum / averageProfitPerProduct)
               const isActive = level.isCurrent
               const isCompleted = level.isUnlocked && !isActive
               const isLocked = !level.isUnlocked
-              
+
               return (
                 <motion.div
                   key={level.key}
@@ -319,91 +319,85 @@ function GamificationCard({ totalProfit, totalProductsSold, userRank, totalStude
                 >
                   {/* Timeline connector */}
                   {index < allLevels.length - 1 && (
-                    <div className={`absolute left-6 top-12 w-0.5 h-full ${
-                      isCompleted ? 'bg-gradient-to-b from-indigo-400 to-indigo-300' : 
-                      isActive ? 'bg-gradient-to-b from-indigo-400 via-gray-200 to-gray-200' : 
-                      'bg-gray-200'
-                    }`} style={{ height: 'calc(100% + 0.75rem)' }} />
+                    <div className={`absolute left-6 top-12 w-0.5 h-full ${isCompleted ? 'bg-gradient-to-b from-indigo-400 to-indigo-300' :
+                      isActive ? 'bg-gradient-to-b from-indigo-400 via-gray-200 to-gray-200' :
+                        'bg-gray-200'
+                      }`} style={{ height: 'calc(100% + 0.75rem)' }} />
                   )}
-                  
-                  <div className={`relative flex items-start space-x-3 p-3 rounded-lg transition-all ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border-2 border-indigo-400 shadow-lg' 
-                      : isCompleted
+
+                  <div className={`relative flex items-start space-x-3 p-3 rounded-lg transition-all ${isActive
+                    ? 'bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border-2 border-indigo-400 shadow-lg'
+                    : isCompleted
                       ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 shadow-sm'
                       : 'bg-gray-50 border border-gray-200 opacity-70'
-                  }`}>
+                    }`}>
                     {/* Level Icon/Number */}
-                    <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white ring-4 ring-indigo-200 scale-110'
-                        : isCompleted
+                    <div className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-all ${isActive
+                      ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white ring-4 ring-indigo-200 scale-110'
+                      : isCompleted
                         ? 'bg-gradient-to-br from-indigo-400 to-purple-500 text-white'
                         : 'bg-gray-300 text-gray-600'
-                    }`}>
+                      }`}>
                       {isCompleted ? (
                         <Check className="h-6 w-6" />
                       ) : (
                         <span>{level.levelNumber}</span>
                       )}
                     </div>
-                    
+
                     {/* Level Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between mb-1">
                         <div className="flex-1">
-                          <h4 className={`font-bold text-sm ${
-                            isActive ? 'text-indigo-900' : isCompleted ? 'text-gray-900' : 'text-gray-500'
-                          }`}>
-                            {level.badge}
+                          <div className={`font-bold text-sm flex items-center gap-2 ${isActive ? 'text-indigo-900' : isCompleted ? 'text-gray-900' : 'text-gray-500'
+                            }`}>
+                            <span>{level.badge}</span>
                             {isActive && (
-                              <Badge className="ml-2 bg-indigo-600 text-white text-xs px-1.5 py-0">
+                              <Badge className="bg-indigo-600 text-white text-xs px-1.5 py-0">
                                 Actuel
                               </Badge>
                             )}
-                          </h4>
-                          <p className={`text-xs mt-0.5 ${
-                            isActive ? 'text-indigo-700' : isCompleted ? 'text-gray-600' : 'text-gray-400'
-                          }`}>
+                          </div>
+                          <p className={`text-xs mt-0.5 ${isActive ? 'text-indigo-700' : isCompleted ? 'text-gray-600' : 'text-gray-400'
+                            }`}>
                             {level.description}
                           </p>
                         </div>
                       </div>
-                      
+
                       {/* Milestones */}
                       <div className="mt-2 space-y-1.5">
-                        <div className={`flex items-center space-x-2 text-xs ${
-                          isActive ? 'text-indigo-800' : isCompleted ? 'text-gray-700' : 'text-gray-500'
-                        }`}>
-                          <DollarSign className={`h-3.5 w-3.5 ${
-                            isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                          }`} />
+                        <div className={`flex items-center space-x-2 text-xs ${isActive ? 'text-indigo-800' : isCompleted ? 'text-gray-700' : 'text-gray-500'
+                          }`}>
+                          <DollarSign className={`h-3.5 w-3.5 ${isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                            }`} />
                           <span className="font-semibold">${level.minimum.toFixed(2)}</span>
                           <span className="text-gray-400">de profit</span>
                         </div>
-                        <div className={`flex items-center space-x-2 text-xs ${
-                          isActive ? 'text-indigo-800' : isCompleted ? 'text-gray-700' : 'text-gray-500'
-                        }`}>
-                          <ShoppingCart className={`h-3.5 w-3.5 ${
-                            isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                          }`} />
+                        <div className={`flex items-center space-x-2 text-xs ${isActive ? 'text-indigo-800' : isCompleted ? 'text-gray-700' : 'text-gray-500'
+                          }`}>
+                          <ShoppingCart className={`h-3.5 w-3.5 ${isActive ? 'text-indigo-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                            }`} />
                           <span className="font-semibold">~{productsNeeded}</span>
                           <span className="text-gray-400">produits</span>
                         </div>
                       </div>
-                      
+
                       {/* Progress indicator for current level */}
                       {isActive && nextProfitReward.minimum && (
                         <div className="mt-2 pt-2 border-t border-indigo-200">
                           <div className="flex items-center justify-between text-xs mb-1">
-                            <span className="text-indigo-700 font-medium">Progression</span>
+                            <span className="text-indigo-700 font-medium">Progression vers le niveau suivant</span>
                             <span className="text-indigo-600 font-bold">{Math.round(levelProgress.percentage)}%</span>
                           </div>
                           <Progress value={levelProgress.percentage} className="h-1.5" />
                           <div className="flex justify-between text-xs text-indigo-600 mt-1">
-                            <span>${currentProfit.toFixed(2)}</span>
-                            <ArrowRight className="h-3 w-3" />
+                            <span className="font-semibold">${currentProfit.toFixed(2)}</span>
+                            <span className="text-indigo-500">/</span>
                             <span className="font-semibold">${nextProfitReward.minimum.toFixed(2)}</span>
+                          </div>
+                          <div className="text-xs text-indigo-600 mt-0.5 text-center">
+                            Il reste ${(nextProfitReward.minimum - currentProfit).toFixed(2)} pour atteindre {nextProfitReward.name}
                           </div>
                         </div>
                       )}

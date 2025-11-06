@@ -187,6 +187,8 @@ const sendEmail = async (params: SendEmailParams) => {
     hoursAvailable,
     products,
     totalAmount,
+    discount,
+    originalSubtotal,
     tip = 0,
     studentDonation = 0,
     schoolDonation = 0,
@@ -201,6 +203,10 @@ const sendEmail = async (params: SendEmailParams) => {
     sellerName,
     sellerPhone,
     sellerEmail,
+    organizationType,
+    deliveryOption,
+    customDeliveryOption,
+    customerDeliveryAddress,
   } = params;
 
   try {
@@ -213,6 +219,8 @@ const sendEmail = async (params: SendEmailParams) => {
         hoursAvailable={hoursAvailable}
         products={products}
         totalAmount={totalAmount}
+        discount={discount}
+        originalSubtotal={originalSubtotal}
         tip={tip}
         studentDonation={studentDonation}
         schoolDonation={schoolDonation}
@@ -227,6 +235,10 @@ const sendEmail = async (params: SendEmailParams) => {
         sellerName={sellerName}
         sellerPhone={sellerPhone}
         sellerEmail={sellerEmail}
+        organizationType={organizationType}
+        deliveryOption={deliveryOption}
+        customDeliveryOption={customDeliveryOption}
+        customerDeliveryAddress={customerDeliveryAddress}
       />
     );
 
@@ -441,12 +453,12 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
 };
 
 // Exportation des fonctions
-export { 
-  sendEmail, 
-  sendDeletionEmail, 
-  sendStudentOrderEmail, 
-  sendPasswordResetEmail, 
-  sendVerificationEmail, 
-  sendSaleNotificationEmail 
+export {
+  sendEmail,
+  sendDeletionEmail,
+  sendStudentOrderEmail,
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+  sendSaleNotificationEmail
 };
 

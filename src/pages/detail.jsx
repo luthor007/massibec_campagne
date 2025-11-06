@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './api/auth/[...nextauth]';
+import { getDetailPageSSR } from '../lib/dashboardSSR';
 import Layout from '../components/Layout';
 import {
   Table,
@@ -20,26 +24,47 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { GiftIcon, CoinsIcon, TrendingUpIcon, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import '@/styles/campaignDetails.css'; // Assurez-vous que ce fichier existe et est correctement référencé
+import '@/styles/campaignDetails.css';
 
-export default function CampaignDetails() {
+export default function CampaignDetails({
+  initialCampaignData,
+  initialSchoolData,
+  initialProducts,
+  initialUser
+}) {
   const { data: session, status } = useSession();
-  const [campaignData, setCampaignData] = useState(null);
-  const [schoolData, setSchoolData] = useState(null);
-  const [products, setProducts] = useState([]);
-  const [loadingCampaign, setLoadingCampaign] = useState(true);
-  const [loadingProducts, setLoadingProducts] = useState(true);
+  const router = useRouter();
+  const [campaignData, setCampaignData] = useState(initialCampaignData || null);
+  const [schoolData, setSchoolData] = useState(initialSchoolData || null);
+  const [products, setProducts] = useState(initialProducts || []);
+  const [loadingCampaign, setLoadingCampaign] = useState(!initialCampaignData);
+  const [loadingProducts, setLoadingProducts] = useState(!initialProducts);
   const [error, setError] = useState(null);
-  const [user, setUser] = useState();
+  const [user, setUser] = useState(initialUser || null);
 
+  // Prefetch dashboard for instant return navigation - aggressive prefetching
+  useEffect(() => {
+    // Prefetch dashboard immediately and multiple times
+    router.prefetch('/dashboard');
+    router.prefetch('/dashboard');
+    setTimeout(() => router.prefetch('/dashboard'), 50);
+    setTimeout(() => router.prefetch('/dashboard'), 100);
 
+    // Also prefetch on hover/touch for extra assurance
+    const backLink = document.querySelector('a[href="/dashboard"]');
+    if (backLink) {
+      const prefetchDashboard = () => router.prefetch('/dashboard');
+      backLink.addEventListener('mouseenter', prefetchDashboard, { once: true, passive: true });
+      backLink.addEventListener('touchstart', prefetchDashboard, { once: true, passive: true });
+    }
+  }, [router]);
 
   // Ensure userId is only accessed when session is authenticated
-  const userId = session?.user?.id;
+  const userId = session?.user?.id || initialUser?._id;
 
-  // Fetch User Data
+  // Fetch User Data - only if not provided via SSR
   const fetchUser = useCallback(async (userId) => {
-    if (!userId) return; // Exit if userId is undefined
+    if (!userId || initialUser) return; // Skip if we have SSR data
     try {
       const userResponse = await fetch(`/api/users/${userId}`);
       if (!userResponse.ok) {
@@ -50,22 +75,23 @@ export default function CampaignDetails() {
     } catch (error) {
       setError(error.message);
     }
-  }, []);
+  }, [initialUser]);
 
   useEffect(() => {
-    if (status === 'authenticated' && userId) { // Check if authenticated
+    if (status === 'authenticated' && userId && !initialUser) { // Check if authenticated and no SSR data
       fetchUser(userId);
     }
-  }, [userId, fetchUser, status]);
+  }, [userId, fetchUser, status, initialUser]);
 
   useEffect(() => {
-    if (status === 'authenticated' && user) {
+    if (status === 'authenticated' && user && !initialCampaignData && !initialSchoolData) {
+      // Only fetch if we don't have SSR data
       const fetchCampaignData = async () => {
         try {
           // For students: Use their selected campaign (activeCampaignId) or first joined campaign
           // For school managers: Use their school's activeCampaignId or query param
           let campaignId = null;
-          
+
           if (user.role === 'student') {
             // Get user's selected campaign (activeCampaignId)
             if (user.activeCampaignId) {
@@ -100,7 +126,7 @@ export default function CampaignDetails() {
             if (campaignResponse.ok) {
               const campaignResult = await campaignResponse.json();
               campaignData = campaignResult.campaign;
-              
+
               // Also fetch school data
               if (campaignData?.school) {
                 const schoolId = campaignData.school._id || campaignData.school;
@@ -112,7 +138,7 @@ export default function CampaignDetails() {
               }
             }
           }
-          
+
           // Fallback to /api/campaigns/current if campaignId fetch failed
           if (!campaignData) {
             let schoolId = null;
@@ -126,11 +152,11 @@ export default function CampaignDetails() {
                 schoolId = user.school?._id || user.school;
               }
             }
-            
-            const apiUrl = schoolId 
+
+            const apiUrl = schoolId
               ? `/api/campaigns/current?schoolId=${schoolId}`
               : '/api/campaigns/current';
-            
+
             const response = await fetch(apiUrl);
             if (response.ok) {
               const data = await response.json();
@@ -141,9 +167,9 @@ export default function CampaignDetails() {
               throw new Error(errorData.message || 'Erreur lors de la récupération des données de la campagne.');
             }
           }
-          
+
           setCampaignData(campaignData);
-          
+
           // Debug: Log donation configuration
           if (campaignData?.donationsForStudents) {
             console.log('[detail.jsx] Donations config:', {
@@ -162,16 +188,21 @@ export default function CampaignDetails() {
 
       fetchCampaignData();
     }
-  }, [status, session, user]);
+  }, [status, session, user, initialCampaignData, initialSchoolData]);
 
-  // Fetch products after campaign data is loaded
+  // Fetch products after campaign data is loaded - only if not provided via SSR
   useEffect(() => {
+    if (initialProducts && initialProducts.length > 0) {
+      setLoadingProducts(false);
+      return;
+    }
+
     if (campaignData && schoolData) {
       const fetchProducts = async () => {
         try {
           // Use the schoolId from the campaign's school data
           const schoolId = schoolData._id;
-          
+
           if (!schoolId) {
             throw new Error('Aucune école associée à cette campagne.');
           }
@@ -193,7 +224,7 @@ export default function CampaignDetails() {
 
       fetchProducts();
     }
-  }, [campaignData, schoolData]);
+  }, [campaignData, schoolData, initialProducts]);
 
   // Fonction pour calculer le total profit par produit
   const calculateProfit = (product) => {
@@ -209,13 +240,13 @@ export default function CampaignDetails() {
 
     // Get product ID - products from API use 'id' field, not '_id'
     const productId = product._id?.toString() || product.id?.toString();
-    
+
     // Check if this product has custom pricing in the campaign
     const customPrice = campaignData.customPrices?.find(cp => {
       const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
       return cpProductId === productId;
     });
-    
+
     // Check if this product has custom profit splits in the campaign
     const customProfitSplit = campaignData.profitSplits?.find(ps => {
       const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
@@ -258,7 +289,7 @@ export default function CampaignDetails() {
     };
   };
 
-  if (status === 'loading' || loadingCampaign || loadingProducts) {
+  if (status === 'loading' || (loadingCampaign && !initialCampaignData) || (loadingProducts && !initialProducts)) {
     return <p>Chargement des informations...</p>;
   }
 
@@ -273,8 +304,8 @@ export default function CampaignDetails() {
   if (!campaignData) {
     return (
       <Layout className="pt-24">
-        <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8">
-          <div className="container mx-auto px-4 py-12">
+        <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden">
+          <div className="container mx-auto px-4 py-12 overflow-x-hidden">
             <div className="text-center">
               <h1 className="text-3xl font-bold mb-4">Aucune campagne active</h1>
               <p className="text-lg text-gray-600 mb-6">
@@ -292,24 +323,31 @@ export default function CampaignDetails() {
 
   return (
     <Layout className="pt-24">
-      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8">
+      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden">
         <header className="bg-primary text-primary-foreground py-12">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 overflow-x-hidden">
             {/* Back arrow */}
-            <Link 
-              href="/dashboard" 
+            <Link
+              href="/dashboard"
+              passHref
+              prefetch={true}
               className="inline-flex items-center text-sm text-primary-foreground/80 hover:text-primary-foreground transition-colors mb-4"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push('/dashboard');
+              }}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Retour au tableau de bord
             </Link>
-            
+
             <h1 className="text-4xl font-bold mb-4">
               {campaignData ? `Campagne #${campaignData.campaignNumber} - ${schoolData?.name}` : 'Campagne de Financement Massibec'}
             </h1>
             <p className="text-xl">
-              {campaignData ? 
-                `Découvrez les détails de votre campagne et maximisez vos profits!` : 
+              {campaignData ?
+                `Découvrez les détails de votre campagne et maximisez vos profits!` :
                 'Découvrez les détails de notre campagne et maximisez vos profits!'
               }
             </p>
@@ -334,7 +372,7 @@ export default function CampaignDetails() {
                 {(() => {
                   // Calculate profits for all products first
                   const profitsData = products.map(product => calculateProfit(product));
-                  
+
                   // Determine which columns to show based on whether they have non-zero values
                   const hasStudentCashProfit = profitsData.some(p => parseFloat(p.studentCashProfit) > 0);
                   const hasStudentSchoolAccountProfit = profitsData.some(p => parseFloat(p.studentSchoolAccountProfit) > 0);
@@ -357,10 +395,10 @@ export default function CampaignDetails() {
                       <TableBody>
                         {products.map((product, index) => {
                           const profitData = profitsData[index];
-                          
+
                           // Get product ID - products from API use 'id' field, not '_id'
                           const productId = product._id?.toString() || product.id?.toString();
-                          
+
                           // Get campaign-specific price if available
                           const customPrice = campaignData?.customPrices?.find(cp => {
                             const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
@@ -391,81 +429,72 @@ export default function CampaignDetails() {
           {/* Section: Don */}
           {(campaignData?.donationsForStudents?.enabled || campaignData?.donationsForSchool?.enabled) && (
             <section>
-              <h2 className="text-3xl font-semibold mb-6">Dons</h2>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <GiftIcon className="mr-2" />
-                    Répartition des dons
+              <h2 className="text-2xl sm:text-3xl font-semibold mb-4 sm:mb-6">Dons</h2>
+              <Card className="shadow-lg border-0">
+                <CardHeader className="pb-4 sm:pb-6">
+                  <CardTitle className="flex items-center text-lg sm:text-xl">
+                    <GiftIcon className="mr-2 h-5 w-5 sm:h-6 sm:w-6" />
+                    Comment ça marche ?
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6 pb-6 sm:pb-8">
                   {campaignData?.donationsForStudents?.enabled && (
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h3 className="font-semibold text-blue-900 mb-2">Dons pour les étudiants</h3>
-                      <p className="text-sm text-blue-800 mb-3">
-                        Les dons des clients sont répartis entre votre compte comptant et votre compte scolaire selon la configuration suivante:
-                      </p>
+                    <div className="p-4 sm:p-6 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl border-2 border-blue-200 shadow-sm">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-4">
+                        <div className="text-2xl sm:text-3xl">💵</div>
+                        <h3 className="font-bold text-blue-900 text-base sm:text-lg">Dons pour vous</h3>
+                      </div>
                       {campaignData.donationsForStudents?.splitConfig && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-700">Compte scolaire:</span>
-                            <span className="font-medium text-blue-900">
-                              {campaignData.donationsForStudents.splitConfig.studentAccount !== undefined 
-                                ? campaignData.donationsForStudents.splitConfig.studentAccount 
-                                : 60}%
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-700">Comptant:</span>
-                            <span className="font-medium text-blue-900">
-                              {campaignData.donationsForStudents.splitConfig.studentCash !== undefined 
-                                ? campaignData.donationsForStudents.splitConfig.studentCash 
-                                : 40}%
-                            </span>
-                          </div>
-                          {campaignData.donationsForStudents.presets && campaignData.donationsForStudents.presets.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-blue-200">
-                              <p className="text-xs text-gray-600 mb-2">Montants suggérés:</p>
-                              <div className="flex gap-2 flex-wrap">
-                                {campaignData.donationsForStudents.presets.map((preset, index) => (
-                                  <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                    {preset}$
-                                  </span>
-                                ))}
-                              </div>
+                        <div className="space-y-3 sm:space-y-4 mb-4">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-blue-100">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">💵</span>
+                              <span className="text-sm sm:text-base font-medium text-gray-700">Compte comptant</span>
                             </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {campaignData?.donationsForSchool?.enabled && (
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <h3 className="font-semibold text-green-900 mb-2">Dons pour l'école</h3>
-                      <p className="text-sm text-green-800 mb-3">
-                        Les dons des clients sont versés directement au projet de l'école.
-                      </p>
-                      {campaignData.donationsForSchool.presets && campaignData.donationsForSchool.presets.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-green-200">
-                          <p className="text-xs text-gray-600 mb-2">Montants suggérés:</p>
-                          <div className="flex gap-2 flex-wrap">
-                            {campaignData.donationsForSchool.presets.map((preset, index) => (
-                              <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                                {preset}$
-                              </span>
-                            ))}
+                            <span className="font-bold text-blue-900 text-base sm:text-lg ml-7 sm:ml-0">
+                              {campaignData.donationsForStudents.splitConfig.studentCash !== undefined
+                                ? campaignData.donationsForStudents.splitConfig.studentCash
+                                : 40}% → Vous gardez
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 sm:gap-2 bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-blue-100">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xl">🎓</span>
+                              <span className="text-sm sm:text-base font-medium text-gray-700">Compte étudiant</span>
+                            </div>
+                            <span className="font-bold text-blue-900 text-base sm:text-lg ml-7 sm:ml-0">
+                              {campaignData.donationsForStudents.splitConfig.studentAccount !== undefined
+                                ? campaignData.donationsForStudents.splitConfig.studentAccount
+                                : 60}% → À transférer à Massibec (qui va transférer à l'école et le mettre dans votre compte scolaire)
+                            </span>
                           </div>
                         </div>
                       )}
+                      <div className="bg-blue-200/50 rounded-lg p-3 sm:p-4 border border-blue-300">
+                        <p className="text-xs sm:text-sm text-blue-900 leading-relaxed">
+                          <strong className="font-semibold">Exemple :</strong> Sur 10$ de dons, vous gardez {(10 * ((campaignData.donationsForStudents?.splitConfig?.studentCash !== undefined ? campaignData.donationsForStudents.splitConfig.studentCash : 40) / 100)).toFixed(0)}$ et vous transférez {(10 * ((campaignData.donationsForStudents?.splitConfig?.studentAccount !== undefined ? campaignData.donationsForStudents.splitConfig.studentAccount : 60) / 100)).toFixed(0)}$ à Massibec (qui va transférer à l'école et le mettre dans votre compte scolaire).
+                        </p>
+                      </div>
                     </div>
                   )}
-                  
-                  {!campaignData?.donationsForStudents?.enabled && !campaignData?.donationsForSchool?.enabled && (
-                    <p className="text-gray-500 text-center py-4">
-                      Les dons ne sont pas activés pour cette campagne.
-                    </p>
+
+                  {campaignData?.donationsForSchool?.enabled && (
+                    <div className="p-4 sm:p-6 bg-gradient-to-br from-green-50 to-green-100/50 rounded-xl border-2 border-green-200 shadow-sm">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-4">
+                        <div className="text-2xl sm:text-3xl">🏫</div>
+                        <h3 className="font-bold text-green-900 text-base sm:text-lg">Dons pour l'école</h3>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-green-100 mb-4">
+                        <p className="text-sm sm:text-base text-green-800 font-medium">
+                          100% des dons → À transférer à Massibec (qui va transférer à l'école)
+                        </p>
+                      </div>
+                      <div className="bg-green-200/50 rounded-lg p-3 sm:p-4 border border-green-300">
+                        <p className="text-xs sm:text-sm text-green-900 leading-relaxed">
+                          <strong className="font-semibold">Exemple :</strong> Si vous recevez 5$ de dons pour l'école, vous transférez 5$ à Massibec (qui va transférer à l'école).
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -473,7 +502,7 @@ export default function CampaignDetails() {
           )}
 
           {/* Section: Bonus pour l'Organisation */}
-          {session.user.role === "school_manager" && schoolData.isBonus && schoolData.bonuses.length > 0 && (
+          {session?.user?.role === "school_manager" && schoolData?.isBonus && schoolData?.bonuses?.length > 0 && (
             <section>
               <Card>
                 <CardHeader>
@@ -511,4 +540,39 @@ export default function CampaignDetails() {
       </div>
     </Layout>
   );
+}
+
+export async function getServerSideProps(context) {
+  try {
+    const session = await getServerSession(context.req, context.res, authOptions);
+    if (!session || !session.user) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    const detailData = await getDetailPageSSR(session);
+
+    return {
+      props: {
+        initialCampaignData: detailData.campaignData,
+        initialSchoolData: detailData.schoolData,
+        initialProducts: detailData.products,
+        initialUser: detailData.user
+      },
+    };
+  } catch (error) {
+    console.error('Error in getServerSideProps (detail):', error);
+    return {
+      props: {
+        initialCampaignData: null,
+        initialSchoolData: null,
+        initialProducts: [],
+        initialUser: null
+      },
+    };
+  }
 }

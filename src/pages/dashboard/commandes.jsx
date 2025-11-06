@@ -2,13 +2,17 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
+import { getServerSession } from 'next-auth/next';
 import Layout from '../../components/Layout';
-import { calculateOrderProfits, getCampaignDataWithFallback, isTestCampaign } from '../../utils/campaignHelpers';
+import { calculateOrderProfits, calculateOrderProfitsDetailed, getCampaignDataWithFallback, isTestCampaign } from '../../utils/campaignHelpers';
 import { getTerminology } from '../../utils/organizationHelpers';
 import CampaignSelector from '../../components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '../../components/Dashboard/JoinCampaignModal';
 import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip';
 import useOnboarding from '../../hooks/useOnboarding';
+import { getDashboardSSRData, getOrdersSSR } from '../../lib/dashboardSSR';
+import { authOptions } from '../api/auth/[...nextauth]';
 import {
   Table,
   TableBody,
@@ -46,16 +50,25 @@ import {
 } from "@/components/ui/dialog";
 import { products } from '../../lib/product';
 import { motion } from 'framer-motion'
-import { SendHorizontal} from 'lucide-react'
+import { SendHorizontal } from 'lucide-react'
 import { format, addDays, isBefore, isAfter } from 'date-fns'; // Make sure to import date-fns
 import { fr } from 'date-fns/locale'; // For French date formatting
 import { toast } from 'sonner'
 
 
-export default function Commandes() {
+export default function Commandes({
+  initialCampaignContext,
+  initialStoreInfo,
+  initialSchoolData,
+  initialCampaignData,
+  initialOrders
+}) {
   const { data: session, status } = useSession();
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  // State declarations - must come before handlers that use them
+  const [orders, setOrders] = useState(initialOrders || []);
+  const [loading, setLoading] = useState(!initialOrders);
   const [error, setError] = useState(null);
   const [schoolFetchFailed, setSchoolFetchFailed] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
@@ -63,23 +76,23 @@ export default function Commandes() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [newOrderId, setNewOrderId] = useState(null);
   const [priceToPay, setPriceToPay] = useState();
-  const [school, setSchool] = useState();
+  const [school, setSchool] = useState(initialSchoolData || null);
   const [isHovered, setIsHovered] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
-  
-  // Campaign-related state
-  const [campaignContext, setCampaignContext] = useState(null);
+
+  // Campaign-related state - initialize from SSR props
+  const [campaignContext, setCampaignContext] = useState(initialCampaignContext || null);
   const [showJoinCampaignModal, setShowJoinCampaignModal] = useState(false);
-  const [campaignData, setCampaignData] = useState(null);
-  const [fallbackSplit, setFallbackSplit] = useState(null);
-  
+  const [campaignData, setCampaignData] = useState(initialCampaignData || null);
+  const [fallbackSplit, setFallbackSplit] = useState(initialSchoolData?.split || null);
+
   // Onboarding state
   const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
   const [tooltipTarget, setTooltipTarget] = useState(null);
   const ordersTableRef = useRef(null);
-  
+
   // Use onboarding hook
   const {
     progress,
@@ -89,9 +102,101 @@ export default function Commandes() {
     getStepContent
   } = useOnboarding();
 
+  // Optimized prefetching for instant return navigation
+  useEffect(() => {
+    // Aggressive prefetching
+    router.prefetch('/dashboard');
+    router.prefetch('/dashboard');
+    const timeoutId = setTimeout(() => {
+      router.prefetch('/dashboard');
+    }, 100);
+
+    // Prefetch on hover/touch
+    const backLink = document.querySelector('a[href="/dashboard"], div[onclick*="dashboard"]');
+    if (backLink) {
+      const prefetchDashboard = () => router.prefetch('/dashboard');
+      backLink.addEventListener('mouseenter', prefetchDashboard, { once: true, passive: true });
+      backLink.addEventListener('touchstart', prefetchDashboard, { once: true, passive: true });
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [router]);
+
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleCampaignSwitch = useCallback((campaignId) => {
+    window.location.reload(); // Simple refresh for now
+  }, []);
+
+  const handleJoinCampaignClick = useCallback(() => {
+    setShowJoinCampaignModal(true);
+  }, []);
+
+  const handleJoinCampaignSuccess = useCallback((campaign) => {
+    setShowJoinCampaignModal(false);
+    window.location.reload();
+  }, []);
+
+  const handleBackNavigation = useCallback((e) => {
+    e.preventDefault();
+    router.push('/dashboard');
+  }, [router]);
+
+  const handlePrint = useCallback(() => {
+    window.print();
+  }, []);
+
+  const handleCopy = useCallback((text, fieldName) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    toast.success('Copié dans le presse-papier!');
+    setTimeout(() => setCopiedField(null), 2000);
+  }, []);
+
+  const handleDeleteOrder = useCallback(async () => {
+    if (!selectedOrderId || isDeletingOrder) {
+      return;
+    }
+
+    setIsDeletingOrder(true);
+    try {
+      console.log('Attempting to delete order with ID:', selectedOrderId);
+      const response = await fetch(`/api/command/${selectedOrderId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setOrders(orders.filter(order => order._id !== selectedOrderId));
+        setShowPopup(false);
+        setSelectedOrderId(null);
+        toast.success('Commande supprimée avec succès.');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur lors de la suppression de la commande');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      setError(error.message);
+      toast.error(`Une erreur est survenue lors de la suppression de la commande: ${error.message}`);
+    } finally {
+      setIsDeletingOrder(false);
+    }
+  }, [selectedOrderId, isDeletingOrder, orders]);
+
+  const handleCloseJoinCampaignModal = useCallback(() => {
+    setShowJoinCampaignModal(false);
+  }, []);
+
+  // Memoize campaign selector props
+  const campaignSelectorProps = useMemo(() => ({
+    onCampaignSwitch: handleCampaignSwitch,
+    onJoinCampaign: handleJoinCampaignClick,
+    initialCampaigns: initialCampaignContext?.campaigns || [],
+    initialActiveCampaignId: initialCampaignContext?.activeCampaignId || null
+  }), [handleCampaignSwitch, handleJoinCampaignClick, initialCampaignContext]);
+
   const schoolId = session?.user?.school;
   const name = session?.user?.name;
-  
+
   // Get terminology based on organization type
   const terminology = useMemo(() => {
     const orgType = school?.organizationType || campaignData?.organizationType || 'school';
@@ -146,7 +251,7 @@ export default function Commandes() {
   // Fetch School Data
   const fetchSchoolData = useCallback(async (schoolId) => {
     if (!schoolId) return;
-    
+
     try {
       const response = await fetch(`/api/schools/${schoolId}`)
       if (!response.ok) {
@@ -176,29 +281,27 @@ export default function Commandes() {
     }
   }, [])
 
-  // Fetch campaign context and school data
+  // Fetch campaign context and school data - only if not provided via SSR
   useEffect(() => {
+    if (initialCampaignContext || initialSchoolData) return; // Skip if SSR data exists
+
     const fetchCampaignContext = async () => {
       if (!session?.user) return;
-      
+
       try {
         const response = await fetch('/api/users/campaigns');
         if (response.ok) {
           const data = await response.json();
-          // The API already returns the properly structured campaign context
           setCampaignContext(data);
-          
-          // Get schoolId from campaign context - extract from campaigns array or use legacy field
+
           let schoolIdFromContext = null;
           if (data.campaigns && data.campaigns.length > 0) {
-            // Extract schoolId from the first campaign's school object
             const firstCampaign = data.campaigns[0];
             schoolIdFromContext = firstCampaign.school?._id || firstCampaign.school;
           } else {
-            // Fallback to legacy school field
             schoolIdFromContext = session?.user?.school;
           }
-          
+
           if (schoolIdFromContext) {
             fetchSchoolData(schoolIdFromContext);
           }
@@ -209,20 +312,34 @@ export default function Commandes() {
     };
 
     fetchCampaignContext();
-  }, [session, fetchSchoolData]);
+  }, [session, fetchSchoolData, initialCampaignContext, initialSchoolData]);
 
   // Fetch campaign data for profit calculations
   useEffect(() => {
     const fetchCampaignData = async () => {
-      if (!school || !campaignContext) return;
+      if (!school) return;
 
       try {
-        const schoolId = campaignContext?.schoolId || session?.user?.school;
-        const activeCampaignId = campaignContext?.campaigns?.find(c => c.isActive)?._id;
+        // First, try to get campaignId from orders (most reliable)
+        let campaignId = null;
+        if (orders && orders.length > 0) {
+          // Find the first order with a campaignId
+          const orderWithCampaign = orders.find(order => order.campaignId);
+          campaignId = orderWithCampaign?.campaignId;
+        }
 
-        // Only fetch if we have either schoolId or activeCampaignId
-        if (!schoolId && !activeCampaignId) {
-          console.warn('No schoolId or activeCampaignId available, skipping campaign data fetch');
+        // Fallback to campaignContext if no campaignId in orders
+        if (!campaignId && campaignContext) {
+          campaignId = campaignContext.activeCampaignId ||
+            campaignContext.campaigns?.find(c => c.isActive)?._id ||
+            campaignContext.campaigns?.[0]?._id;
+        }
+
+        const schoolId = campaignContext?.schoolId || session?.user?.school || school?._id;
+
+        // Only fetch if we have either schoolId or campaignId
+        if (!schoolId && !campaignId) {
+          console.warn('No schoolId or campaignId available, skipping campaign data fetch');
           // Set fallback split from school data
           setFallbackSplit(school?.split || {
             studentBenefit: 85.6,
@@ -235,7 +352,7 @@ export default function Commandes() {
         const { campaign, fallbackSplit } = await getCampaignDataWithFallback(
           schoolId,
           school,
-          activeCampaignId
+          campaignId
         );
 
         setCampaignData(campaign);
@@ -252,52 +369,47 @@ export default function Commandes() {
     };
 
     fetchCampaignData();
-  }, [school, campaignContext, session]);
+  }, [school, campaignContext, session, orders]);
 
   // Campaign handlers
-  const handleCampaignSwitch = (campaignId) => {
-    window.location.reload(); // Simple refresh for now
-  };
-
-  const handleJoinCampaignSuccess = (campaign) => {
-    setShowJoinCampaignModal(false);
-    window.location.reload();
-  };
 
   useEffect(() => {
 
-    
+
     const fetchOrders = async () => {
       // Don't fetch if session is still loading
       if (status === 'loading') {
         return;
       }
-      
+
       // Don't fetch if there's no session
       if (!session?.user) {
         setLoading(false);
         return;
       }
-      
+
+      // Skip if we have initial orders from SSR
+      if (initialOrders && initialOrders.length >= 0) {
+        setLoading(false);
+        return;
+      }
+
       try {
         // Get active campaign ID from campaign context
         let campaignId = null;
         if (campaignContext?.mode === 'campaign') {
-          // Prefer activeCampaignId from context (most accurate)
           if (campaignContext.activeCampaignId) {
             campaignId = campaignContext.activeCampaignId;
           } else if (campaignContext?.campaigns?.length > 0) {
-            // Fallback: find active campaign or use first campaign
             const activeCampaign = campaignContext.campaigns.find(c => c.isActive || c.isActiveCampaign) || campaignContext.campaigns[0];
             campaignId = activeCampaign?._id;
           }
         }
-        
-        // Build API URL with campaign filter - always include campaignId if available
-        const apiUrl = campaignId 
+
+        const apiUrl = campaignId
           ? `/api/commandes?campaignId=${campaignId}`
           : '/api/commandes';
-        
+
         console.log('Fetching orders with campaignId:', campaignId);
         const response = await fetch(apiUrl);
         if (response.ok) {
@@ -368,13 +480,26 @@ export default function Commandes() {
     setShowOnboardingTooltip(false);
   };
 
+  // Check if any order has discounts enabled and applied
+  const showDiscountColumn = useMemo(() => {
+    return orders.some(order => {
+      const storeHasDiscounts = order.store?.discountEnabled !== false;
+      const originalSubtotal = order.products.reduce((sum, prod) => {
+        const unitPrice = prod.productPrice || prod.price || 0;
+        return sum + (unitPrice * prod.quantity);
+      }, 0);
+      const discountAmount = Math.max(0, originalSubtotal - order.totalAmount);
+      return discountAmount > 0 && storeHasDiscounts;
+    });
+  }, [orders]);
+
   // Fonction pour calculer le total des commandes payées (excluding test orders)
   function calculateTotalOrders(orders) {
     if (!orders || orders.length === 0) {
       return 0;
     }
     // Only count paid orders that are NOT test orders
-    const paidOrders = orders.filter(order => 
+    const paidOrders = orders.filter(order =>
       order.status === 'Payé' && !order.isTest
     );
     return paidOrders.reduce((total, order) => total + order.totalAmount, 0);
@@ -385,7 +510,7 @@ export default function Commandes() {
     try {
       // Convert single orderId to array if needed
       const orderIdsArray = Array.isArray(orderIds) ? orderIds : [orderIds];
-      
+
       const updatePromises = orderIdsArray.map(async (orderId) => {
         const orderToUpdate = orders.find(order => order.orderId === orderId);
         if (!orderToUpdate) return;
@@ -405,7 +530,7 @@ export default function Commandes() {
       });
 
       const updatedOrderIds = await Promise.all(updatePromises);
-      
+
       setOrders(orders.map(order =>
         updatedOrderIds.includes(order._id) ? { ...order, status: newStatus } : order
       ));
@@ -445,47 +570,12 @@ export default function Commandes() {
     }
   };
 
-    // Fonction pour gérer l'impression des commandes
-    const handlePrint = () => {
-      window.print();
-    };
-
-  // Fonction pour gérer la suppression d'une commande
-  const handleDeleteOrder = async () => {
-    if (!selectedOrderId || isDeletingOrder) {
-      return;
-    }
-
-    setIsDeletingOrder(true);
-    try {
-      console.log('Attempting to delete order with ID:', selectedOrderId);
-      const response = await fetch(`/api/command/${selectedOrderId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setOrders(orders.filter(order => order._id !== selectedOrderId));
-        setShowPopup(false);
-        setSelectedOrderId(null);
-        toast.success('Commande supprimée avec succès.');
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Erreur lors de la suppression de la commande');
-      }
-    } catch (error) {
-      console.error('Delete error:', error);
-      setError(error.message);
-      toast.error(`Une erreur est survenue lors de la suppression de la commande: ${error.message}`);
-    } finally {
-      setIsDeletingOrder(false);
-    }
-  };
 
   // Fonction pour gérer le passage de la commande
   const handlePlaceOrder = async () => {
     if (isSubmitting) return; // Prevent multiple submissions
     setIsSubmitting(true);
-    
+
     try {
       if (!session || !session.user) {
         throw new Error('Utilisateur non authentifié');
@@ -493,36 +583,36 @@ export default function Commandes() {
 
       // Get schoolId from multiple possible sources
       let schoolId = null;
-      
+
       // 1. Try from school object (already loaded in state)
       if (school?._id) {
         schoolId = school._id;
       }
-      
+
       // 2. Try to get schoolId from campaign context campaigns
       if (!schoolId && campaignContext?.campaigns && campaignContext.campaigns.length > 0) {
         const firstCampaign = campaignContext.campaigns[0];
         schoolId = firstCampaign.school?._id || firstCampaign.school;
       }
-      
+
       // 3. Fallback to campaignContext.schoolId if available
       if (!schoolId && campaignContext?.schoolId) {
         schoolId = campaignContext.schoolId;
       }
-      
+
       // 4. Fallback to session.user.school
       if (!schoolId) {
         schoolId = session.user.school;
       }
-      
+
       // 5. Try to get from orders if they exist (last resort)
       if (!schoolId && orders.length > 0) {
         schoolId = orders[0].school;
       }
-      
+
       if (!schoolId) {
-        console.error('SchoolId not found:', { 
-          school: school?._id, 
+        console.error('SchoolId not found:', {
+          school: school?._id,
           campaignContext: campaignContext?.schoolId || campaignContext?.campaigns?.[0]?.school,
           session: session.user.school,
           orders: orders.length > 0 ? orders[0].school : 'no orders'
@@ -539,24 +629,24 @@ export default function Commandes() {
       }
 
       // Créer une commande étudiante - EXCLUDE test orders from final order
-      const paidOrders = orders.filter(order => 
+      const paidOrders = orders.filter(order =>
         order.status === 'Payé' && !order.isTest // Exclude test orders
       );
       const testOrders = orders.filter(order => order.status === 'Payé' && order.isTest);
-      
+
       if (testOrders.length > 0) {
         console.log(`Excluding ${testOrders.length} test order(s) from final order`);
         toast.info(`${testOrders.length} commande(s) TEST exclue(s) de la commande finale. Elles ne seront pas envoyées à Massibec.`, {
           duration: 5000
         });
       }
-      
+
       if (paidOrders.length === 0) {
         toast.error('Aucune commande payée disponible (les commandes TEST sont exclues).');
         setIsSubmitting(false);
         return;
       }
-      
+
       console.log('Paid Orders (excluding test):', paidOrders);
 
       if (paidOrders.length > 0) {
@@ -593,96 +683,96 @@ export default function Commandes() {
         // Get campaign data with fallback to school data
         const { campaign, fallbackSplit } = await getCampaignDataWithFallback(schoolId, school);
 
-          // Calculer les bénéfices using campaign data
-          let totalStudentBenefit = 0;
-          let totalOrganizationBenefit = 0;
-          let totalRaffleBenefit = 0;
+        // Calculer les bénéfices using campaign data
+        let totalStudentBenefit = 0;
+        let totalOrganizationBenefit = 0;
+        let totalRaffleBenefit = 0;
 
-          const calculatedStudentProducts = aggregatedStudentProducts.map(product => {
-            // Try to find product-specific profit split in campaign
-            const profitSplit = campaign?.profitSplits?.find(ps => 
-              ps.productId?.toString() === product.productId?.toString()
-            );
-            
-            let studentB, organizationB, raffleB;
-            
-            if (profitSplit && campaign.profitSplitType === 'absolute') {
-              // Use absolute per-unit values from campaign - use new fields with fallback to old
-              const studentCash = Number(profitSplit.studentCash) || Number(profitSplit.student) || 0;
-              const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 0;
-              const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0;
-              const raffle = Number(profitSplit.raffle) || 0;
-              
-              // Total student benefit is cash + school account
-              studentB = (studentCash + studentSchoolAccount) * product.quantity;
-              organizationB = schoolProject * product.quantity;
-              raffleB = raffle * product.quantity;
-            } else {
-              // Fallback to percentage calculation using school.split
-              const profit = (product.price - product.cost) * product.quantity;
-              const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
-              const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
-              const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
-              
-              studentB = profit * (studentPercentage / 100);
-              organizationB = profit * (organizationPercentage / 100);
-              raffleB = profit * (rafflePercentage / 100);
-            }
+        const calculatedStudentProducts = aggregatedStudentProducts.map(product => {
+          // Try to find product-specific profit split in campaign
+          const profitSplit = campaign?.profitSplits?.find(ps =>
+            ps.productId?.toString() === product.productId?.toString()
+          );
 
-            totalStudentBenefit += studentB;
-            totalOrganizationBenefit += organizationB;
-            totalRaffleBenefit += raffleB;
+          let studentB, organizationB, raffleB;
 
-            return {
-              productName: product.productName,
-              quantity: product.quantity,
-              price: product.price,
-              cost: product.cost,
-              profit: (product.price - product.cost) * product.quantity,
-              studentBenefit: studentB,
-              organizationBenefit: organizationB,
-              raffleBenefit: raffleB,
-            };
-          });
+          if (profitSplit && campaign.profitSplitType === 'absolute') {
+            // Use absolute per-unit values from campaign - use new fields with fallback to old
+            const studentCash = Number(profitSplit.studentCash) || Number(profitSplit.student) || 0;
+            const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 0;
+            const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0;
+            const raffle = Number(profitSplit.raffle) || 0;
 
-          setPriceToPay(studentTotalAmount - totalStudentBenefit);
-
-          const studentOrderData = {
-            timestamp: new Date(),
-            email: session.user.email,
-            studentName: session.user.name,
-            phoneNumber: session.user.parentInfo?.telephone || '000-000-0000',
-            schoolId: school._id,
-            products: calculatedStudentProducts,
-            totalUnits: studentTotalUnits,
-            totalAmount: studentTotalAmount - totalStudentBenefit,
-            amountPaid: 0,
-            studentBenefit: totalStudentBenefit,
-            organizationBenefit: totalOrganizationBenefit,
-            raffleBenefit: totalRaffleBenefit,
-          };
-
-          // Envoyer la commande étudiante à l'API
-          const studentResponse = await fetch('/api/orderStudent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(studentOrderData),
-          });
-
-          if (studentResponse.ok) {
-            toast.success('Commande étudiante créée avec succès.');
-            const data = await studentResponse.json();
-            setNewOrderId(data.orderId); // Supposons que l'API retourne le nouvel orderId
-
-            // Mettre à jour le statut des commandes payées à 'Commander'
-            await handleStatusChange(
-              paidOrders.map(order => order.orderId),
-              'Commander'
-            );
+            // Total student benefit is cash + school account
+            studentB = (studentCash + studentSchoolAccount) * product.quantity;
+            organizationB = schoolProject * product.quantity;
+            raffleB = raffle * product.quantity;
           } else {
-            const errorData = await studentResponse.json();
-            throw new Error(errorData.message || 'Erreur lors de la création de la commande étudiante');
+            // Fallback to percentage calculation using school.split
+            const profit = (product.price - product.cost) * product.quantity;
+            const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
+            const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
+            const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
+
+            studentB = profit * (studentPercentage / 100);
+            organizationB = profit * (organizationPercentage / 100);
+            raffleB = profit * (rafflePercentage / 100);
           }
+
+          totalStudentBenefit += studentB;
+          totalOrganizationBenefit += organizationB;
+          totalRaffleBenefit += raffleB;
+
+          return {
+            productName: product.productName,
+            quantity: product.quantity,
+            price: product.price,
+            cost: product.cost,
+            profit: (product.price - product.cost) * product.quantity,
+            studentBenefit: studentB,
+            organizationBenefit: organizationB,
+            raffleBenefit: raffleB,
+          };
+        });
+
+        setPriceToPay(studentTotalAmount - totalStudentBenefit);
+
+        const studentOrderData = {
+          timestamp: new Date(),
+          email: session.user.email,
+          studentName: session.user.name,
+          phoneNumber: session.user.parentInfo?.telephone || '000-000-0000',
+          schoolId: school._id,
+          products: calculatedStudentProducts,
+          totalUnits: studentTotalUnits,
+          totalAmount: studentTotalAmount - totalStudentBenefit,
+          amountPaid: 0,
+          studentBenefit: totalStudentBenefit,
+          organizationBenefit: totalOrganizationBenefit,
+          raffleBenefit: totalRaffleBenefit,
+        };
+
+        // Envoyer la commande étudiante à l'API
+        const studentResponse = await fetch('/api/orderStudent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(studentOrderData),
+        });
+
+        if (studentResponse.ok) {
+          toast.success('Commande étudiante créée avec succès.');
+          const data = await studentResponse.json();
+          setNewOrderId(data.orderId); // Supposons que l'API retourne le nouvel orderId
+
+          // Mettre à jour le statut des commandes payées à 'Commander'
+          await handleStatusChange(
+            paidOrders.map(order => order.orderId),
+            'Commander'
+          );
+        } else {
+          const errorData = await studentResponse.json();
+          throw new Error(errorData.message || 'Erreur lors de la création de la commande étudiante');
+        }
 
 
         // Afficher le popup de confirmation
@@ -707,57 +797,52 @@ export default function Commandes() {
   const amountToPay = (totalSales * 0.9).toFixed(2); // Ajustez selon votre logique
 
 
-    // Function to calculate the student profit for an order
-    const calculateStudentProfit = (products) => {
-      if (!campaignData) {
-        // Fallback to simple calculation if no campaign data
-        return products
-          .map((product) => (product.productPrice - product.productCost) * product.quantity)
-          .reduce((acc, profit) => acc + profit, 0);
-      }
+  // Function to calculate the student profit for an order
+  const calculateStudentProfit = (products) => {
+    if (!campaignData) {
+      // Fallback to simple calculation if no campaign data
+      return products
+        .map((product) => (product.productPrice - product.productCost) * product.quantity)
+        .reduce((acc, profit) => acc + profit, 0);
+    }
 
-      let totalStudentProfit = 0;
+    let totalStudentProfit = 0;
 
-      products.forEach(product => {
-        if (campaignData.profitSplits && campaignData.profitSplitType === 'absolute') {
-          // Handle both populated and non-populated productId
-          const productId = product.product?._id?.toString() || product.product?.toString();
-          const profitSplit = campaignData.profitSplits.find(ps => {
-            const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
-            return psProductId === productId;
-          });
-          
-          if (profitSplit) {
-            const studentCash = profitSplit.studentCash || 1.00;
-            const studentSchoolAccount = profitSplit.studentSchoolAccount || 1.00;
-            const totalStudentProfitPerUnit = studentCash + studentSchoolAccount;
-            totalStudentProfit += totalStudentProfitPerUnit * product.quantity;
-          } else {
-            // Fallback to percentage calculation
-            const profit = (product.productPrice - product.productCost) * product.quantity;
-            const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
-            totalStudentProfit += profit * (studentPercentage / 100);
-          }
+    products.forEach(product => {
+      if (campaignData.profitSplits && campaignData.profitSplitType === 'absolute') {
+        // Handle both populated and non-populated productId
+        const productId = product.product?._id?.toString() || product.product?.toString();
+        const profitSplit = campaignData.profitSplits.find(ps => {
+          const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
+          return psProductId === productId;
+        });
+
+        if (profitSplit) {
+          const studentCash = profitSplit.studentCash || 1.00;
+          const studentSchoolAccount = profitSplit.studentSchoolAccount || 1.00;
+          const totalStudentProfitPerUnit = studentCash + studentSchoolAccount;
+          totalStudentProfit += totalStudentProfitPerUnit * product.quantity;
         } else {
-          // Use percentage-based calculation
+          // Fallback to percentage calculation
           const profit = (product.productPrice - product.productCost) * product.quantity;
           const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
           totalStudentProfit += profit * (studentPercentage / 100);
         }
-      });
+      } else {
+        // Use percentage-based calculation
+        const profit = (product.productPrice - product.productCost) * product.quantity;
+        const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
+        totalStudentProfit += profit * (studentPercentage / 100);
+      }
+    });
 
-      return totalStudentProfit;
-    };
+    return totalStudentProfit;
+  };
 
   // Fonction pour copier du texte dans le presse-papier
   const copyToClipboard = (text, fieldName) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(fieldName);
-    toast.success('Copié dans le presse-papier!');
-    setTimeout(() => setCopiedField(null), 2000);
+    handleCopy(text, fieldName);
   };
-
-  // Handler pour fermer avec confirmation
   const handleCloseWithConfirmation = () => {
     setShowPaymentConfirmation(true);
   };
@@ -792,664 +877,706 @@ export default function Commandes() {
 
   return (
     <Layout>
-      {isTest && (
-        <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 shadow-sm mb-4 mt-16">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-orange-900 mb-1">
-                ⚠️ MODE TEST
-              </h3>
-              <p className="text-sm text-orange-800">
-                Les données affichées sont en mode test. Les commandes ne seront pas définitives jusqu'à l'approbation de la campagne.
-              </p>
+      <div className="pt-16 md:pt-20 overflow-x-hidden max-w-full">
+        {isTest && (
+          <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 shadow-sm mb-4">
+            <div className="flex items-start space-x-3">
+              <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-orange-900 mb-1">
+                  ⚠️ MODE TEST
+                </h3>
+                <p className="text-sm text-orange-800">
+                  Les données affichées sont en mode test. Les commandes ne seront pas définitives jusqu'à l'approbation de la campagne.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      <Card className="pt-16">
-        <CardHeader>
-          <Link href="/dashboard" passHref>
-            <div className="flex items-center space-x-2 cursor-pointer">
-              <ArrowLeft className="h-5 w-5" />
-              <span>Retour au tableau de bord</span>
+        )}
+        <Card className="mt-8">
+          <CardHeader className="space-y-4">
+            <Link href="/dashboard" passHref prefetch={true}>
+              <div
+                className="flex items-center space-x-2 cursor-pointer"
+                onClick={handleBackNavigation}
+              >
+                <ArrowLeft className="h-5 w-5" />
+                <span>Retour au tableau de bord</span>
+              </div>
+            </Link>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-2xl">Mes commandes</CardTitle>
+                <CardDescription>Gérez les commandes de vos clients</CardDescription>
+                {schoolFetchFailed && (
+                  <p className="text-yellow-700 text-sm mt-2">Impossible de charger les données de l'école (connexion DB). Affichage en mode dégradé.</p>
+                )}
+              </div>
+              <CampaignSelector {...campaignSelectorProps} />
             </div>
-          </Link>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle className="text-2xl">Mes commandes</CardTitle>
-              <CardDescription>Gérez les commandes de vos clients</CardDescription>
-              {schoolFetchFailed && (
-                <p className="text-yellow-700 text-sm mt-2">Impossible de charger les données de l'école (connexion DB). Affichage en mode dégradé.</p>
-              )}
-            </div>
-            <CampaignSelector 
-              onCampaignSwitch={handleCampaignSwitch}
-              onJoinCampaign={() => setShowJoinCampaignModal(true)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {orders.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">Aucune commande trouvée</p>
-              <p className="text-gray-400 text-sm mt-2">Vos commandes apparaîtront ici une fois créées</p>
-            </div>
-          ) : (
-            <>
-              {/* Order Summary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="text-xs text-blue-600 font-medium mb-1">Total commandes</div>
-                  <div className="text-xl font-bold text-blue-700">{orders.filter(o => !o.isTest).length}</div>
-                  {orders.filter(o => o.isTest).length > 0 && (
-                    <div className="text-[10px] text-blue-500 mt-1">+{orders.filter(o => o.isTest).length} TEST</div>
-                  )}
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <div className="text-xs text-green-600 font-medium mb-1">Payées</div>
-                  <div className="text-xl font-bold text-green-700">
-                    {orders.filter(o => o.status === 'Payé' && !o.isTest).length}
+          </CardHeader>
+          <CardContent>
+            {orders.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-lg">Aucune commande trouvée</p>
+                <p className="text-gray-400 text-sm mt-2">Vos commandes apparaîtront ici une fois créées</p>
+              </div>
+            ) : (
+              <>
+                {/* Order Summary Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="text-xs text-blue-600 font-medium mb-1">Total commandes</div>
+                    <div className="text-xl font-bold text-blue-700">{orders.filter(o => !o.isTest).length}</div>
+                    {orders.filter(o => o.isTest).length > 0 && (
+                      <div className="text-[10px] text-blue-500 mt-1">+{orders.filter(o => o.isTest).length} TEST</div>
+                    )}
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="text-xs text-green-600 font-medium mb-1">Payées</div>
+                    <div className="text-xl font-bold text-green-700">
+                      {orders.filter(o => o.status === 'Payé' && !o.isTest).length}
+                    </div>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <div className="text-xs text-purple-600 font-medium mb-1">Total revenus</div>
+                    <div className="text-xl font-bold text-purple-700">
+                      {orders
+                        .filter(o => o.status === 'Payé' && !o.isTest)
+                        .reduce((sum, o) => {
+                          const donations = (o.studentDonation || o.tip || 0) + (o.schoolDonation || 0);
+                          return sum + o.totalAmount + donations;
+                        }, 0)
+                        .toFixed(2)}$</div>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    <div className="text-xs text-orange-600 font-medium mb-1">Total profit</div>
+                    <div className="text-xl font-bold text-orange-700">
+                      {orders
+                        .filter(o => o.status === 'Payé' && !o.isTest)
+                        .reduce((sum, o) => {
+                          const profit = calculateStudentProfit(o.products);
+                          const donation = o.studentDonation || o.tip || 0;
+                          return sum + profit + donation;
+                        }, 0)
+                        .toFixed(2)}$</div>
                   </div>
                 </div>
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <div className="text-xs text-purple-600 font-medium mb-1">Total revenus</div>
-                  <div className="text-xl font-bold text-purple-700">
-                    {orders
-                      .filter(o => o.status === 'Payé' && !o.isTest)
-                      .reduce((sum, o) => {
-                        const donations = (o.studentDonation || o.tip || 0) + (o.schoolDonation || 0);
-                        return sum + o.totalAmount + donations;
-                      }, 0)
-                      .toFixed(2)}$</div>
+
+                {/* Action buttons */}
+                <div className="flex items-center justify-between mb-4">
+                  <Button variant="outline" size="sm" onClick={handlePrint} className="text-xs">
+                    📄 Imprimer
+                  </Button>
+                  <div className="text-xs text-gray-500">
+                    {orders.length} commande{orders.length > 1 ? 's' : ''} affichée{orders.length > 1 ? 's' : ''}
+                  </div>
                 </div>
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                  <div className="text-xs text-orange-600 font-medium mb-1">Total profit</div>
-                  <div className="text-xl font-bold text-orange-700">
-                    {orders
-                      .filter(o => o.status === 'Payé' && !o.isTest)
-                      .reduce((sum, o) => {
-                        const profit = calculateStudentProfit(o.products);
-                        const donation = o.studentDonation || o.tip || 0;
-                        return sum + profit + donation;
-                      }, 0)
-                      .toFixed(2)}$</div>
-                </div>
-              </div>
 
-              {/* Action buttons */}
-              <div className="flex items-center justify-between mb-4">
-                <Button variant="outline" size="sm" onClick={handlePrint} className="text-xs">
-                  📄 Imprimer
-              </Button>
-                <div className="text-xs text-gray-500">
-                  {orders.length} commande{orders.length > 1 ? 's' : ''} affichée{orders.length > 1 ? 's' : ''}
-                </div>
-              </div>
-
-{/* Instructions sur les statuts des commandes */}
-<div className="bg-white p-6 rounded-lg shadow-md mt-6">
-  <h2 className="text-2xl font-bold mb-4 text-gray-800">📝 Statut des commandes</h2>
-            <div className="space-y-6">
-    <div>
-      <h3 className="font-semibold text-lg mb-2">🕓 En attente</h3>
-      <p className="text-gray-700">
-        Ce statut est attribué automatiquement lorsqu'un client passe une commande.
-        Vous devriez recevoir un virement Interac.
-        <br />
-        👉 Si vous n'avez pas activé les dépôts automatiques, la réponse de sécurité sera l'adresse courriel du client.
-      </p>
-    </div>
-    <div>
-      <h3 className="font-semibold text-lg mb-2">💰 Payé</h3>
-      <p className="text-gray-700">
-        Une fois le paiement reçu, mettez le statut à Payé.
-        Cela confirme que l'argent a bien été reçu et vous permettra plus tard d'envoyer votre commande à Massibec.
-      </p>
-    </div>
-    <div>
-      <h3 className="font-semibold text-lg mb-2">📦 Commandé</h3>
-      <p className="text-gray-700 mb-2">
-        (
-          Disponible seulement le{' '}
-          {campaignEndDateInfo.short || 'jour de fin de campagne'}{' '}
-          entre minuit et midi
-        )
-        <br />
-        Quand vous cliquez sur Passer la commande à Massibec, toutes les commandes avec le statut Payé sont transmises à Massibec.
-        Le statut passe automatiquement à Commandé.
-        Vous recevrez ensuite les instructions pour effectuer le transfert Interac.
-      </p>
-      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-2">
-        <p className="text-sm text-gray-700">
-          ✅ Assurez-vous d'avoir reçu :
-        </p>
-        <ul className="list-disc list-inside text-sm text-gray-700 ml-2 mt-1">
-          <li>la confirmation de commande</li>
-          <li>la confirmation du transfert Interac</li>
-        </ul>
-        <p className="text-sm text-gray-700 mt-2">
-          ❌ Si l'une d'elles est manquante, contactez-nous à <a href="mailto:commande@massibec.com" className="text-blue-600 hover:text-blue-800 underline">commande@massibec.com</a>.
-        </p>
-      </div>
-    </div>
-    <div>
-      <h3 className="font-semibold text-lg mb-2">✅ Complété</h3>
-      <p className="text-gray-700">
-        Ce statut vous aide à suivre facilement la distribution aux clients.
-        Mettez une commande à compléter dès qu'elle est préparée ou remise.
-      </p>
-    </div>
-  </div>
-</div>
-
-              {/* Tableau des commandes */}
-              <motion.div 
-                ref={ordersTableRef}
-                id="orderTable"
-                animate={currentStep?.key === 'viewedOrders' ? {
-                  scale: [1, 1.02, 1],
-                } : {}}
-                transition={{
-                  duration: 2,
-                  repeat: currentStep?.key === 'viewedOrders' ? Infinity : 0,
-                  ease: "easeInOut"
-                }}
-              >
-              <div className="overflow-x-auto">
-              <Table className={`mt-6 ${currentStep?.key === 'viewedOrders' ? 'ring-4 ring-blue-500 rounded-lg' : ''}`}>
-                <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead className="py-2 text-xs font-semibold sticky left-0 bg-gray-50 z-10">Id</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold">Client</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold hidden lg:table-cell">Email</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold hidden md:table-cell">Téléphone</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold min-w-[180px]">Produit(s)</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold text-center">Dons ({terminology.participant})</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold text-center">Dons ({terminology.organization})</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold text-right font-bold">Total</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold text-right text-green-700">Profit</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold hidden lg:table-cell">Date</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold">Statut</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold min-w-[160px]">Notes distribution</TableHead>
-                      <TableHead className="py-2 text-xs font-semibold sticky right-0 bg-gray-50 z-10">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {orders.map((order) => {
-                      const studentDonation = order.studentDonation || order.tip || 0;
-                      const schoolDonation = order.schoolDonation || 0;
-                      const totalDonations = studentDonation + schoolDonation;
-                      const totalWithDonations = order.totalAmount + totalDonations;
-                      const studentProfit = calculateStudentProfit(order.products) + studentDonation;
-                      
-                      return (
-                        <TableRow key={order._id} className={`${order.isTest ? 'bg-orange-50/50' : ''} hover:bg-blue-50/30 transition-colors border-b border-gray-100`}>
-                          <TableCell className="py-2 sticky left-0 bg-white z-10 border-r border-gray-200">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-mono font-semibold text-gray-700">#{order.orderId}</span>
-                          {order.isTest && (
-                                <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-50 text-[10px] px-1 py-0">
-                                  <AlertCircle className="h-2 w-2 mr-0.5" />
-                              TEST
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                          <TableCell className="py-2 text-xs font-medium">{order.customerName}</TableCell>
-                          <TableCell className="py-2 text-xs text-gray-600 hidden lg:table-cell truncate max-w-[180px]" title={order.customerEmail}>
-                            {order.customerEmail}
-                          </TableCell>
-                          <TableCell className="py-2 text-xs text-gray-600 hidden md:table-cell">{order.phoneNumber}</TableCell>
-                          <TableCell className="py-2 text-xs">
-                            <div className="space-y-0.5">
-                              {order.products.map((prod, index) => {
-                                // Handle both productPrice (from Order schema) and price (from API)
-                                const unitPrice = prod.productPrice || prod.price || 0;
-                                const productTotal = unitPrice * prod.quantity;
-                                return (
-                                  <div key={index} className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="text-gray-700 flex-1 min-w-0">
-                                      <span className="truncate">{prod.productName}</span> 
-                                      <span className="text-gray-500 ml-1">×{prod.quantity}</span>
-                                    </span>
-                                    <span className="text-gray-600 font-medium whitespace-nowrap ml-2">
-                                      {productTotal.toFixed(2)}$
-                                    </span>
-                          </div>
-                                );
-                              })}
-                              {order.products.length > 1 && (
-                                <div className="pt-0.5 mt-0.5 border-t border-gray-200">
-                                  <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                                    <span>Sous-total produits</span>
-                                    <span className="font-medium">{order.totalAmount.toFixed(2)}$</span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                      </TableCell>
-                          <TableCell className="py-2 text-xs text-center">
-                            {studentDonation > 0 ? (
-                              <span className="font-medium text-blue-700">{studentDonation.toFixed(2)}$</span>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-2 text-xs text-center">
-                            {schoolDonation > 0 ? (
-                              <span className="font-medium text-purple-700">{schoolDonation.toFixed(2)}$</span>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-2 text-xs text-right">
-                            <div className="flex flex-col items-end">
-                              <span className={`font-bold text-base ${order.isTest ? 'text-gray-500' : 'text-gray-900'}`}>
-                                {totalWithDonations.toFixed(2)}$
-                        </span>
-                              {totalDonations > 0 && (
-                                <span className="text-[10px] text-gray-500 mt-0.5">
-                                  (dont {totalDonations.toFixed(2)}$ dons)
-                                </span>
-                              )}
-                            </div>
-                      </TableCell>
-                          <TableCell className="py-2 text-xs text-right">
-                            <span className="font-semibold text-green-700 text-sm">
-                              {studentProfit.toFixed(2)}$
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-2 text-xs text-gray-600 hidden lg:table-cell">
-                            {new Date(order.createdAt).toLocaleDateString('fr-CA', { month: 'short', day: 'numeric' })}
-                          </TableCell>
-                          <TableCell className="py-2">
-                            <div className="flex items-center gap-2">
-                              <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
-                                order.status === 'En attente' ? 'bg-yellow-500' :
-                                order.status === 'Payé' ? 'bg-green-500' :
-                                order.status === 'Commander' ? 'bg-blue-500' :
-                                order.status === 'Complété' ? 'bg-gray-500' :
-                                'bg-gray-300'
-                              }`} title={order.status}></span>
-                              {order.status === 'Commander' || order.status === 'Complété' ? (
-                                // Allow changing between Commander and Complété (can go back if mistake)
-                        <Select
-                          value={order.status}
-                          onValueChange={(value) => handleStatusChange(order.orderId, value)}
-                        >
-                                  <SelectTrigger className="h-7 text-xs border-gray-300 w-[110px]">
-                            <SelectValue placeholder="Statut" />
-                          </SelectTrigger>
-                                  <SelectContent className="bg-white">
-                                    <SelectItem value="Commander" className="text-xs">
-                                      <div className="flex items-center">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
-                                        Commander
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="Complété" className="text-xs">
-                                      <div className="flex items-center">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-gray-500 mr-2"></span>
-                                        Complété
-                                      </div>
-                                    </SelectItem>
-                          </SelectContent>
-                        </Select>
-                              ) : (
-                                // Allow changing between En attente and Payé
-                                <Select
-                                  value={order.status}
-                                  onValueChange={(value) => handleStatusChange(order.orderId, value)}
-                                >
-                                  <SelectTrigger className="h-7 text-xs border-gray-300 w-[110px]">
-                                    <SelectValue placeholder="Statut" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-white">
-                                    <SelectItem value="En attente" className="text-xs">
-                                      <div className="flex items-center">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
-                                        En attente
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="Payé" className="text-xs">
-                                      <div className="flex items-center">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-                                        Payé
-                                      </div>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            </div>
-                      </TableCell>
-                          <TableCell className="py-2">
-                            <Input
-                              type="text"
-                              value={order.distributionNotes || ''}
-                              onChange={(e) => handleDistributionNotesChange(order._id, e.target.value)}
-                              onBlur={(e) => handleDistributionNotesChange(order._id, e.target.value)}
-                              placeholder="chez moi, travail..."
-                              className="h-7 text-xs border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                            />
-                          </TableCell>
-                          <TableCell className="py-2 sticky right-0 bg-white z-10 border-l border-gray-200">
-                        <Button
-                              variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedOrderId(order._id)}
-                              className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              title="Supprimer la commande"
-                        >
-                              <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                      );
-                    })}
-                </TableBody>
-              </Table>
-              </div>
-              </motion.div>
-
-              <CommandeButton 
-                school={school} 
-                campaignContext={campaignContext}
-                handlePlaceOrder={handlePlaceOrder}
-                isSubmitting={isSubmitting}
-                campaignEndDateInfo={campaignEndDateInfo}
-              />
-
-              {/* Popup pour les instructions de paiement */}
-              <Dialog open={showPopup} onOpenChange={handlePopupClose}>
-                <DialogContent className="bg-white p-6 rounded-lg shadow-xl max-w-2xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <div className="flex items-center space-x-3 mb-2">
-                      <CheckCircle className="h-8 w-8 text-green-500" />
-                      <DialogTitle className="text-2xl font-bold text-gray-900">
-                        Merci, commande reçue!
-                      </DialogTitle>
-                    </div>
-                    <DialogDescription className="text-gray-600">
-                      Suivez les étapes ci-dessous pour finaliser votre paiement par virement Interac.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="mt-6 space-y-6">
-                    {/* Step 1: Bank Selection */}
+                {/* Instructions sur les statuts des commandes */}
+                <div className="bg-white p-6 rounded-lg shadow-md mt-6">
+                  <h2 className="text-2xl font-bold mb-4 text-gray-800">📝 Statut des commandes</h2>
+                  <div className="space-y-6">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-3">1. Choisissez votre banque :</h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                        <a 
-                          href="https://www.desjardins.com/fr/" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all duration-200 group"
-                        >
-                          <img src="/images/desjardins.svg" alt="Desjardins" className="w-10 h-10 object-contain mb-2" />
-                          <span className="text-xs font-medium text-gray-700 group-hover:text-green-700">Desjardins</span>
-                        </a>
-                        <a 
-                          href="https://www.bnc.ca/fr/particuliers.html" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
-                        >
-                          <img src="/images/bnc.svg" alt="BNC" className="w-10 h-10 object-contain mb-2" />
-                          <span className="text-xs font-medium text-gray-700 group-hover:text-blue-700">BNC</span>
-                        </a>
-                        <a 
-                          href="https://www.rbcbanqueroyale.com/" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
-                        >
-                          <img src="/images/rbc.svg" alt="RBC" className="w-10 h-10 object-contain mb-2" />
-                          <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">RBC</span>
-                        </a>
-                        <a 
-                          href="https://www.td.com/ca/fr/perso/" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all duration-200 group"
-                        >
-                          <img src="/images/TD.svg" alt="TD" className="w-10 h-10 object-contain mb-2" />
-                          <span className="text-xs font-medium text-gray-700 group-hover:text-green-700">TD</span>
-                        </a>
-                        <a 
-                          href="https://www.scotiabank.com/ca/fr/particuliers.html" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
-                        >
-                          <img src="/images/Scotiabank.svg" alt="Scotiabank" className="w-10 h-10 object-contain mb-2" />
-                          <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">Scotiabank</span>
-                        </a>
-                        <a 
-                          href="https://www.cibc.com/fr/personal-banking.html" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
-                        >
-                          <img src="/images/cibc.svg" alt="CIBC" className="w-10 h-10 object-contain mb-2" />
-                          <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">CIBC</span>
-                        </a>
-                      </div>
+                      <h3 className="font-semibold text-lg mb-2">🕓 En attente</h3>
+                      <p className="text-gray-700">
+                        Ce statut est attribué automatiquement lorsqu'un client passe une commande.
+                        Vous devriez recevoir un virement Interac.
+                        <br />
+                        👉 Si vous n'avez pas activé les dépôts automatiques, la réponse de sécurité sera l'adresse courriel du client.
+                      </p>
                     </div>
-
-                    {/* Step 2: Email */}
-                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-1">2. Destinataire :</p>
-                        <p className="text-base font-semibold text-gray-900">facturation@massibec.com</p>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 shrink-0"
-                        onClick={() => copyToClipboard('facturation@massibec.com', 'email')}
-                        title="Copier l'email"
-                      >
-                        {copiedField === 'email' ? (
-                          <Check className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <Copy className="h-4 w-4 text-gray-500" />
-                        )}
-                      </Button>
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2">💰 Payé</h3>
+                      <p className="text-gray-700">
+                        Une fois le paiement reçu, mettez le statut à Payé.
+                        Cela confirme que l'argent a bien été reçu et vous permettra plus tard d'envoyer votre commande à Massibec.
+                      </p>
                     </div>
-
-                    {/* Step 3: Amount */}
-                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-1">3. Montant à payer :</p>
-                        <p className="text-lg font-bold text-gray-900">
-                          {priceToPay ? parseFloat(priceToPay).toFixed(2) : '0.00'}$
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2">📦 Commandé</h3>
+                      <p className="text-gray-700 mb-2">
+                        (
+                        Disponible seulement le{' '}
+                        {campaignEndDateInfo.short || 'jour de fin de campagne'}{' '}
+                        entre minuit et midi
+                        )
+                        <br />
+                        Quand vous cliquez sur Passer la commande à Massibec, toutes les commandes avec le statut Payé sont transmises à Massibec.
+                        Le statut passe automatiquement à Commandé.
+                        Vous recevrez ensuite les instructions pour effectuer le transfert Interac.
+                      </p>
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-2">
+                        <p className="text-sm text-gray-700">
+                          ✅ Assurez-vous d'avoir reçu :
+                        </p>
+                        <ul className="list-disc list-inside text-sm text-gray-700 ml-2 mt-1">
+                          <li>la confirmation de commande</li>
+                          <li>la confirmation du transfert Interac</li>
+                        </ul>
+                        <p className="text-sm text-gray-700 mt-2">
+                          ❌ Si l'une d'elles est manquante, contactez-nous à <a href="mailto:commande@massibec.com" className="text-blue-600 hover:text-blue-800 underline">commande@massibec.com</a>.
                         </p>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 shrink-0"
-                        onClick={() => copyToClipboard(priceToPay ? parseFloat(priceToPay).toFixed(2) : '0.00', 'montant')}
-                        title="Copier le montant"
-                      >
-                        {copiedField === 'montant' ? (
-                          <Check className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <Copy className="h-4 w-4 text-gray-500" />
-                        )}
-                      </Button>
                     </div>
-
-                    {/* Step 4: Message */}
-                    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-600 mb-1">4. Message de virement :</p>
-                        <p className="text-base font-mono text-gray-900 break-all">
-                          {(() => {
-                            const schoolName = school?.name || school?.code || 'N/A';
-                            const orderId = newOrderId || 'N/A';
-                            const personName = session?.user?.role === 'school_manager' 
-                              ? session.user.name 
-                              : name;
-                            return `${schoolName}-${orderId}-${personName}`;
-                          })()}
-                        </p>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 shrink-0"
-                        onClick={() => {
-                          const schoolName = school?.name || school?.code || 'N/A';
-                          const orderId = newOrderId || 'N/A';
-                          const personName = session?.user?.role === 'school_manager' 
-                            ? session.user.name 
-                            : name;
-                          copyToClipboard(`${schoolName}-${orderId}-${personName}`, 'message');
-                        }}
-                        title="Copier le message"
-                      >
-                        {copiedField === 'message' ? (
-                          <Check className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <Copy className="h-4 w-4 text-gray-500" />
-                        )}
-                      </Button>
-                    </div>
-
-                    {/* Important Notice */}
-                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
-                      <p className="text-sm text-yellow-800">
-                        <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page. 
-                        Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement. 
-                        Si vous avez déjà effectué le paiement, ne tenez pas compte de ce courriel. 
-                        Il se peut qu'il soit dans vos indésirables.
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2">✅ Complété</h3>
+                      <p className="text-gray-700">
+                        Ce statut vous aide à suivre facilement la distribution aux clients.
+                        Mettez une commande à compléter dès qu'elle est préparée ou remise.
                       </p>
                     </div>
                   </div>
+                </div>
 
-                  <DialogFooter className="mt-6">
-                    <Button 
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 w-full sm:w-auto" 
-                      onClick={handleCloseWithConfirmation}
-                    >
-                      Terminer
-                      </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                {/* Tableau des commandes */}
+                <motion.div
+                  ref={ordersTableRef}
+                  id="orderTable"
+                  animate={currentStep?.key === 'viewedOrders' ? {
+                    scale: [1, 1.02, 1],
+                  } : {}}
+                  transition={{
+                    duration: 2,
+                    repeat: currentStep?.key === 'viewedOrders' ? Infinity : 0,
+                    ease: "easeInOut"
+                  }}
+                >
+                  <div className="overflow-x-auto">
+                    <Table className={`mt-6 ${currentStep?.key === 'viewedOrders' ? 'ring-4 ring-blue-500 rounded-lg' : ''}`}>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead className="py-2 text-xs font-semibold sticky left-0 bg-gray-50 z-10">Id</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold">Client</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold">Email</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold">Téléphone</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold min-w-[180px]">Produit(s)</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold text-center">Dons ({terminology.participant})</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold text-center">Dons ({terminology.organization})</TableHead>
+                          {showDiscountColumn && (
+                            <TableHead className="py-2 text-xs font-semibold text-center">Rabais</TableHead>
+                          )}
+                          <TableHead className="py-2 text-xs font-semibold text-right font-bold">Total</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold text-right text-green-700">Profit</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold hidden lg:table-cell">Date</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold">Statut</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold min-w-[160px]">Option de livraison</TableHead>
+                          <TableHead className="py-2 text-xs font-semibold sticky right-0 bg-gray-50 z-10">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orders.map((order) => {
+                          const studentDonation = order.studentDonation || order.tip || 0;
+                          const schoolDonation = order.schoolDonation || 0;
+                          const totalDonations = studentDonation + schoolDonation;
 
-              {/* Modal de confirmation de paiement */}
-              <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
-                <DialogContent className="sm:max-w-[450px] bg-white p-6">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-bold text-gray-900 mb-2">
-                      Confirmation de paiement
-                    </DialogTitle>
-                  </DialogHeader>
-                  
-                  <div className="mt-4 space-y-3">
-                    <p className="text-sm text-gray-600">
-                      Avez-vous effectué le virement Interac avec les informations fournies ?
-                    </p>
+                          // Calculate original subtotal before discount
+                          const originalSubtotal = order.products.reduce((sum, prod) => {
+                            const unitPrice = prod.productPrice || prod.price || 0;
+                            return sum + (unitPrice * prod.quantity);
+                          }, 0);
+
+                          // Calculate discount amount (difference between original subtotal and stored totalAmount)
+                          const discountAmount = Math.max(0, originalSubtotal - order.totalAmount);
+
+                          // Check if store has discounts enabled
+                          const storeHasDiscounts = order.store?.discountEnabled !== false; // Default to true if not set
+                          const hasDiscount = discountAmount > 0 && storeHasDiscounts;
+
+                          // Calculate total with donations
+                          const totalWithDonations = order.totalAmount + totalDonations;
+
+                          // Calculate student profit using helper function which accounts for discount
+                          const profitDetails = calculateOrderProfitsDetailed(order, campaignData, fallbackSplit);
+                          const studentProfit = profitDetails.totalStudentBenefit + studentDonation;
+
+                          return (
+                            <TableRow key={order._id} className={`${order.isTest ? 'bg-orange-50/50' : ''} hover:bg-blue-50/30 transition-colors border-b border-gray-100`}>
+                              <TableCell className="py-2 sticky left-0 bg-white z-10 border-r border-gray-200">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-mono font-semibold text-gray-700">#{order.orderId}</span>
+                                  {order.isTest && (
+                                    <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-50 text-[10px] px-1 py-0">
+                                      <AlertCircle className="h-2 w-2 mr-0.5" />
+                                      TEST
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 text-xs font-medium">{order.customerName}</TableCell>
+                              <TableCell className="py-2 text-xs text-gray-600 truncate max-w-[180px]" title={order.customerEmail}>
+                                {order.customerEmail}
+                              </TableCell>
+                              <TableCell className="py-2 text-xs text-gray-600">{order.phoneNumber}</TableCell>
+                              <TableCell className="py-2 text-xs">
+                                <div className="space-y-0.5">
+                                  {order.products.map((prod, index) => {
+                                    // Handle both productPrice (from Order schema) and price (from API)
+                                    const unitPrice = prod.productPrice || prod.price || 0;
+                                    const productTotal = unitPrice * prod.quantity;
+                                    return (
+                                      <div key={index} className="flex items-center justify-between gap-2 text-xs">
+                                        <span className="text-gray-700 flex-1 min-w-0">
+                                          <span className="truncate">{prod.productName}</span>
+                                          <span className="text-gray-500 ml-1">×{prod.quantity}</span>
+                                        </span>
+                                        <span className="text-gray-600 font-medium whitespace-nowrap ml-2">
+                                          {productTotal.toFixed(2)}$
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                  {order.products.length > 1 && (
+                                    <div className="pt-0.5 mt-0.5 border-t border-gray-200">
+                                      <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                                        <span>Sous-total produits</span>
+                                        <span className="font-medium">{originalSubtotal.toFixed(2)}$</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 text-xs text-center">
+                                {studentDonation > 0 ? (
+                                  <span className="font-medium text-blue-700">{studentDonation.toFixed(2)}$</span>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-2 text-xs text-center">
+                                {schoolDonation > 0 ? (
+                                  <span className="font-medium text-purple-700">{schoolDonation.toFixed(2)}$</span>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </TableCell>
+                              {showDiscountColumn && (
+                                <TableCell className="py-2 text-xs text-center">
+                                  {hasDiscount ? (
+                                    <span className="font-medium text-green-700">-{discountAmount.toFixed(2)}$</span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </TableCell>
+                              )}
+                              <TableCell className="py-2 text-xs text-right">
+                                <div className="flex flex-col items-end">
+                                  <span className={`font-bold text-base ${order.isTest ? 'text-gray-500' : 'text-gray-900'}`}>
+                                    {totalWithDonations.toFixed(2)}$
+                                  </span>
+                                  {totalDonations > 0 && (
+                                    <span className="text-[10px] text-gray-500 mt-0.5">
+                                      (dont {totalDonations.toFixed(2)}$ dons)
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 text-xs text-right">
+                                <span className="font-semibold text-green-700 text-sm">
+                                  {studentProfit.toFixed(2)}$
+                                </span>
+                              </TableCell>
+                              <TableCell className="py-2 text-xs text-gray-600 hidden lg:table-cell">
+                                {new Date(order.createdAt).toLocaleDateString('fr-CA', { month: 'short', day: 'numeric' })}
+                              </TableCell>
+                              <TableCell className="py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${order.status === 'En attente' ? 'bg-yellow-500' :
+                                    order.status === 'Payé' ? 'bg-green-500' :
+                                      order.status === 'Commander' ? 'bg-blue-500' :
+                                        order.status === 'Complété' ? 'bg-gray-500' :
+                                          'bg-gray-300'
+                                    }`} title={order.status}></span>
+                                  {order.status === 'Commander' || order.status === 'Complété' ? (
+                                    // Allow changing between Commander and Complété (can go back if mistake)
+                                    <Select
+                                      value={order.status}
+                                      onValueChange={(value) => handleStatusChange(order.orderId, value)}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs border-gray-300 w-[110px]">
+                                        <SelectValue placeholder="Statut" />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-white">
+                                        <SelectItem value="Commander" className="text-xs">
+                                          <div className="flex items-center">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                                            Commander
+                                          </div>
+                                        </SelectItem>
+                                        <SelectItem value="Complété" className="text-xs">
+                                          <div className="flex items-center">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-gray-500 mr-2"></span>
+                                            Complété
+                                          </div>
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    // Allow changing between En attente and Payé
+                                    <Select
+                                      value={order.status}
+                                      onValueChange={(value) => handleStatusChange(order.orderId, value)}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs border-gray-300 w-[110px]">
+                                        <SelectValue placeholder="Statut" />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-white">
+                                        <SelectItem value="En attente" className="text-xs">
+                                          <div className="flex items-center">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-yellow-500 mr-2"></span>
+                                            En attente
+                                          </div>
+                                        </SelectItem>
+                                        <SelectItem value="Payé" className="text-xs">
+                                          <div className="flex items-center">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                                            Payé
+                                          </div>
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 text-xs min-w-[160px]">
+                                <div className="flex flex-col gap-1">
+                                  {order.deliveryOption ? (
+                                    <>
+                                      <span className="font-medium text-gray-800 text-xs">{order.deliveryOption}</span>
+                                      {order.deliveryOption === 'Autre' && order.customDeliveryOption && (
+                                        <span className="text-gray-600 text-[10px] italic">({order.customDeliveryOption})</span>
+                                      )}
+                                      {order.deliveryOption === 'Livraison (si près de chez moi)' && order.customerDeliveryAddress && (
+                                        <div className="text-gray-600 text-[10px] mt-1">
+                                          <span className="font-medium">Adresse livraison:</span> {order.customerDeliveryAddress}
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : order.distributionNotes ? (
+                                    <span className="text-gray-600 italic text-xs">{order.distributionNotes}</span>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">-</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-2 sticky right-0 bg-white z-10 border-l border-gray-200">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedOrderId(order._id)}
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Supprimer la commande"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
+                </motion.div>
 
-                  <DialogFooter className="mt-6 gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={handleCancelPayment}
-                      className="flex-1"
-                    >
-                      Annuler
-                  </Button>
-                    <Button 
-                      onClick={handleConfirmPayment}
-                      className="bg-green-600 hover:bg-green-700 text-white flex-1"
-                    >
-                      Oui, j'ai fait le paiement
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                <CommandeButton
+                  school={school}
+                  campaignContext={campaignContext}
+                  handlePlaceOrder={handlePlaceOrder}
+                  isSubmitting={isSubmitting}
+                  campaignEndDateInfo={campaignEndDateInfo}
+                />
 
-              {/* Popup de confirmation de suppression */}
-              <Dialog open={selectedOrderId !== null} onOpenChange={() => setSelectedOrderId(null)}>
-                <DialogContent className="bg-white p-6 rounded-md shadow-md">
-                  <DialogHeader>
-                    <DialogTitle>Supprimer la commande</DialogTitle>
-                    <DialogDescription>
-                      Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
-                    </DialogDescription>
-                  </DialogHeader>
+                {/* Popup pour les instructions de paiement */}
+                <Dialog open={showPopup} onOpenChange={handlePopupClose}>
+                  <DialogContent className="bg-white p-6 rounded-lg shadow-xl max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <div className="flex items-center space-x-3 mb-2">
+                        <CheckCircle className="h-8 w-8 text-green-500" />
+                        <DialogTitle className="text-2xl font-bold text-gray-900">
+                          Merci, commande reçue!
+                        </DialogTitle>
+                      </div>
+                      <DialogDescription className="text-gray-600">
+                        Suivez les étapes ci-dessous pour finaliser votre paiement par virement Interac.
+                      </DialogDescription>
+                    </DialogHeader>
 
-                  <DialogFooter className="mt-4 flex justify-end space-x-4">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setSelectedOrderId(null)}
-                      disabled={isDeletingOrder}
-                    >
-                      Annuler
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      onClick={handleDeleteOrder}
-                      disabled={isDeletingOrder}
-                    >
-                      {isDeletingOrder ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Suppression...
-                        </>
-                      ) : (
-                        'Supprimer'
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </>
-          )}
-        </CardContent>
-      </Card>
-      
-      {/* Onboarding Tooltip */}
-      {showOnboardingTooltip && currentStep && tooltipTarget && (
-        <OnboardingTooltip
-          isVisible={showOnboardingTooltip}
-          position="top"
-          title={getStepContent(currentStep.key).title}
-          message={getStepContent(currentStep.key).message}
-          tip={getStepContent(currentStep.key).tip}
-          stats={getStepContent(currentStep.key).stats}
-          benefit={getStepContent(currentStep.key).benefit}
-          onNext={handleOnboardingNext}
-          onSkip={handleOnboardingSkip}
-          onClose={handleOnboardingClose}
-          currentStep={currentStep.order}
-          totalSteps={6}
-          showCelebration={false}
-          targetElement={tooltipTarget}
+                    <div className="mt-6 space-y-6">
+                      {/* Step 1: Bank Selection */}
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-700 mb-3">1. Choisissez votre banque :</h3>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                          <a
+                            href="https://www.desjardins.com/fr/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all duration-200 group"
+                          >
+                            <img src="/images/desjardins.svg" alt="Desjardins" className="w-10 h-10 object-contain mb-2" />
+                            <span className="text-xs font-medium text-gray-700 group-hover:text-green-700">Desjardins</span>
+                          </a>
+                          <a
+                            href="https://www.bnc.ca/fr/particuliers.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+                          >
+                            <img src="/images/bnc.svg" alt="BNC" className="w-10 h-10 object-contain mb-2" />
+                            <span className="text-xs font-medium text-gray-700 group-hover:text-blue-700">BNC</span>
+                          </a>
+                          <a
+                            href="https://www.rbcbanqueroyale.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
+                          >
+                            <img src="/images/rbc.svg" alt="RBC" className="w-10 h-10 object-contain mb-2" />
+                            <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">RBC</span>
+                          </a>
+                          <a
+                            href="https://www.td.com/ca/fr/perso/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 transition-all duration-200 group"
+                          >
+                            <img src="/images/TD.svg" alt="TD" className="w-10 h-10 object-contain mb-2" />
+                            <span className="text-xs font-medium text-gray-700 group-hover:text-green-700">TD</span>
+                          </a>
+                          <a
+                            href="https://www.scotiabank.com/ca/fr/particuliers.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
+                          >
+                            <img src="/images/Scotiabank.svg" alt="Scotiabank" className="w-10 h-10 object-contain mb-2" />
+                            <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">Scotiabank</span>
+                          </a>
+                          <a
+                            href="https://www.cibc.com/fr/personal-banking.html"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center p-3 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 transition-all duration-200 group"
+                          >
+                            <img src="/images/cibc.svg" alt="CIBC" className="w-10 h-10 object-contain mb-2" />
+                            <span className="text-xs font-medium text-gray-700 group-hover:text-red-700">CIBC</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Step 2: Email */}
+                      <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600 mb-1">2. Destinataire :</p>
+                          <p className="text-base font-semibold text-gray-900">facturation@massibec.com</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 shrink-0"
+                          onClick={() => copyToClipboard('facturation@massibec.com', 'email')}
+                          title="Copier l'email"
+                        >
+                          {copiedField === 'email' ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4 text-gray-500" />
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Step 3: Amount */}
+                      <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600 mb-1">3. Montant à payer :</p>
+                          <p className="text-lg font-bold text-gray-900">
+                            {priceToPay ? parseFloat(priceToPay).toFixed(2) : '0.00'}$
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 shrink-0"
+                          onClick={() => copyToClipboard(priceToPay ? parseFloat(priceToPay).toFixed(2) : '0.00', 'montant')}
+                          title="Copier le montant"
+                        >
+                          {copiedField === 'montant' ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4 text-gray-500" />
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Step 4: Message */}
+                      <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-600 mb-1">4. Message de virement :</p>
+                          <p className="text-base font-mono text-gray-900 break-all">
+                            {(() => {
+                              const schoolName = school?.name || school?.code || 'N/A';
+                              const orderId = newOrderId || 'N/A';
+                              const personName = session?.user?.role === 'school_manager'
+                                ? session.user.name
+                                : name;
+                              return `${schoolName}-${orderId}-${personName}`;
+                            })()}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 shrink-0"
+                          onClick={() => {
+                            const schoolName = school?.name || school?.code || 'N/A';
+                            const orderId = newOrderId || 'N/A';
+                            const personName = session?.user?.role === 'school_manager'
+                              ? session.user.name
+                              : name;
+                            copyToClipboard(`${schoolName}-${orderId}-${personName}`, 'message');
+                          }}
+                          title="Copier le message"
+                        >
+                          {copiedField === 'message' ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4 text-gray-500" />
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Important Notice */}
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+                        <p className="text-sm text-yellow-800">
+                          <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page.
+                          Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement.
+                          Si vous avez déjà effectué le paiement, ne tenez pas compte de ce courriel.
+                          Il se peut qu'il soit dans vos indésirables.
+                        </p>
+                      </div>
+                    </div>
+
+                    <DialogFooter className="mt-6">
+                      <Button
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 w-full sm:w-auto"
+                        onClick={handleCloseWithConfirmation}
+                      >
+                        Terminer
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Modal de confirmation de paiement */}
+                <Dialog open={showPaymentConfirmation} onOpenChange={setShowPaymentConfirmation}>
+                  <DialogContent className="sm:max-w-[450px] bg-white p-6">
+                    <DialogHeader>
+                      <DialogTitle className="text-xl font-bold text-gray-900 mb-2">
+                        Confirmation de paiement
+                      </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="mt-4 space-y-3">
+                      <p className="text-sm text-gray-600">
+                        Avez-vous effectué le virement Interac avec les informations fournies ?
+                      </p>
+                    </div>
+
+                    <DialogFooter className="mt-6 gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleCancelPayment}
+                        className="flex-1"
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={handleConfirmPayment}
+                        className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                      >
+                        Oui, j'ai fait le paiement
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Popup de confirmation de suppression */}
+                <Dialog open={selectedOrderId !== null} onOpenChange={() => setSelectedOrderId(null)}>
+                  <DialogContent className="bg-white p-6 rounded-md shadow-md">
+                    <DialogHeader>
+                      <DialogTitle>Supprimer la commande</DialogTitle>
+                      <DialogDescription>
+                        Êtes-vous sûr de vouloir supprimer cette commande ? Cette action est irréversible.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter className="mt-4 flex justify-end space-x-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedOrderId(null)}
+                        disabled={isDeletingOrder}
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={handleDeleteOrder}
+                        disabled={isDeletingOrder}
+                      >
+                        {isDeletingOrder ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Suppression...
+                          </>
+                        ) : (
+                          'Supprimer'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Onboarding Tooltip */}
+        {showOnboardingTooltip && currentStep && tooltipTarget && (
+          <OnboardingTooltip
+            isVisible={showOnboardingTooltip}
+            position="top"
+            title={getStepContent(currentStep.key).title}
+            message={getStepContent(currentStep.key).message}
+            tip={getStepContent(currentStep.key).tip}
+            stats={getStepContent(currentStep.key).stats}
+            benefit={getStepContent(currentStep.key).benefit}
+            onNext={handleOnboardingNext}
+            onSkip={handleOnboardingSkip}
+            onClose={handleOnboardingClose}
+            currentStep={currentStep.order}
+            totalSteps={6}
+            showCelebration={false}
+            targetElement={tooltipTarget}
+          />
+        )}
+
+        {/* Join Campaign Modal */}
+        <JoinCampaignModal
+          isOpen={showJoinCampaignModal}
+          onClose={handleCloseJoinCampaignModal}
+          onSuccess={handleJoinCampaignSuccess}
         />
-      )}
-
-      {/* Join Campaign Modal */}
-      <JoinCampaignModal 
-        isOpen={showJoinCampaignModal}
-        onClose={() => setShowJoinCampaignModal(false)}
-        onSuccess={handleJoinCampaignSuccess}
-      />
+      </div>
     </Layout>
   );
 }
 const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmitting, campaignEndDateInfo }) => {
   const [isHovered, setIsHovered] = useState(false);
-  
+
   // Guard against undefined school
   if (!school) {
     return null;
   }
-  
+
   // Get campaign end date - prefer campaign context, fallback to school legacy field
   let finCampagne;
   if (campaignEndDateInfo?.raw) {
@@ -1465,16 +1592,16 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
     // If no date available, hide the button
     return null;
   }
-  
+
   // Check if current date is within the allowed range
   const currentDate = new Date();
   const orderEndDate = addDays(finCampagne, 15);
   const orderEndDateFormatted = format(orderEndDate, 'dd MMMM yyyy', { locale: fr });
   const campaignEndDateLong = campaignEndDateInfo?.long || format(finCampagne, 'dd MMMM yyyy', { locale: fr });
-  
+
   // Check if current date is between campaign end date and 15 days after
-  const isOrderingPeriod = !isBefore(currentDate, finCampagne) && 
-                          !isAfter(currentDate, orderEndDate);
+  const isOrderingPeriod = !isBefore(currentDate, finCampagne) &&
+    !isAfter(currentDate, orderEndDate);
 
   return (
     <motion.div
@@ -1490,8 +1617,8 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
         className={`
           relative overflow-hidden transition-all duration-300 ease-out
           transform hover:scale-105 hover:shadow-lg
-          ${isOrderingPeriod 
-            ? 'bg-gradient-to-r from-blue-500 to-indigo-600' 
+          ${isOrderingPeriod
+            ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
             : 'bg-gray-400 cursor-not-allowed'}
           text-white font-semibold py-3 px-6 rounded-full
           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
@@ -1527,10 +1654,10 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
           />
         )}
       </Button>
-      
+
 
       {!isOrderingPeriod && (
-        <motion.p 
+        <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="text-sm text-gray-600"
@@ -1543,3 +1670,49 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
     </motion.div>
   );
 };
+
+export async function getServerSideProps(context) {
+  try {
+    const session = await getServerSession(context.req, context.res, authOptions);
+    if (!session || !session.user) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    const dashboardData = await getDashboardSSRData(session);
+    if (!dashboardData) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    // Fetch orders for the active campaign
+    const campaignId = dashboardData.initialCampaignContext?.activeCampaignId;
+    const initialOrders = await getOrdersSSR(session, campaignId);
+
+    return {
+      props: {
+        ...dashboardData,
+        initialOrders: initialOrders || []
+      },
+    };
+  } catch (error) {
+    console.error('Error in getServerSideProps (commandes):', error);
+    return {
+      props: {
+        initialCampaignContext: { campaigns: [], activeCampaignId: null, mode: 'none' },
+        initialStoreInfo: null,
+        initialSchoolData: null,
+        initialCampaignData: null,
+        initialOrders: []
+      },
+    };
+  }
+}

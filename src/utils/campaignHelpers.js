@@ -107,17 +107,17 @@ export const getActiveCampaign = (user) => {
   if (!user.campaigns || user.campaigns.length === 0) {
     return null;
   }
-  
+
   // First try to find by activeCampaignId
   if (user.activeCampaignId) {
-    const activeCampaign = user.campaigns.find(c => 
+    const activeCampaign = user.campaigns.find(c =>
       c.campaignId.toString() === user.activeCampaignId.toString()
     );
     if (activeCampaign) {
       return activeCampaign;
     }
   }
-  
+
   // Fallback to first active campaign
   return user.campaigns.find(c => c.isActive) || user.campaigns[0];
 };
@@ -148,13 +148,13 @@ export const getCampaignDataWithFallback = async (schoolId, schoolData, campaign
           fallbackSplit: schoolData?.split || null
         };
       }
-      
-      const url = campaignId 
+
+      const url = campaignId
         ? `/api/campaigns/${campaignId}`
         : `/api/campaigns/current?schoolId=${schoolId}`;
-      
+
       const campaignResponse = await fetch(url);
-      
+
       if (campaignResponse.ok) {
         const campaignResult = await campaignResponse.json();
         if (campaignResult.campaign) {
@@ -169,20 +169,20 @@ export const getCampaignDataWithFallback = async (schoolId, schoolData, campaign
       try {
         const dbConnect = await import('../lib/mongodb').then(m => m.default);
         await dbConnect();
-        
+
         // Dynamically import Campaign model only on server-side
         const Campaign = (await import('../models/Campaign')).default;
-        
+
         let campaign;
         if (campaignId) {
           campaign = await Campaign.findById(campaignId).lean();
         } else {
-          campaign = await Campaign.findOne({ 
+          campaign = await Campaign.findOne({
             school: schoolId,
-            isActive: true 
+            isActive: true
           }).lean();
         }
-        
+
         if (campaign) {
           return {
             campaign: campaign,
@@ -222,18 +222,18 @@ export const calculateOrderProfitsDetailed = (order, campaign, fallbackSplit) =>
   let totalRaffleBenefit = 0;
 
   if (!order.products || order.products.length === 0) {
-    return { 
-      totalStudentCashBenefit, 
-      totalStudentSchoolAccountBenefit, 
+    return {
+      totalStudentCashBenefit,
+      totalStudentSchoolAccountBenefit,
       totalStudentBenefit: totalStudentCashBenefit + totalStudentSchoolAccountBenefit,
-      totalOrganizationBenefit, 
-      totalRaffleBenefit 
+      totalOrganizationBenefit,
+      totalRaffleBenefit
     };
   }
 
   order.products.forEach(product => {
     const profit = (product.productPrice - product.productCost) * product.quantity;
-    
+
     if (campaign && campaign.profitSplits && campaign.profitSplitType === 'absolute') {
       // Use campaign-specific profit splits
       // Handle both populated and non-populated productId
@@ -242,14 +242,14 @@ export const calculateOrderProfitsDetailed = (order, campaign, fallbackSplit) =>
         const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
         return psProductId === productId;
       });
-      
+
       if (profitSplit) {
         // Use new fields if available, otherwise fallback to old fields
         const studentCash = Number(profitSplit.studentCash) || Number(profitSplit.student) || 0;
         const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 0; // No fallback for this
         const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0;
         const raffle = Number(profitSplit.raffle) || 0;
-        
+
         totalStudentCashBenefit += studentCash * product.quantity;
         totalStudentSchoolAccountBenefit += studentSchoolAccount * product.quantity;
         totalOrganizationBenefit += schoolProject * product.quantity;
@@ -259,7 +259,7 @@ export const calculateOrderProfitsDetailed = (order, campaign, fallbackSplit) =>
         const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
         const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
         const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
-        
+
         // Assume all student benefit goes to cash for fallback
         totalStudentCashBenefit += profit * (studentPercentage / 100);
         totalOrganizationBenefit += profit * (organizationPercentage / 100);
@@ -270,7 +270,7 @@ export const calculateOrderProfitsDetailed = (order, campaign, fallbackSplit) =>
       const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
       const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
       const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
-      
+
       // Assume all student benefit goes to cash for fallback
       totalStudentCashBenefit += profit * (studentPercentage / 100);
       totalOrganizationBenefit += profit * (organizationPercentage / 100);
@@ -278,12 +278,39 @@ export const calculateOrderProfitsDetailed = (order, campaign, fallbackSplit) =>
     }
   });
 
-  return { 
-    totalStudentCashBenefit, 
-    totalStudentSchoolAccountBenefit, 
+  // Calculate discount amount if order has discount or if totalAmount differs from product sum
+  let discountAmount = 0;
+  if (order.discount !== undefined && order.discount !== null) {
+    // Use explicit discount field if available
+    discountAmount = Number(order.discount);
+  } else {
+    // Calculate discount from difference between original subtotal and totalAmount
+    const originalSubtotal = order.products.reduce((sum, product) => {
+      return sum + (product.productPrice || product.price || 0) * (product.quantity || 0);
+    }, 0);
+    discountAmount = Math.max(0, originalSubtotal - (order.totalAmount || 0));
+  }
+
+  // Deduct discount from student benefits: first from studentSchoolAccountBenefit, then from studentCashBenefit
+  if (discountAmount > 0) {
+    // First, try to deduct from student school account benefit
+    if (totalStudentSchoolAccountBenefit >= discountAmount) {
+      // Discount can be fully covered by school account benefit
+      totalStudentSchoolAccountBenefit -= discountAmount;
+    } else {
+      // Need to deduct from both school account and cash
+      const remainingDiscount = discountAmount - totalStudentSchoolAccountBenefit;
+      totalStudentSchoolAccountBenefit = 0;
+      totalStudentCashBenefit = Math.max(0, totalStudentCashBenefit - remainingDiscount);
+    }
+  }
+
+  return {
+    totalStudentCashBenefit,
+    totalStudentSchoolAccountBenefit,
     totalStudentBenefit: totalStudentCashBenefit + totalStudentSchoolAccountBenefit,
-    totalOrganizationBenefit, 
-    totalRaffleBenefit 
+    totalOrganizationBenefit,
+    totalRaffleBenefit
   };
 };
 
@@ -305,7 +332,7 @@ export const calculateOrderProfits = (order, campaign, fallbackSplit) => {
 
   order.products.forEach(product => {
     const profit = (product.productPrice - product.productCost) * product.quantity;
-    
+
     if (campaign && campaign.profitSplits && campaign.profitSplitType === 'absolute') {
       // Use campaign-specific profit splits
       // Handle both populated and non-populated productId
@@ -314,14 +341,14 @@ export const calculateOrderProfits = (order, campaign, fallbackSplit) => {
         const psProductId = ps.productId?._id?.toString() || ps.productId?.toString();
         return psProductId === productId;
       });
-      
+
       if (profitSplit) {
         // Use new fields with fallback to old fields
         const studentCash = Number(profitSplit.studentCash) || Number(profitSplit.student) || 1.00;
         const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 1.00;
         const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0.75;
         const raffle = Number(profitSplit.raffle) || 0.25;
-        
+
         // Total student benefit is cash + school account
         const totalStudentProfitPerUnit = studentCash + studentSchoolAccount;
         totalStudentBenefit += totalStudentProfitPerUnit * product.quantity;
@@ -332,7 +359,7 @@ export const calculateOrderProfits = (order, campaign, fallbackSplit) => {
         const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
         const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
         const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
-        
+
         totalStudentBenefit += profit * (studentPercentage / 100);
         totalOrganizationBenefit += profit * (organizationPercentage / 100);
         totalRaffleBenefit += profit * (rafflePercentage / 100);
@@ -342,7 +369,7 @@ export const calculateOrderProfits = (order, campaign, fallbackSplit) => {
       const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
       const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
       const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
-      
+
       totalStudentBenefit += profit * (studentPercentage / 100);
       totalOrganizationBenefit += profit * (organizationPercentage / 100);
       totalRaffleBenefit += profit * (rafflePercentage / 100);
@@ -486,14 +513,14 @@ export const calculateDonationProfits = (tipAmount, campaign) => {
   if (!tipAmount || tipAmount <= 0) {
     return { studentCash: 0, studentSchoolAccount: 0, schoolProject: 0 };
   }
-  
+
   // Use campaign's donation split or fallback to default percentages
-  const split = campaign?.donationSplit || { 
-    studentCash: 50.0, 
-    studentSchoolAccount: 16.7, 
-    schoolProject: 33.3 
+  const split = campaign?.donationSplit || {
+    studentCash: 50.0,
+    studentSchoolAccount: 16.7,
+    schoolProject: 33.3
   };
-  
+
   // Calculate breakdown using percentages
   return {
     studentCash: Math.round((tipAmount * split.studentCash / 100) * 100) / 100,

@@ -80,3 +80,4 @@ export function canEditSchoolSettings(role) {
   return hasPermission(role, 'edit_school_settings');
 }
 
+

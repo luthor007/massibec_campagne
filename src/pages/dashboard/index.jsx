@@ -1,41 +1,52 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BarChart, Settings, ShoppingBag, Store, TrendingUp, AlertTriangle, CheckCircle, Info, ArrowLeft, School } from 'lucide-react';
+import { ArrowRight, BarChart, Settings, ShoppingBag, Store, TrendingUp, AlertTriangle, CheckCircle, Info, ArrowLeft, School, Loader2 } from 'lucide-react';
 import CampaignSelector from '@/components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '@/components/Dashboard/JoinCampaignModal';
 import OnboardingTooltip from '@/components/Dashboard/OnboardingTooltip';
 import useOnboarding from '@/hooks/useOnboarding';
 import { getUserCampaignContext } from '@/utils/campaignHelpers';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getStoreUrl } from '@/utils/storeUrlHelpers';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '../api/auth/[...nextauth]';
+import { getDashboardSSRData } from '../../lib/dashboardSSR';
 
-export default function Dashboard() {
+export default function Dashboard({
+  initialCampaignContext,
+  initialStoreInfo,
+  initialSchoolData,
+  initialCampaignData
+}) {
   const { data: session } = useSession();
   const router = useRouter();
-  const [storeId, setStoreId] = useState(null);
-  
+  const [storeId, setStoreId] = useState(initialStoreInfo?.storeId || null);
+  const [storeSlug, setStoreSlug] = useState(initialStoreInfo?.slug || null);
+  const [navigatingTo, setNavigatingTo] = useState(null); // Track which route we're navigating to
+
   // Check if user is in preview mode (school_manager viewing as student)
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  
-  // Campaign-related state
-  const [campaignContext, setCampaignContext] = useState(null);
+
+  // Campaign-related state - initialize from SSR props
+  const [campaignContext, setCampaignContext] = useState(initialCampaignContext || null);
   const [showJoinCampaignModal, setShowJoinCampaignModal] = useState(false);
-  const [campaignsLoading, setCampaignsLoading] = useState(true);
-  
-  // School data for distribution message
-  const [schoolData, setSchoolData] = useState(null);
-  const [campaignData, setCampaignData] = useState(null);
-  
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+
+  // School data for distribution message - initialize from SSR props
+  const [schoolData, setSchoolData] = useState(initialSchoolData || null);
+  const [campaignData, setCampaignData] = useState(initialCampaignData || null);
+
   // Onboarding state
-  const [storeExists, setStoreExists] = useState(false);
+  const [storeExists, setStoreExists] = useState(!!initialStoreInfo?.storeId);
   const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
   const [tooltipTarget, setTooltipTarget] = useState(null);
-  
+
   // Refs for tooltip positioning
   const campaignSelectorRef = useRef(null);
   const personalizeCardRef = useRef(null);
@@ -43,7 +54,7 @@ export default function Dashboard() {
   const ordersCardRef = useRef(null);
   const statsCardRef = useRef(null);
   const toolsCardRef = useRef(null);
-  
+
   // Use onboarding hook
   const {
     progress,
@@ -55,9 +66,157 @@ export default function Dashboard() {
     getStepContent
   } = useOnboarding();
 
+  // Prefetch all dashboard routes for instant navigation - optimized
   useEffect(() => {
-    if (session) {
-      // Fetch the store information using the user's session
+    // Prefetch all dashboard pages immediately - multiple times for aggressive caching
+    const routesToPrefetch = [
+      '/dashboard/personnalisation',
+      '/dashboard/commandes',
+      '/dashboard/statistiques',
+      '/dashboard/vendre',
+      '/detail'
+    ];
+
+    // Prefetch all routes immediately - batch prefetch for better performance
+    routesToPrefetch.forEach(route => {
+      router.prefetch(route);
+    });
+
+    // Double prefetch for extra assurance - single timeout
+    const timeoutId = setTimeout(() => {
+      routesToPrefetch.forEach(route => {
+        router.prefetch(route);
+      });
+    }, 100);
+
+    // Optimized hover listener setup - single function, reused
+    const prefetchOnHover = (e) => {
+      const link = e.currentTarget;
+      const href = link.getAttribute('href');
+      if (href && (href.startsWith('/dashboard/') || href === '/detail')) {
+        router.prefetch(href);
+      }
+    };
+
+    // Set up hover listeners - batch DOM query
+    const setupHoverListeners = () => {
+      const links = document.querySelectorAll('a[href^="/dashboard/"], a[href="/detail"]');
+      links.forEach(link => {
+        link.addEventListener('mouseenter', prefetchOnHover, { once: true, passive: true });
+        link.addEventListener('touchstart', prefetchOnHover, { once: true, passive: true });
+      });
+    };
+
+    // Set up listeners immediately
+    setupHoverListeners();
+
+    // Single delayed setup
+    const delayedSetup = setTimeout(setupHoverListeners, 300);
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(delayedSetup);
+    };
+  }, [router]);
+
+  // Memoize store URL to avoid recalculating on every render
+  const storeUrl = useMemo(() => {
+    if (!storeId) return null;
+    return getStoreUrl({ storeId, slug: storeSlug });
+  }, [storeId, storeSlug]);
+
+  // Memoize onboarding handlers to prevent unnecessary re-renders
+  const handleOnboardingNext = useCallback(async () => {
+    if (currentStep) {
+      const success = await markStepComplete(currentStep.key, true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  }, [currentStep, markStepComplete]);
+
+  const handleOnboardingSkip = useCallback(async () => {
+    if (currentStep) {
+      const success = await markStepComplete(currentStep.key, true);
+      if (success) {
+        setShowOnboardingTooltip(false);
+      }
+    }
+  }, [currentStep, markStepComplete]);
+
+  const handleOnboardingClose = useCallback(() => {
+    setShowOnboardingTooltip(false);
+  }, []);
+
+  // Memoize campaign handlers
+  const handleCampaignSwitch = useCallback((campaignId) => {
+    window.location.reload(); // Simple refresh for now
+  }, []);
+
+  const handleJoinCampaignClick = useCallback(() => {
+    setShowJoinCampaignModal(true);
+  }, []);
+
+  // Memoize campaign join success handler
+  const handleJoinCampaignSuccess = useCallback(async (campaign) => {
+    setShowJoinCampaignModal(false);
+    await markStepComplete('joinedCampaign', true);
+    window.location.reload();
+  }, [markStepComplete]);
+
+  // Memoize navigation handler
+  const handleNavigation = useCallback((href, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setNavigatingTo(href);
+    // Navigate immediately - prefetching should have already loaded the page
+    router.push(href).catch(() => {
+      // Fallback if navigation fails
+      setNavigatingTo(null);
+    });
+  }, [router]);
+
+  // Memoize detail page navigation
+  const handleDetailNavigation = useCallback((e) => {
+    e.preventDefault();
+    router.push('/detail');
+  }, [router]);
+
+  // Memoize return to manager dashboard handler
+  const handleReturnToManagerDashboard = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('viewMode');
+    }
+    router.push('/dashboard-manager');
+  }, [router]);
+
+  // Memoize modal close handler
+  const handleCloseJoinCampaignModal = useCallback(() => {
+    setShowJoinCampaignModal(false);
+  }, []);
+
+  // Memoize completion percentage to avoid recalculation
+  const completionPercentageDisplay = useMemo(() => completionPercentage, [completionPercentage]);
+
+  // Clear navigating state when route changes
+  useEffect(() => {
+    const handleRouteChangeComplete = () => {
+      setNavigatingTo(null);
+    };
+
+    router.events.on('routeChangeComplete', handleRouteChangeComplete);
+    router.events.on('routeChangeError', handleRouteChangeComplete);
+
+    return () => {
+      router.events.off('routeChangeComplete', handleRouteChangeComplete);
+      router.events.off('routeChangeError', handleRouteChangeComplete);
+    };
+  }, [router]);
+
+  // Only fetch if data wasn't provided via SSR (fallback for client-side updates)
+  useEffect(() => {
+    // Only fetch store if we don't have it from SSR and campaign context is available
+    if (session && campaignContext?.activeCampaignId && !initialStoreInfo?.storeId) {
       const fetchStore = async () => {
         try {
           const response = await fetch('/api/get-store', {
@@ -65,24 +224,27 @@ export default function Dashboard() {
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ userId: session.user.id }),
+            body: JSON.stringify({
+              campaignId: campaignContext.activeCampaignId
+            }),
           });
           const data = await response.json();
-          setStoreId(data.storeId);  // Assuming the API response returns a storeId
-          setStoreExists(!!data.storeId); // Track if store exists
+          setStoreId(data.storeId);
+          setStoreSlug(data.slug || null);
+          setStoreExists(!!data.storeId);
         } catch (error) {
           console.error('Error fetching store ID:', error);
         }
       };
       fetchStore();
     }
-  }, [session]);
+  }, [session, campaignContext?.activeCampaignId, initialStoreInfo]);
 
-  // Fetch campaign context
+  // Refresh campaign context on client-side updates (only if not provided via SSR)
   useEffect(() => {
+    if (!session?.user || initialCampaignContext) return;
+
     const fetchCampaignContext = async () => {
-      if (!session?.user) return;
-      
       setCampaignsLoading(true);
       try {
         const response = await fetch('/api/users/campaigns');
@@ -99,53 +261,7 @@ export default function Dashboard() {
     };
 
     fetchCampaignContext();
-  }, [session]);
-
-  // Fetch school and campaign data for distribution message
-  useEffect(() => {
-    const fetchSchoolAndCampaignData = async () => {
-      if (!session?.user || !campaignContext) return;
-
-      try {
-        // Get schoolId from campaign context
-        let schoolIdFromContext = null;
-        if (campaignContext.campaigns && campaignContext.campaigns.length > 0) {
-          const firstCampaign = campaignContext.campaigns[0];
-          schoolIdFromContext = firstCampaign.school?._id || firstCampaign.school;
-        }
-
-        if (schoolIdFromContext) {
-          // Fetch school data
-          const schoolResponse = await fetch(`/api/schools/${schoolIdFromContext}`);
-          if (schoolResponse.ok) {
-            const schoolData = await schoolResponse.json();
-            setSchoolData(schoolData);
-          }
-
-          // Fetch campaign data for delivery date
-          const activeCampaignId = campaignContext.activeCampaignId || 
-            (campaignContext.campaigns?.[0]?._id) || 
-            (campaignContext.campaigns?.[0]?.campaignId);
-          
-          if (activeCampaignId) {
-            const campaignResponse = await fetch(`/api/campaigns/${activeCampaignId}`);
-            if (campaignResponse.ok) {
-              const campaignResult = await campaignResponse.json();
-              if (campaignResult.campaign) {
-                setCampaignData(campaignResult.campaign);
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching school/campaign data:', error);
-      }
-    };
-
-    if (campaignContext && campaignContext.mode !== 'none') {
-      fetchSchoolAndCampaignData();
-    }
-  }, [session, campaignContext]);
+  }, [session, initialCampaignContext]);
 
   // Check if in preview mode on mount
   useEffect(() => {
@@ -156,26 +272,13 @@ export default function Dashboard() {
     }
   }, [session]);
 
-  const handleReturnToManagerDashboard = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('viewMode');
-    }
-    router.push('/dashboard-manager');
-  };
-
-  // Campaign handlers
-  const handleCampaignSwitch = (campaignId) => {
-    window.location.reload(); // Simple refresh for now
-  };
-
-
   // Show onboarding tooltip when current step is available
   useEffect(() => {
     if (!onboardingLoading && currentStep && !isCompleted) {
       // Use a small delay to ensure refs are attached
       const timer = setTimeout(() => {
         setShowOnboardingTooltip(true);
-        
+
         // Set tooltip target based on current step
         switch (currentStep.key) {
           case 'joinedCampaign':
@@ -207,54 +310,34 @@ export default function Dashboard() {
     }
   }, [currentStep, onboardingLoading, isCompleted]);
 
-  // Onboarding handlers
-  const handleOnboardingNext = async () => {
-    if (currentStep) {
-      const success = await markStepComplete(currentStep.key, true);
-      if (success) {
-        setShowOnboardingTooltip(false);
-      }
+  // Check if in preview mode on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const viewMode = localStorage.getItem('viewMode');
+      const isPreview = viewMode === 'student_preview' && session?.user?.role === 'school_manager';
+      setIsPreviewMode(isPreview);
     }
-  };
+  }, [session]);
 
-  const handleOnboardingSkip = async () => {
-    if (currentStep) {
-      const success = await markStepComplete(currentStep.key, true);
-      if (success) {
-        setShowOnboardingTooltip(false);
-      }
-    }
-  };
-
-  const handleOnboardingClose = () => {
-    setShowOnboardingTooltip(false);
-  };
-
-
-  // Handle campaign join success
-  const handleJoinCampaignSuccess = async (campaign) => {
-    setShowJoinCampaignModal(false);
-    await markStepComplete('joinedCampaign', true);
-    window.location.reload();
-  };
+  // Show onboarding tooltip when current step is available
 
   return (
-    <Layout className="pt-8">
-      <div className="pt-24">
+    <Layout>
+      <div className="pt-12 sm:pt-16 md:pt-20 overflow-x-hidden max-w-full px-3 sm:px-4 md:px-6">
         {/* Header with Campaign Management */}
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h1 className="text-3xl font-bold">Tableau de bord</h1>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-6 mb-6">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Tableau de bord</h1>
             {!isCompleted && currentStep && (
-              <div className="mt-2 flex items-center space-x-2">
-                <div className="text-sm text-gray-600">
-                  Formation en cours ({completionPercentage}%)
+              <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <div className="text-xs sm:text-sm text-gray-600">
+                  Formation en cours ({completionPercentageDisplay}%)
                 </div>
-                <div className="w-24 h-1 bg-gray-200 rounded-full overflow-hidden">
+                <div className="w-full sm:w-24 h-1.5 sm:h-1 bg-gray-200 rounded-full overflow-hidden">
                   <motion.div
                     className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
                     initial={{ width: 0 }}
-                    animate={{ width: `${completionPercentage}%` }}
+                    animate={{ width: `${completionPercentageDisplay}%` }}
                     transition={{ duration: 0.5 }}
                   />
                 </div>
@@ -263,7 +346,7 @@ export default function Dashboard() {
           </div>
           <motion.div
             ref={campaignSelectorRef}
-            className="flex items-center space-x-4"
+            className="flex-shrink-0 w-full sm:w-auto"
             animate={currentStep?.key === 'joinedCampaign' ? {
               scale: [1, 1.05, 1],
             } : {}}
@@ -274,9 +357,11 @@ export default function Dashboard() {
             }}
           >
             <div className={currentStep?.key === 'joinedCampaign' ? 'ring-4 ring-blue-500 rounded-lg p-2 shadow-2xl' : ''}>
-              <CampaignSelector 
+              <CampaignSelector
                 onCampaignSwitch={handleCampaignSwitch}
-                onJoinCampaign={() => setShowJoinCampaignModal(true)}
+                onJoinCampaign={handleJoinCampaignClick}
+                initialCampaigns={initialCampaignContext?.campaigns || []}
+                initialActiveCampaignId={initialCampaignContext?.activeCampaignId || null}
               />
             </div>
           </motion.div>
@@ -344,9 +429,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/personnalisation" passHref>
-                  <Button className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                    Personnaliser
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button
+                    className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-all"
+                    onClick={(e) => handleNavigation('/dashboard/personnalisation', e)}
+                    disabled={navigatingTo === '/dashboard/personnalisation'}
+                  >
+                    {navigatingTo === '/dashboard/personnalisation' ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      <>
+                        Personnaliser
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </Link>
               </CardContent>
@@ -374,9 +472,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/commandes" passHref>
-                  <Button className="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                    Voir les commandes
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button
+                    className="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-all"
+                    onClick={(e) => handleNavigation('/dashboard/commandes', e)}
+                    disabled={navigatingTo === '/dashboard/commandes'}
+                  >
+                    {navigatingTo === '/dashboard/commandes' ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      <>
+                        Voir les commandes
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </Link>
               </CardContent>
@@ -404,9 +515,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/statistiques" passHref>
-                  <Button className="w-full bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded">
-                    Voir les statistiques
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button
+                    className="w-full bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-all"
+                    onClick={(e) => handleNavigation('/dashboard/statistiques', e)}
+                    disabled={navigatingTo === '/dashboard/statistiques'}
+                  >
+                    {navigatingTo === '/dashboard/statistiques' ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      <>
+                        Voir les statistiques
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </Link>
               </CardContent>
@@ -434,8 +558,8 @@ export default function Dashboard() {
                 <CardDescription>Accédez à votre boutique en ligne pour la voir comme vos clients.</CardDescription>
               </CardHeader>
               <CardContent>
-                {storeId ? (
-                  <Link href={`/boutique/${storeId}`} passHref>
+                {storeUrl ? (
+                  <Link href={storeUrl} passHref>
                     <Button className="w-full bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
                       Voir la boutique
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -472,9 +596,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <Link href="/dashboard/vendre" passHref>
-                  <Button className="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded">
-                    Voir les outils
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button
+                    className="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-all"
+                    onClick={(e) => handleNavigation('/dashboard/vendre', e)}
+                    disabled={navigatingTo === '/dashboard/vendre'}
+                  >
+                    {navigatingTo === '/dashboard/vendre' ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      <>
+                        Voir les outils
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </Link>
               </CardContent>
@@ -492,7 +629,10 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <Link href="/detail" passHref>
-                <Button className="w-full bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+                <Button
+                  className="w-full bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-all"
+                  onClick={handleDetailNavigation}
+                >
                   Voir les détails
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -501,13 +641,22 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Loading overlay for navigation - ultra-fast, minimal */}
+        {navigatingTo && (
+          <div className="fixed inset-0 bg-white/40 backdrop-blur-[2px] z-50 flex items-center justify-center pointer-events-none transition-opacity duration-75">
+            <div className="flex flex-col items-center space-y-2">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+            </div>
+          </div>
+        )}
+
         {/* Onboarding Tooltip */}
         {showOnboardingTooltip && currentStep && tooltipTarget && (
           <OnboardingTooltip
             isVisible={showOnboardingTooltip}
             position={
-              currentStep.key === 'joinedCampaign' ? 'bottom' : 
-              currentStep.key === 'viewedStats' ? 'left' : 'right'
+              currentStep.key === 'joinedCampaign' ? 'bottom' :
+                currentStep.key === 'viewedStats' ? 'left' : 'right'
             }
             title={getStepContent(currentStep.key).title}
             message={getStepContent(currentStep.key).message}
@@ -527,10 +676,48 @@ export default function Dashboard() {
         {/* Join Campaign Modal */}
         <JoinCampaignModal
           isOpen={showJoinCampaignModal}
-          onClose={() => setShowJoinCampaignModal(false)}
+          onClose={handleCloseJoinCampaignModal}
           onSuccess={handleJoinCampaignSuccess}
         />
       </div>
     </Layout>
   );
+}
+
+export async function getServerSideProps(context) {
+  try {
+    const session = await getServerSession(context.req, context.res, authOptions);
+    if (!session || !session.user) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    const dashboardData = await getDashboardSSRData(session);
+    if (!dashboardData) {
+      return {
+        redirect: {
+          destination: '/connexion',
+          permanent: false,
+        },
+      };
+    }
+
+    return {
+      props: dashboardData,
+    };
+  } catch (error) {
+    console.error('Error in getServerSideProps:', error);
+    return {
+      props: {
+        initialCampaignContext: { campaigns: [], activeCampaignId: null, mode: 'none' },
+        initialStoreInfo: null,
+        initialSchoolData: null,
+        initialCampaignData: null
+      },
+    };
+  }
 }

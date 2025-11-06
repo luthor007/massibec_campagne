@@ -13,9 +13,9 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
   // Find performers above current user
   const performersAbove = rank && rank > 1 && topPerformers
     ? topPerformers
-        .filter(p => p.rank && p.rank < rank)
-        .slice(0, 3)
-        .sort((a, b) => a.rank - b.rank)
+      .filter(p => p.rank && p.rank < rank)
+      .slice(0, 3)
+      .sort((a, b) => a.rank - b.rank)
     : [];
 
   // Find next performer to catch up to
@@ -48,6 +48,13 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
     return `${position}ème`;
   };
 
+  const getRankText = (position) => {
+    if (position === 1) return "1er";
+    if (position === 2) return "2ème";
+    if (position === 3) return "3ème";
+    return `${position}ème`;
+  };
+
   return (
     <Card className="overflow-hidden border border-gray-200 shadow-lg">
       <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-100">
@@ -69,13 +76,13 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
             >
               <Badge className={`${getRankBadgeStyle(rank)} text-base px-3 py-1`}>
                 {getRankIcon(rank)}
-                <span className="ml-2 font-bold">{rank}ème</span>
+                <span className="ml-2 font-bold">{getRankText(rank)}</span>
               </Badge>
             </motion.div>
           )}
         </CardTitle>
       </CardHeader>
-      
+
       <CardContent className="p-5 bg-white">
         {/* Current Position - Prominent Display */}
         {rank && (
@@ -185,11 +192,10 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className={`flex items-center justify-between p-3 rounded-lg transition-all ${
-                      isCurrentUser 
-                        ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 shadow-md' 
-                        : 'bg-white border border-gray-200 hover:shadow-sm'
-                    }`}
+                    className={`flex items-center justify-between p-3 rounded-lg transition-all ${isCurrentUser
+                      ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 shadow-md'
+                      : 'bg-white border border-gray-200 hover:shadow-sm'
+                      }`}
                   >
                     <div className="flex items-center space-x-3 flex-1">
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${getRankBadgeStyle(performer.rank)}`}>
@@ -202,12 +208,12 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
                         )}
                       </div>
                       <div className="flex-1">
-                        <p className={`font-semibold text-sm ${isCurrentUser ? 'text-indigo-900' : 'text-gray-900'}`}>
-                          {performer.name || 'Vendeur'}
+                        <div className={`font-semibold text-sm ${isCurrentUser ? 'text-indigo-900' : 'text-gray-900'} flex items-center gap-2`}>
+                          <span>{performer.name || 'Vendeur'}</span>
                           {isCurrentUser && (
-                            <Badge className="ml-2 bg-indigo-600 text-white text-xs px-1.5 py-0.5">Vous</Badge>
+                            <Badge className="bg-indigo-600 text-white text-xs px-1.5 py-0.5">Vous</Badge>
                           )}
-                        </p>
+                        </div>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {performer.totalProductsSold || 0} produits • ${(performer.totalSales || 0).toFixed(2)}
                         </p>

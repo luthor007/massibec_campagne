@@ -23,13 +23,28 @@ export default async function handler(req, res) {
     // Get user with campaigns populated
     const user = await User.findById(session.user.id)
       .populate('campaigns.campaignId')
-      .populate('campaigns.schoolId', 'name code');
+      .populate('campaigns.schoolId', 'name code logo');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     const context = getUserCampaignContext(user);
+
+    // Helper function to convert Cloudinary public_id to URL
+    const getLogoUrl = (logo) => {
+      if (!logo) return null;
+      // If already a URL (http/https), return as is
+      if (logo.startsWith('http')) {
+        return logo;
+      }
+      // If it's a Cloudinary public_id, convert to URL
+      if (logo.startsWith('school-logo/')) {
+        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+        return `https://res.cloudinary.com/${cloudName}/image/upload/${logo}.png`;
+      }
+      return null;
+    };
 
     if (context.mode === 'none') {
       return res.status(200).json({
@@ -43,7 +58,7 @@ export default async function handler(req, res) {
     if (context.mode === 'legacy') {
       // Log deprecation warning
       logLegacyModeWarning('User Campaigns API');
-      
+
       // For legacy users, return their school info as a "campaign"
       const school = await School.findById(context.schoolId);
       if (!school) {
@@ -58,7 +73,8 @@ export default async function handler(req, res) {
           school: {
             _id: school._id,
             name: school.name,
-            code: school.code
+            code: school.code,
+            logo: getLogoUrl(school.logo)
           },
           status: 'legacy',
           isActive: true,
@@ -75,7 +91,7 @@ export default async function handler(req, res) {
     const campaignsWithDetails = user.campaigns.map(campaignEntry => {
       const campaign = campaignEntry.campaignId;
       const school = campaignEntry.schoolId;
-      
+
       return {
         _id: campaign._id,
         campaignNumber: campaign.campaignNumber,
@@ -83,7 +99,8 @@ export default async function handler(req, res) {
         school: {
           _id: school._id,
           name: school.name,
-          code: school.code
+          code: school.code,
+          logo: getLogoUrl(school.logo)
         },
         startDate: campaign.startDate,
         endDate: campaign.endDate,
@@ -93,7 +110,7 @@ export default async function handler(req, res) {
         isActive: campaign.isActive,
         objectifPersonnel: campaignEntry.objectifPersonnel,
         joinedAt: campaignEntry.joinedAt,
-        isActiveCampaign: user.activeCampaignId && 
+        isActiveCampaign: user.activeCampaignId &&
           user.activeCampaignId.toString() === campaign._id.toString()
       };
     });
