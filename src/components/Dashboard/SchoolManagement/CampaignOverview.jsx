@@ -4,18 +4,19 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { 
-  DollarSign, 
-  Users, 
-  Package, 
-  Target, 
+import {
+  DollarSign,
+  Users,
+  Package,
+  Target,
   TrendingUp,
   Calendar,
   CheckCircle,
   Clock,
   AlertCircle,
   Mail,
-  Copy
+  Copy,
+  Check
 } from 'lucide-react';
 import ParentLetterModal from './ParentLetterModal';
 import { getTerminology } from '@/utils/organizationHelpers';
@@ -24,6 +25,7 @@ import { toast } from 'react-toastify';
 
 const CampaignOverview = ({ campaign, stats, loading, school }) => {
   const [showParentLetterModal, setShowParentLetterModal] = useState(false);
+  const [copied, setCopied] = useState(false);
   // Get terminology based on organization type
   const organizationType = school?.organizationType || campaign?.organizationType || 'school';
   const terminology = getTerminology(organizationType);
@@ -61,15 +63,15 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
     if (!date) return 'N/A';
     const dateObj = new Date(date);
     if (isNaN(dateObj.getTime())) return 'N/A';
-    
+
     // Use UTC methods to avoid timezone issues
     const year = dateObj.getUTCFullYear();
     const month = dateObj.getUTCMonth();
     const day = dateObj.getUTCDate();
-    
-    const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
-                    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-    
+
+    const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
     return `${day} ${months[month]} ${year}`;
   };
 
@@ -118,10 +120,10 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
                             {getStatusIcon(campaign.status)}
                             <span className="whitespace-nowrap">
                               {campaign.status === 'active' ? 'Active' :
-                               campaign.status === 'approved' ? 'Approuvée' :
-                               campaign.status === 'pending_approval' ? 'En attente' :
-                               campaign.status === 'rejected' ? 'Rejetée' :
-                               campaign.status === 'completed' ? 'Terminée' : campaign.status}
+                                campaign.status === 'approved' ? 'Approuvée' :
+                                  campaign.status === 'pending_approval' ? 'En attente' :
+                                    campaign.status === 'rejected' ? 'Rejetée' :
+                                      campaign.status === 'completed' ? 'Terminée' : campaign.status}
                             </span>
                             {isTest && (
                               <AlertCircle className="h-2.5 w-2.5 text-orange-600" />
@@ -155,16 +157,25 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
                           onClick={async () => {
                             try {
                               await navigator.clipboard.writeText(campaign.campaignCode);
+                              setCopied(true);
                               toast.success('Code copié!');
+                              setTimeout(() => setCopied(false), 2000);
                             } catch (err) {
                               console.error('Erreur lors de la copie:', err);
                             }
                           }}
                           variant="ghost"
                           size="sm"
-                          className="h-7 w-7 p-0 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                          className={`h-7 w-7 p-0 transition-all duration-200 ${copied
+                              ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
+                              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                            }`}
                         >
-                          <Copy className="h-3.5 w-3.5" />
+                          {copied ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -176,7 +187,7 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
               )}
             </div>
           </div>
-          
+
           {/* Right: Action Button */}
           <Button
             onClick={() => setShowParentLetterModal(true)}
@@ -314,7 +325,7 @@ const CampaignOverview = ({ campaign, stats, loading, school }) => {
           </CardContent>
         </Card>
       </div>
-      
+
       {/* Parent Letter Modal */}
       <ParentLetterModal
         isOpen={showParentLetterModal}

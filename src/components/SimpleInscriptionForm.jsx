@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, CheckCircle, Mail, Lock, User, ArrowRight, Sparkles, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { trackSchoolRegistrationStarted, trackSchoolRegistrationCompleted } from '@/lib/funnelAnalytics';
 
 export default function SimpleInscriptionForm() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function SimpleInscriptionForm() {
   const [errorMessage, setErrorMessage] = useState('');
   const [emailExists, setEmailExists] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const hasTrackedStarted = useRef(false);
   const [formData, setFormData] = useState({
     nomComplet: '',
     email: '',
@@ -24,6 +26,12 @@ export default function SimpleInscriptionForm() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Track registration started on first interaction
+    if (!hasTrackedStarted.current) {
+      hasTrackedStarted.current = true;
+      trackSchoolRegistrationStarted();
+    }
   };
 
   // Email validation
@@ -87,6 +95,9 @@ export default function SimpleInscriptionForm() {
       });
 
       if (response.ok) {
+        // Track registration completion
+        trackSchoolRegistrationCompleted(formData.email);
+
         // Store email in sessionStorage for email verification page
         sessionStorage.setItem('pendingVerificationEmail', formData.email.toLowerCase().trim());
         router.push('/email-verification');
@@ -94,7 +105,7 @@ export default function SimpleInscriptionForm() {
         const errorData = await response.json();
         console.error('Registration error:', errorData);
         setErrorMessage(errorData.message || 'Erreur lors de la création du compte');
-        
+
         // If it's an email already exists error, update the emailExists state
         if (errorData.message?.includes('déjà utilisée') || errorData.message?.includes('already exists')) {
           setEmailExists(true);
@@ -110,7 +121,7 @@ export default function SimpleInscriptionForm() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -165,11 +176,10 @@ export default function SimpleInscriptionForm() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`pl-10 pr-10 h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                    emailExists ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200' :
+                  className={`pl-10 pr-10 h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${emailExists ? 'border-red-300 bg-red-50 focus:border-red-500 focus:ring-red-200' :
                     formData.email && !emailExists ? 'border-green-300 bg-green-50 focus:border-green-500 focus:ring-green-200' :
-                    'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                  }`}
+                      'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                    }`}
                   placeholder="votre@email.com"
                   required
                 />

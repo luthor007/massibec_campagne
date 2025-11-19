@@ -23,6 +23,7 @@ export default function Header() {
   const { data: session } = useSession();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [schoolLogo, setSchoolLogo] = useState(null);
 
   const isSchoolManager = session?.user?.role === 'school_manager';
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -35,12 +36,58 @@ export default function Header() {
       if (session) {
         setName(session.user.name)
         setEmail(session.user.email)
-        setTelephone(session.user.parentInfo.telephone) // Changed from goal to telephone
+        setTelephone(session.user.parentInfo?.telephone) // Changed from goal to telephone
       }
     }
 
     fetchUserInfo()
   }, [session])
+
+  // Fetch school logo based on active campaign
+  useEffect(() => {
+    const fetchSchoolLogo = async () => {
+      if (!session?.user) {
+        setSchoolLogo(null);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/users/campaigns');
+        if (response.ok) {
+          const data = await response.json();
+          const activeCampaignId = data.activeCampaignId;
+          const campaigns = data.campaigns || [];
+
+          // Find active campaign
+          const activeCampaign = campaigns.find(c =>
+            c._id === activeCampaignId || c.isActiveCampaign
+          ) || campaigns[0];
+
+          // Get school logo from active campaign
+          if (activeCampaign?.school?.logo) {
+            setSchoolLogo(activeCampaign.school.logo);
+          } else {
+            setSchoolLogo(null);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching school logo:', error);
+        setSchoolLogo(null);
+      }
+    };
+
+    fetchSchoolLogo();
+
+    // Listen for campaign changes
+    const handleCampaignSwitched = () => {
+      fetchSchoolLogo();
+    };
+
+    window.addEventListener('campaignSwitched', handleCampaignSwitched);
+    return () => {
+      window.removeEventListener('campaignSwitched', handleCampaignSwitched);
+    };
+  }, [session]);
 
   const handleProfileClick = () => {
     setShowProfileModal(true);
@@ -115,138 +162,155 @@ export default function Header() {
   return (
     <>
       <header className={`${headerClasses} h-16 md:h-20`}>
-        <div className="container mx-auto px-4 py-3 sm:px-10 lg:px-12 h-full flex items-center">
-          <nav className="flex justify-between items-center w-full">
-            <Link href="/" className={logoClasses}>
+        <div className="h-full w-full px-4 sm:px-6 lg:px-8">
+          <div className="h-full max-w-7xl mx-auto flex items-center justify-between">
+            {/* Logo - centered with main content */}
+            <Link href="/" className={`${logoClasses} flex-shrink-0`}>
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
                 <div className="relative flex items-center h-full">
-                  <img
-                    src="/images/logo_massibec.png"
-                    alt="Massibec Fundraising Logo"
-                    className="object-cover h-10 md:h-14"
-                    style={{ objectPosition: 'center top' }}
-                  />
+                  {schoolLogo ? (
+                    <img
+                      src={schoolLogo}
+                      alt="School Logo"
+                      className="object-cover h-14 md:h-16 lg:h-20"
+                      style={{ objectPosition: 'center top' }}
+                    />
+                  ) : (
+                    <img
+                      src="/images/logo_massibec.png"
+                      alt="Massibec Fundraising Logo"
+                      className="object-cover h-14 md:h-16 lg:h-20"
+                      style={{ objectPosition: 'center top' }}
+                    />
+                  )}
                 </div>
               </motion.div>
             </Link>
 
-            <div className="hidden md:flex items-center space-x-4">
-              <AnimatePresence>
-                {session ? (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex items-center space-x-4"
-                  >
-                    {/* Navigation buttons for school managers */}
-                    {isSchoolManager ? (
-                      <>
-                        <Link href="/dashboard-manager" passHref>
+            {/* Rest of header content */}
+            <nav className="flex items-center">
+
+              <div className="hidden md:flex items-center space-x-4">
+                <AnimatePresence>
+                  {session ? (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex items-center space-x-4"
+                    >
+                      {/* Navigation buttons for school managers */}
+                      {isSchoolManager ? (
+                        <>
                           <Button
                             variant={router.pathname === '/dashboard-manager' ? 'default' : 'outline'}
                             size="sm"
                             className="flex items-center space-x-2"
+                            asChild
                           >
-                            <Building2 className="h-4 w-4" />
-                            <span className="hidden sm:inline">Portail Organisation</span>
-                            <span className="sm:hidden">Organisation</span>
+                            <Link href="/dashboard-manager">
+                              <Building2 className="h-4 w-4" />
+                              <span className="hidden sm:inline">Portail Organisation</span>
+                              <span className="sm:hidden">Organisation</span>
+                            </Link>
                           </Button>
-                        </Link>
-                        <Link href="/dashboard" passHref>
                           <Button
                             variant={router.pathname === '/dashboard' ? 'default' : 'outline'}
                             size="sm"
                             className="flex items-center space-x-2"
+                            asChild
                           >
-                            <ShoppingBag className="h-4 w-4" />
-                            <span className="hidden sm:inline">Portail Vendeur</span>
-                            <span className="sm:hidden">Vendeur</span>
+                            <Link href="/dashboard">
+                              <ShoppingBag className="h-4 w-4" />
+                              <span className="hidden sm:inline">Portail Vendeur</span>
+                              <span className="sm:hidden">Vendeur</span>
+                            </Link>
                           </Button>
+                        </>
+                      ) : (
+                        <Button variant="secondary" size="sm" asChild>
+                          <Link href="/dashboard">
+                            Tableau de bord
+                          </Link>
+                        </Button>
+                      )}
+
+                      {/* Profile Menu Dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="flex items-center space-x-2 hover:bg-gray-100">
+                            <Avatar className="w-8 h-8 border-2 border-gray-200">
+                              <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
+                              <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                                {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="hidden lg:inline">{session.user?.name}</span>
+                            <ChevronDown className="h-4 w-4 text-gray-400" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-xl rounded-lg">
+                          <div className="px-3 py-2 border-b border-gray-100">
+                            <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
+                            <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
+                          </div>
+                          <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5">
+                            <User className="mr-2 h-4 w-4 text-gray-600" />
+                            <span className="text-sm">Profil</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-gray-100" />
+                          <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5">
+                            <LogOut className="mr-2 h-4 w-4" />
+                            <span className="text-sm font-medium">Déconnexion</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex items-center space-x-4"
+                    >
+                      <Button variant="secondary" size="sm" asChild>
+                        <Link href="/inscription">
+                          S&apos;inscrire
                         </Link>
-                      </>
-                    ) : (
-                      <Link href="/dashboard" passHref>
-                        <Button variant="secondary" size="sm">
-                          Tableau de bord
-                        </Button>
-                      </Link>
-                    )}
+                      </Button>
+                      <Button variant="secondary" size="sm" asChild>
+                        <Link href="/connexion">
+                          <User className="mr-2 h-4 w-4" />
+                          Connexion
+                        </Link>
+                      </Button>
+                      <Button variant="secondary" size="sm" asChild>
+                        <Link href="/inscription-manager">
+                          Inscrire mon école
+                        </Link>
+                      </Button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-                    {/* Profile Menu Dropdown */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="flex items-center space-x-2 hover:bg-gray-100">
-                          <Avatar className="w-8 h-8 border-2 border-gray-200">
-                            <AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
-                            <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
-                              {session.user?.name?.[0]?.toUpperCase() || 'U'}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="hidden lg:inline">{session.user?.name}</span>
-                          <ChevronDown className="h-4 w-4 text-gray-400" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-200 shadow-xl rounded-lg">
-                        <div className="px-3 py-2 border-b border-gray-100">
-                          <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
-                          <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
-                        </div>
-                        <DropdownMenuItem onClick={handleProfileClick} className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5">
-                          <User className="mr-2 h-4 w-4 text-gray-600" />
-                          <span className="text-sm">Profil</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-gray-100" />
-                        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5">
-                          <LogOut className="mr-2 h-4 w-4" />
-                          <span className="text-sm font-medium">Déconnexion</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex items-center space-x-4"
-                  >
-                    <Link href="/inscription" passHref>
-                      <Button variant="secondary" size="sm">
-                        S&apos;inscrire
-                      </Button>
-                    </Link>
-                    <Link href="/connexion" passHref>
-                      <Button variant="secondary" size="sm">
-                        <User className="mr-2 h-4 w-4" />
-                        Connexion
-                      </Button>
-                    </Link>
-                    <Link href="/inscription-manager" passHref>
-                      <Button variant="secondary" size="sm">
-                        Inscrire mon école
-                      </Button>
-                    </Link>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden text-primary-foreground"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </Button>
-          </nav>
+              {/* Mobile menu button - positioned on the right */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden text-primary-foreground flex-shrink-0 ml-2"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </Button>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -298,7 +362,10 @@ export default function Header() {
                           variant={router.pathname === '/dashboard-manager' ? 'default' : 'outline'}
                           size="sm"
                           className="w-full justify-start border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
-                          onClick={() => setIsMobileMenuOpen(false)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsMobileMenuOpen(false);
+                          }}
                         >
                           <Building2 className="h-4 w-4 mr-2" />
                           Portail Organisation
@@ -309,9 +376,13 @@ export default function Header() {
                         variant={router.pathname === '/dashboard' ? 'default' : 'outline'}
                         size="sm"
                         className="w-full justify-start border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setIsMobileMenuOpen(false);
-                          router.push('/dashboard');
+                          // Use setTimeout to ensure menu closes before navigation
+                          setTimeout(() => {
+                            router.push('/dashboard');
+                          }, 100);
                         }}
                       >
                         <ShoppingBag className="h-4 w-4 mr-2" />
@@ -323,7 +394,8 @@ export default function Header() {
                         variant="ghost"
                         size="sm"
                         className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleProfileClick();
                           setIsMobileMenuOpen(false);
                         }}
@@ -339,7 +411,10 @@ export default function Header() {
                           variant={router.pathname === '/dashboard' ? 'default' : 'ghost'}
                           size="sm"
                           className="w-full justify-start text-xl"
-                          onClick={() => setIsMobileMenuOpen(false)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsMobileMenuOpen(false);
+                          }}
                         >
                           Tableau de bord
                         </Button>
@@ -363,7 +438,8 @@ export default function Header() {
 
                   {/* Logout */}
                   <Button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       handleLogout();
                       setIsMobileMenuOpen(false);
                     }}
@@ -382,7 +458,10 @@ export default function Header() {
                       variant="ghost"
                       size="sm"
                       className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsMobileMenuOpen(false);
+                      }}
                     >
                       S&apos;inscrire
                     </Button>
@@ -392,7 +471,10 @@ export default function Header() {
                       variant="ghost"
                       size="sm"
                       className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsMobileMenuOpen(false);
+                      }}
                     >
                       <User className="h-4 w-4 mr-2" />
                       Connexion
@@ -403,7 +485,10 @@ export default function Header() {
                       variant="ghost"
                       size="sm"
                       className="w-full justify-start text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsMobileMenuOpen(false);
+                      }}
                     >
                       Inscrire mon école
                     </Button>

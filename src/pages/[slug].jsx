@@ -173,6 +173,21 @@ export async function getServerSideProps(context) {
                         }
                     }
 
+                    // Get attributes from product, ensuring all fields are present
+                    const productAttributes = product.attributes || {};
+                    const sanitizedAttributes = {
+                        freezable: productAttributes.freezable !== undefined ? Boolean(productAttributes.freezable) : (product.freezable !== undefined ? Boolean(product.freezable) : false),
+                        glutenFree: productAttributes.glutenFree !== undefined ? Boolean(productAttributes.glutenFree) : false,
+                        vegetarian: productAttributes.vegetarian !== undefined ? Boolean(productAttributes.vegetarian) : false,
+                        vegan: productAttributes.vegan !== undefined ? Boolean(productAttributes.vegan) : false,
+                        nutFree: productAttributes.nutFree !== undefined ? Boolean(productAttributes.nutFree) : false,
+                        halal: productAttributes.halal !== undefined ? Boolean(productAttributes.halal) : false,
+                        kosher: productAttributes.kosher !== undefined ? Boolean(productAttributes.kosher) : false,
+                        organic: productAttributes.organic !== undefined ? Boolean(productAttributes.organic) : false,
+                        quebecProduct: productAttributes.quebecProduct !== undefined ? Boolean(productAttributes.quebecProduct) : false,
+                        allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+                    };
+
                     const productData = {
                         id: product._id.toString(),
                         name: sanitizeHtml(String(product.name || '')),
@@ -186,7 +201,9 @@ export async function getServerSideProps(context) {
                         isDefault: Boolean(product.isDefault),
                         productId: String(product.productId || ''),
                         order: Number(product.order) || 0,
-                        hasCustomPrice: hasCustomPrice
+                        hasCustomPrice: hasCustomPrice,
+                        attributes: sanitizedAttributes,
+                        freezable: product.freezable !== undefined ? Boolean(product.freezable) : false // Keep for backward compatibility, ensure never undefined
                     }
 
                     // Debug: Log products with ingredient/nutrition images
@@ -209,6 +226,21 @@ export async function getServerSideProps(context) {
             products = productDocs
                 .filter(product => product && product._id && product.name)
                 .map(product => {
+                    // Get attributes from product, ensuring all fields are present
+                    const productAttributes = product.attributes || {};
+                    const sanitizedAttributes = {
+                        freezable: productAttributes.freezable !== undefined ? Boolean(productAttributes.freezable) : (product.freezable !== undefined ? Boolean(product.freezable) : false),
+                        glutenFree: productAttributes.glutenFree !== undefined ? Boolean(productAttributes.glutenFree) : false,
+                        vegetarian: productAttributes.vegetarian !== undefined ? Boolean(productAttributes.vegetarian) : false,
+                        vegan: productAttributes.vegan !== undefined ? Boolean(productAttributes.vegan) : false,
+                        nutFree: productAttributes.nutFree !== undefined ? Boolean(productAttributes.nutFree) : false,
+                        halal: productAttributes.halal !== undefined ? Boolean(productAttributes.halal) : false,
+                        kosher: productAttributes.kosher !== undefined ? Boolean(productAttributes.kosher) : false,
+                        organic: productAttributes.organic !== undefined ? Boolean(productAttributes.organic) : false,
+                        quebecProduct: productAttributes.quebecProduct !== undefined ? Boolean(productAttributes.quebecProduct) : false,
+                        allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+                    };
+
                     const productData = {
                         id: product._id.toString(),
                         name: sanitizeHtml(String(product.name || '')),
@@ -222,7 +254,9 @@ export async function getServerSideProps(context) {
                         isDefault: Boolean(product.isDefault),
                         productId: String(product.productId || ''),
                         order: Number(product.order) || 0,
-                        hasCustomPrice: false
+                        hasCustomPrice: false,
+                        attributes: sanitizedAttributes,
+                        freezable: product.freezable !== undefined ? Boolean(product.freezable) : false // Keep for backward compatibility, ensure never undefined
                     }
 
                     // Debug: Log products with ingredient/nutrition images
@@ -302,7 +336,33 @@ export async function getServerSideProps(context) {
                     schoolName: schoolName,
                     deliveryOptions: normalizedDeliveryOptions
                 },
-                initialProducts: products
+                initialProducts: products.map(p => {
+                    // Ensure attributes are always included and properly serialized
+                    // Remove undefined values from the product object to avoid serialization errors
+                    const cleanProduct = Object.fromEntries(
+                        Object.entries(p).filter(([_, value]) => value !== undefined)
+                    );
+
+                    const existingAttributes = cleanProduct.attributes && typeof cleanProduct.attributes === 'object' ? cleanProduct.attributes : {};
+                    const productFreezable = cleanProduct.freezable !== undefined ? Boolean(cleanProduct.freezable) : false;
+
+                    return {
+                        ...cleanProduct,
+                        attributes: {
+                            freezable: existingAttributes.freezable !== undefined ? Boolean(existingAttributes.freezable) : productFreezable,
+                            glutenFree: existingAttributes.glutenFree !== undefined ? Boolean(existingAttributes.glutenFree) : false,
+                            vegetarian: existingAttributes.vegetarian !== undefined ? Boolean(existingAttributes.vegetarian) : false,
+                            vegan: existingAttributes.vegan !== undefined ? Boolean(existingAttributes.vegan) : false,
+                            nutFree: existingAttributes.nutFree !== undefined ? Boolean(existingAttributes.nutFree) : false,
+                            halal: existingAttributes.halal !== undefined ? Boolean(existingAttributes.halal) : false,
+                            kosher: existingAttributes.kosher !== undefined ? Boolean(existingAttributes.kosher) : false,
+                            organic: existingAttributes.organic !== undefined ? Boolean(existingAttributes.organic) : false,
+                            quebecProduct: existingAttributes.quebecProduct !== undefined ? Boolean(existingAttributes.quebecProduct) : false,
+                            allergens: existingAttributes.allergens !== undefined ? String(existingAttributes.allergens) : ''
+                        },
+                        freezable: productFreezable // Ensure freezable is always a boolean, never undefined
+                    };
+                })
             }
         }
     } catch (error) {

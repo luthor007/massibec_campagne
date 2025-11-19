@@ -83,17 +83,17 @@ export default function Overview() {
 
   const filteredLivraisons = useMemo(() => {
     return livraisons.filter(livraison => {
-      const matchEcole = !searchFilters.ecole || 
+      const matchEcole = !searchFilters.ecole ||
         (livraison?.school || '').toLowerCase().includes(searchFilters.ecole.toLowerCase());
-      
-      const matchStatut = searchFilters.statut === 'tous' || 
+
+      const matchStatut = searchFilters.statut === 'tous' ||
         livraison?.status === searchFilters.statut;
-      
-      const dateMatch = (!searchFilters.dateDebut || 
+
+      const dateMatch = (!searchFilters.dateDebut ||
         new Date(livraison?.createdAt || '') >= new Date(searchFilters.dateDebut)) &&
-        (!searchFilters.dateFin || 
-        new Date(livraison?.createdAt || '') <= new Date(searchFilters.dateFin));
-      
+        (!searchFilters.dateFin ||
+          new Date(livraison?.createdAt || '') <= new Date(searchFilters.dateFin));
+
       return matchEcole && matchStatut && dateMatch;
     });
   }, [livraisons, searchFilters]);
@@ -139,12 +139,12 @@ export default function Overview() {
       });
 
       if (!response.ok) throw new Error('Failed to update order');
-      
+
       // Mettre à jour l'état local
-      setLivraisons(livraisons.map(order => 
+      setLivraisons(livraisons.map(order =>
         order._id === orderId ? { ...order, products: updatedProducts } : order
       ));
-      
+
       toast({
         title: "Commande mise à jour",
         description: "Les produits ont été mis à jour avec succès.",
@@ -170,7 +170,7 @@ export default function Overview() {
       if (!response.ok) throw new Error('Failed to delete order');
 
       setLivraisons(livraisons.filter(order => order._id !== orderId));
-      
+
       toast({
         title: "Commande supprimée",
         description: "La commande a été supprimée avec succès.",
@@ -193,12 +193,12 @@ export default function Overview() {
       if (!livraison.user) {
         throw new Error('No user ID associated with this order');
       }
-      
+
       const userResponse = await fetch(`/api/users/${livraison.user}`);
       if (!userResponse.ok) {
         throw new Error('Failed to fetch user data');
       }
-      
+
       const userInfo = await userResponse.json();
       setSelectedLivraison({
         ...livraison,
@@ -235,13 +235,13 @@ export default function Overview() {
         ...prev,
         products
       }));
-      
+
       toast({
         title: "Produits mis à jour",
         description: "Les produits ont été mis à jour avec succès.",
         duration: 3000,
       });
-      
+
       setEditingProducts(false);
     } catch (error) {
       toast({
@@ -310,7 +310,7 @@ export default function Overview() {
                   <SelectItem value="tous">Tous</SelectItem>
                   <SelectItem value="En attente">En attente</SelectItem>
                   <SelectItem value="Payé">Payé</SelectItem>
-                  <SelectItem value="Commander">Commander</SelectItem>
+                  <SelectItem value="Commandé">Commandé</SelectItem>
                   <SelectItem value="Complété">Complété</SelectItem>
                 </SelectContent>
               </Select>
@@ -347,28 +347,28 @@ export default function Overview() {
                   <TableRow key={index}>
                     <TableCell>{livraison?.school || 'N/A'}</TableCell>
                     <TableCell>
-                      <Badge 
+                      <Badge
                         variant={
                           livraison?.status === 'En attente' ? 'default' :
-                          livraison?.status === 'Payé' ? 'secondary' :
-                          livraison?.status === 'Commander' ? 'primary' :
-                          'outline'
+                            livraison?.status === 'Payé' ? 'secondary' :
+                              livraison?.status === 'Commandé' ? 'primary' :
+                                'outline'
                         }
                       >
                         {livraison?.status || 'N/A'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {livraison?.createdAt ? 
-                        new Date(livraison.createdAt).toLocaleDateString() : 
+                      {livraison?.createdAt ?
+                        new Date(livraison.createdAt).toLocaleDateString() :
                         'N/A'
                       }
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDetailsClick(livraison)}
                         >
                           Détails
@@ -405,7 +405,7 @@ export default function Overview() {
                   {isEditing ? 'Modifier la Commande' : 'Détails de la Commande'}
                 </DialogTitle>
               </DialogHeader>
-              
+
               {selectedLivraison && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-6">
@@ -427,7 +427,7 @@ export default function Overview() {
                             <SelectContent>
                               <SelectItem value="En attente">En attente</SelectItem>
                               <SelectItem value="Payé">Payé</SelectItem>
-                              <SelectItem value="Commander">Commander</SelectItem>
+                              <SelectItem value="Commandé">Commandé</SelectItem>
                               <SelectItem value="Complété">Complété</SelectItem>
                             </SelectContent>
                           </Select>

@@ -767,11 +767,16 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
         <p>
           <strong>Destinataire :</strong> {sellerName}<br />
           <strong>Adresse courriel :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a><br />
-          {formData.autoDeposit ? null : <><strong>Question de sécurité :</strong> {firstName}<br /></>}
-          {formData.autoDeposit ? null : <><strong>Réponse :</strong> <a href={`mailto:${customerEmail}`}>{customerEmail}</a><br /></>}
+          {formData.autoDeposit ? null : <><strong>Question de sécurité :</strong> Numéro de commande<br /></>}
+          {formData.autoDeposit ? null : <><strong>Réponse :</strong> Cmd-{orderId}<br /></>}
           <strong>Montant :</strong> {totalAmount.toFixed(2)} $<br />
           {formData.autoDeposit ? <><strong>Message :</strong> #{orderId}</> : null}
         </p>
+        {formData.autoDeposit ? null : (
+          <p style={{ fontSize: '14px', color: '#666', fontStyle: 'italic', marginTop: '10px' }}>
+            <strong>Note :</strong> Si vous n'avez pas activé le dépôt automatique, utilisez Cmd-{orderId} comme réponse à la question de sécurité.
+          </p>
+        )}
 
         <h3 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Détails de la commande :</h3>
         <p><strong>Nom du vendeur :</strong> {sellerName}</p>

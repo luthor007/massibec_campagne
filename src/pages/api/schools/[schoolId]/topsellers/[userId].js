@@ -2,6 +2,7 @@ import dbConnect from '../../../../../lib/mongodb';
 import User from '../../../../../models/User';
 import Order from '../../../../../models/Order';
 import School from '../../../../../models/School';
+import mongoose from 'mongoose';
 import { calculateStudentEarnings, getCampaignDataWithFallback } from '../../../../../utils/campaignHelpers';
 
 const profitRewards = {
@@ -119,6 +120,32 @@ const schoolYears = {
   '2026-2027': { startDate: '2026-08-01', endDate: '2027-07-31' }
 };
 
+const buildCampaignMatchConditions = (campaignId) => {
+  if (!campaignId || !mongoose.Types.ObjectId.isValid(campaignId)) {
+    return [];
+  }
+
+  const campaignObjectId = new mongoose.Types.ObjectId(campaignId);
+  const idAsString = campaignObjectId.toString();
+
+  return [
+    { campaignId: campaignObjectId },
+    { campaignId: idAsString },
+    { campaignId },
+    { campaignId: null },
+    { campaignId: { $exists: false } }
+  ];
+};
+
+const buildSchoolFilter = (schoolId) => {
+  if (!schoolId) return null;
+  const values = [schoolId.toString()];
+  if (mongoose.Types.ObjectId.isValid(schoolId)) {
+    values.push(new mongoose.Types.ObjectId(schoolId));
+  }
+  return values.length > 1 ? { $in: values } : values[0];
+};
+
 export default async function handler(req, res) {
   const { schoolId, userId } = req.query;
   const { schoolYear = '2025-2026', campaignId } = req.body;
@@ -126,28 +153,100 @@ export default async function handler(req, res) {
   try {
     await dbConnect();
 
-    // Fetch the school
-    const school = await School.findById(schoolId);
+    // IMPORTANT: When campaignId is provided, get school from campaign, not from schoolId parameter
+    // The schoolId parameter may be the user's school (deprecated), but we need the campaign's school
+    let finalSchoolId = schoolId;
+    let school = null;
+
+    if (campaignId) {
+      // Get school from campaign
+      const Campaign = (await import('../../../../../models/Campaign')).default;
+      const campaign = await Campaign.findById(campaignId).lean();
+      if (campaign && campaign.school) {
+        finalSchoolId = campaign.school.toString();
+        school = await School.findById(finalSchoolId);
+      }
+    }
+
+    // Fallback to schoolId parameter if campaign not found or no campaignId provided
+    if (!school) {
+      school = await School.findById(schoolId);
+    }
+
     if (!school) {
       return res.status(404).json({ message: 'School not found' });
     }
 
-    // Get date range for the selected school year
-    const yearData = schoolYears[schoolYear];
-    if (!yearData) {
-      return res.status(400).json({ message: 'Invalid school year' });
+    // If campaignId is provided, use campaign dates instead of school year dates
+    let startDate, endDate;
+    if (campaignId) {
+      const Campaign = (await import('../../../../../models/Campaign')).default;
+      const campaign = await Campaign.findById(campaignId).lean();
+      if (campaign) {
+        // Use campaign dates if available, otherwise use a wide range
+        startDate = campaign.startDate ? new Date(campaign.startDate) : new Date('2020-01-01');
+        // For end date, use campaign endDate or deliveryDate, or extend far into future
+        endDate = campaign.endDate
+          ? new Date(campaign.endDate)
+          : (campaign.deliveryDate
+            ? new Date(campaign.deliveryDate)
+            : new Date('2099-12-31'));
+        // Add some buffer after campaign end to include all orders
+        endDate.setDate(endDate.getDate() + 30); // 30 days buffer
+      } else {
+        // Campaign not found, fall back to school year
+        const yearData = schoolYears[schoolYear];
+        if (!yearData) {
+          return res.status(400).json({ message: 'Invalid school year' });
+        }
+        startDate = new Date(yearData.startDate);
+        endDate = new Date(yearData.endDate);
+      }
+    } else {
+      // No campaignId, use school year dates
+      const yearData = schoolYears[schoolYear];
+      if (!yearData) {
+        return res.status(400).json({ message: 'Invalid school year' });
+      }
+      startDate = new Date(yearData.startDate);
+      endDate = new Date(yearData.endDate);
     }
 
-    const startDate = new Date(yearData.startDate);
-    const endDate = new Date(yearData.endDate);
+    // Fetch all participants in the campaign (students AND school_managers who joined as sellers)
+    // IMPORTANT: When campaignId is provided, we should find participants by campaignId, not by schoolId
+    // This allows school_managers who joined campaigns from other schools to see the correct leaderboard
+    let participants = [];
+    if (campaignId) {
+      // Find all users (students AND school_managers) who have joined this specific campaign
+      const campaignObjectId = mongoose.Types.ObjectId.isValid(campaignId)
+        ? new mongoose.Types.ObjectId(campaignId)
+        : campaignId;
 
-    // Fetch all students in the school (both legacy school field and campaign-based)
-    const students = await User.find({
-      $or: [
-        { school: schoolId, role: 'student' },
-        { 'campaigns.schoolId': schoolId, role: 'student' }
-      ]
-    });
+      participants = await User.find({
+        // Include both students and school_managers who joined the campaign
+        $or: [
+          { 'campaigns.campaignId': campaignObjectId },
+          { 'campaigns.campaignId': campaignId },
+          { activeCampaignId: campaignObjectId },
+          { activeCampaignId: campaignId }
+        ]
+      });
+
+      console.log(`[TopSellers] Found ${participants.length} participants for campaign ${campaignId}:`,
+        participants.map(p => ({ id: p._id.toString(), name: p.name, role: p.role }))
+      );
+    } else {
+      // Fallback: find students by schoolId (legacy behavior)
+      participants = await User.find({
+        $or: [
+          { school: schoolId, role: 'student' },
+          { 'campaigns.schoolId': schoolId, role: 'student' }
+        ]
+      });
+    }
+
+    // Rename for clarity - these are participants, not just students
+    const students = participants;
     if (!students || students.length === 0) {
       return res.status(200).json({
         topPerformers: [],
@@ -158,7 +257,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // Calculate total earnings for each student (filtered by school year and campaign)
+    // Verify the current user is in the participants list
+    const currentUserInList = students.find(s => s._id.toString() === userId);
+    if (!currentUserInList) {
+      console.warn(`[TopSellers] User ${userId} not found in campaign ${campaignId || 'N/A'} participants list`);
+    } else {
+      console.log(`[TopSellers] User ${userId} (${currentUserInList.name}, role: ${currentUserInList.role}) found in participants list`);
+    }
+
+    // Calculate total earnings for each participant (filtered by campaign dates and campaignId)
     const studentData = await Promise.all(students.map(async student => {
       const orderQuery = {
         user: student._id,
@@ -168,18 +275,43 @@ export default async function handler(req, res) {
         }
       };
 
-      // Filter by campaign if provided
+      // IMPORTANT: Don't filter by school when campaignId is provided
+      // Orders belong to the campaign's school, not the user's school
+      // This allows school_managers to see their orders from campaigns of other schools
+      if (!campaignId) {
+        // Only filter by school if no campaignId (legacy behavior)
+        const schoolFilter = buildSchoolFilter(school?._id?.toString() || schoolId);
+        if (schoolFilter) {
+          orderQuery.school = schoolFilter;
+        }
+      }
+
+      // Filter by campaignId - convert to ObjectId if needed
       if (campaignId) {
-        orderQuery.$or = [
-          { campaignId: campaignId },
-          { campaignId: { $exists: false } },
-          { campaignId: null }
-        ];
+        const campaignObjectId = mongoose.Types.ObjectId.isValid(campaignId)
+          ? new mongoose.Types.ObjectId(campaignId)
+          : campaignId;
+        orderQuery.campaignId = campaignObjectId;
       }
 
       const orders = await Order.find(orderQuery);
+
+      // Debug logging for the current user
+      if (student._id.toString() === userId) {
+        console.log(`[TopSellers] User ${userId} orders:`, {
+          orderCount: orders.length,
+          dateRange: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
+          campaignId,
+          orderQuery,
+          orderDates: orders.map(o => ({ date: o.createdAt, campaignId: o.campaignId }))
+        });
+      }
+
       const totalEarnings = await calculateTotalEarnings(orders, school);
-      const totalProductsSold = orders.reduce((acc, order) => acc + order.products.reduce((sum, p) => sum + p.quantity, 0), 0);
+      const totalProductsSold = orders.reduce((acc, order) => {
+        const products = Array.isArray(order.products) ? order.products : [];
+        return acc + products.reduce((sum, p) => sum + (p.quantity || 0), 0);
+      }, 0);
 
       // Calculate total sales including donations (products before discount + all donations)
       const totalSales = orders.reduce((sum, order) => {
@@ -201,6 +333,22 @@ export default async function handler(req, res) {
       const category = determineUserCategory(totalEarnings);
       return { student, totalEarnings, totalProductsSold, totalSales, category };
     }));
+
+    // Ensure all students are included, even those with 0 orders
+    // This ensures the current user is always in the list
+    const studentDataIds = new Set(studentData.map(s => s.student._id.toString()));
+    const missingStudents = students.filter(s => !studentDataIds.has(s._id.toString()));
+
+    // Add missing students with 0 earnings
+    missingStudents.forEach(student => {
+      studentData.push({
+        student,
+        totalEarnings: 0,
+        totalProductsSold: 0,
+        totalSales: 0,
+        category: 'Noob'
+      });
+    });
 
     // Sort by total earnings (descending), then alphabetically by name (ascending)
     const sortedStudentData = studentData.sort((a, b) => {
@@ -226,10 +374,31 @@ export default async function handler(req, res) {
 
     // Find the current user's rank and earnings
     const currentUserData = sortedStudentData.find(data => data.student._id.toString() === userId);
-    const userRank = sortedStudentData.findIndex(data => data.student._id.toString() === userId) + 1;
+    const userRankIndex = sortedStudentData.findIndex(data => data.student._id.toString() === userId);
+    const userRank = userRankIndex >= 0 ? userRankIndex + 1 : null;
 
+    console.log(`[TopSellers] Results for user ${userId}:`, {
+      totalStudents: sortedStudentData.length,
+      userInList: !!currentUserData,
+      userRank,
+      topPerformersCount: topPerformers.length,
+      dateRange: { startDate, endDate },
+      campaignId
+    });
+
+    // If user has no orders, they won't be in sortedStudentData
+    // But we should still return the leaderboard with other students
     if (!currentUserData) {
-      return res.status(404).json({ message: 'User not found' });
+      // User not found in sorted data - they might have no orders
+      // Return leaderboard anyway, but with null rank
+      console.warn(`[TopSellers] User ${userId} not found in sorted data - no orders found`);
+      return res.status(200).json({
+        topPerformers,
+        userRank: null,
+        userTotalEarnings: '0.00',
+        userTotalProductsSold: 0,
+        userCategory: 'Noob'
+      });
     }
 
     // Respond with the top performers, the user's rank/earnings, and their category

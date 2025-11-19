@@ -38,7 +38,7 @@ export default function DashboardManager() {
   const [schoolListRefreshTrigger, setSchoolListRefreshTrigger] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [justCreatedCampaign, setJustCreatedCampaign] = useState(false);
-  
+
   // Initialize selectedCampaignId from localStorage or null
   const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -58,11 +58,11 @@ export default function DashboardManager() {
   // Custom hooks for data management
   // Only pass selectedSchoolId if it exists, otherwise let useSchoolData fetch from user's associations
   const schoolIdParam = selectedSchoolId || undefined;
-  const { 
-    school, 
-    loading: schoolLoading, 
-    error: schoolError, 
-    refreshSchoolData 
+  const {
+    school,
+    loading: schoolLoading,
+    error: schoolError,
+    refreshSchoolData
   } = useSchoolData(schoolIdParam);
 
   // Clear invalid selectedSchoolId if school data fetch fails or if school ID doesn't match
@@ -115,11 +115,11 @@ export default function DashboardManager() {
     }
   }, [schoolError, selectedSchoolId, school, refreshSchoolData]);
 
-  const { 
-    campaigns: allCampaigns, 
-    campaignsLoading, 
-    campaignsError, 
-    refreshCampaigns 
+  const {
+    campaigns: allCampaigns,
+    campaignsLoading,
+    campaignsError,
+    refreshCampaigns
   } = useCampaigns(session?.user?.id);
 
   // Filter campaigns by selected school if a school is selected
@@ -130,11 +130,11 @@ export default function DashboardManager() {
   // Get the selected campaign
   const activeCampaign = campaigns?.find(campaign => campaign._id?.toString() === selectedCampaignId?.toString()) || null;
 
-  const { 
-    stats, 
-    statsLoading, 
-    statsError, 
-    refreshStats 
+  const {
+    stats,
+    statsLoading,
+    statsError,
+    refreshStats
   } = useCampaignStats(activeCampaign?._id);
 
   // Redirect if not authenticated
@@ -208,7 +208,7 @@ export default function DashboardManager() {
     try {
       // Check if we're already in student preview mode
       const currentViewMode = typeof window !== 'undefined' ? localStorage.getItem('viewMode') : null;
-      
+
       if (currentViewMode === 'student_preview') {
         // Return to manager dashboard
         if (typeof window !== 'undefined') {
@@ -234,60 +234,60 @@ export default function DashboardManager() {
   // Handle campaign creation
   const handleCampaignCreated = async (newCampaign) => {
     console.log('handleCampaignCreated called with:', newCampaign);
-    
+
     if (!newCampaign?._id) {
       console.error('No campaign ID in response:', newCampaign);
       toast.error('Erreur: La campagne créée ne contient pas d\'ID');
       return;
     }
-    
+
     // Mark that we just created a campaign to prevent welcome modal from showing
     setJustCreatedCampaign(true);
     setShowWelcomeModal(false); // Hide welcome modal immediately
-    
+
     const campaignId = newCampaign._id.toString();
     console.log('Setting selected campaign ID to:', campaignId);
-    
+
     // Set the selected campaign ID immediately
     setSelectedCampaignId(campaignId);
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedCampaignId', campaignId);
     }
-    
+
     setActiveTab('overview');
-    
+
     // Refresh campaigns with retry logic
     let retries = 5;
     while (retries > 0) {
       // Wait before refreshing (longer delay for first refresh)
       await new Promise(resolve => setTimeout(resolve, retries === 5 ? 1500 : 1000));
-      
+
       console.log(`Refreshing campaigns (attempt ${6 - retries}/5)...`);
-      
+
       // Refresh campaigns
       try {
         await refreshCampaigns();
-        
+
         // Wait a bit for state to update
         await new Promise(resolve => setTimeout(resolve, 500));
-        
+
         // Check if we now have campaigns (this will be checked by the useEffect)
         // We continue to give the API time to sync
       } catch (error) {
         console.error('Error refreshing campaigns:', error);
       }
-      
+
       retries--;
     }
-    
+
     console.log('Campaign creation handling complete');
-    
+
     // Reset the flag after a delay to allow the campaigns to load
     setTimeout(() => {
       setJustCreatedCampaign(false);
       console.log('Reset justCreatedCampaign flag');
     }, 5000);
-    
+
     toast.success('Campagne créée avec succès !');
   };
 
@@ -311,24 +311,24 @@ export default function DashboardManager() {
       console.log('Skipping welcome modal - campaign just created');
       return;
     }
-    
+
     // Only evaluate after all data has finished loading
     if (schoolLoading || campaignsLoading) {
       console.log('Still loading:', { schoolLoading, campaignsLoading });
       return; // Don't show/hide modal while still loading
     }
-    
+
     const profileIsCompleted = school?.profileCompleted === true;
-    
-    console.log('Campaigns loaded:', { 
-      campaignsCount: campaigns?.length || 0, 
-      activeTab, 
+
+    console.log('Campaigns loaded:', {
+      campaignsCount: campaigns?.length || 0,
+      activeTab,
       showOnboardingWizard,
       hasSchool: !!school,
       profileIsCompleted,
       justCreatedCampaign
     });
-    
+
     // Don't show welcome modal if onboarding wizard should be shown (profile not completed)
     // Only show modal if profile is completed, no campaigns exist, and wizard is not shown
     if (school && profileIsCompleted && campaigns && campaigns.length === 0 && activeTab !== 'create' && !showOnboardingWizard && !justCreatedCampaign) {
@@ -350,13 +350,13 @@ export default function DashboardManager() {
       console.log('Still loading, skipping wizard check:', { schoolLoading, campaignsLoading, status });
       return; // Don't show/hide wizard while still loading
     }
-    
+
     // Explicit check: profile is NOT completed if:
     // 1. school exists AND profileCompleted is explicitly false
     // 2. school exists AND profileCompleted is undefined/null (defaults to false)
     const profileIsCompleted = school?.profileCompleted === true;
     const profileNotCompleted = school && school.profileCompleted !== true; // true only if explicitly set to true
-    
+
     console.log('Onboarding wizard check:', {
       hasSession: !!session?.user,
       hasSchool: !!school,
@@ -370,7 +370,7 @@ export default function DashboardManager() {
       showOnboardingWizard,
       schoolError: schoolError?.message
     });
-    
+
     // Show wizard if: user is logged in, school exists, profile is NOT completed, wizard not already showing
     if (session?.user && school && profileNotCompleted && !showOnboardingWizard) {
       console.log('✅ Showing onboarding wizard - profile not completed');
@@ -388,11 +388,11 @@ export default function DashboardManager() {
   // Handle campaign update
   const handleCampaignUpdate = async (updatedCampaign) => {
     console.log('handleCampaignUpdate called with:', updatedCampaign);
-    
+
     // Refresh campaigns to get updated data
     await refreshCampaigns();
     await refreshStats();
-    
+
     // If updated campaign is provided, ensure it's selected
     if (updatedCampaign && updatedCampaign._id) {
       const campaignId = updatedCampaign._id.toString();
@@ -400,7 +400,7 @@ export default function DashboardManager() {
         setSelectedCampaignId(campaignId);
       }
     }
-    
+
     toast.success('Campagne mise à jour');
   };
 
@@ -436,24 +436,24 @@ export default function DashboardManager() {
   }
 
   if (schoolError || campaignsError) {
-  return (
+    return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center max-w-md">
           <div className="text-red-600 mb-4">
             <School className="h-16 w-16 mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">Erreur de chargement</h2>
             <p className="text-sm">{schoolError || campaignsError}</p>
-                  </div>
-          <Button onClick={handleRefresh} variant="outline">
-                <RefreshCw className="h-4 w-4 mr-2" />
-            Réessayer
-            </Button>
           </div>
+          <Button onClick={handleRefresh} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Réessayer
+          </Button>
         </div>
+      </div>
     );
   }
-                          
-                          return (
+
+  return (
     <>
       <Head>
         <title>Dashboard Manager - {school?.name || 'École'}</title>
@@ -478,17 +478,17 @@ export default function DashboardManager() {
               </div>
 
               {/* Mobile menu button - moved to right */}
-                <button
-                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="lg:hidden p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ml-2"
-                  aria-label="Toggle menu"
-                >
-                  {mobileMenuOpen ? (
-                    <X className="h-5 w-5" />
-                  ) : (
-                    <Menu className="h-5 w-5" />
-                  )}
-                </button>
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? (
+                  <X className="h-5 w-5" />
+                ) : (
+                  <Menu className="h-5 w-5" />
+                )}
+              </button>
 
               {/* Desktop user menu */}
               <div className="hidden lg:flex items-center space-x-3">
@@ -499,9 +499,13 @@ export default function DashboardManager() {
                 </div>
 
                 {/* Switch to Vendeur Portal Button */}
-                <Button 
-                  onClick={handleSwitchToBoutique} 
-                  variant="outline" 
+                <Button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSwitchToBoutique();
+                  }}
+                  variant="outline"
                   size="sm"
                   className="border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400 transition-all duration-200 shadow-sm hover:shadow-md"
                 >
@@ -512,8 +516,8 @@ export default function DashboardManager() {
                 {/* Profile Menu Dropdown with School Selector */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       className="flex items-center space-x-2 px-3 py-2 h-auto hover:bg-gray-100 transition-all duration-200"
                     >
@@ -535,7 +539,7 @@ export default function DashboardManager() {
                       <div className="text-sm font-semibold text-gray-900">{session.user.name}</div>
                       <div className="text-xs text-gray-500 truncate">{session.user.email}</div>
                     </div>
-                    
+
                     {/* School Selector in Dropdown */}
                     <div className="px-3 py-3 border-b border-gray-100">
                       <MultiSchoolSelector
@@ -570,7 +574,7 @@ export default function DashboardManager() {
                       />
                     </div>
 
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => setActiveTab('settings')}
                       className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 focus:bg-gray-50 py-2.5"
                     >
@@ -578,7 +582,7 @@ export default function DashboardManager() {
                       <span className="text-sm">Profil</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-gray-100" />
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={handleLogout}
                       className="flex items-center space-x-2 cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50 py-2.5"
                     >
@@ -596,7 +600,7 @@ export default function DashboardManager() {
         {mobileMenuOpen && (
           <>
             {/* Overlay backdrop */}
-            <div 
+            <div
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
               onClick={() => setMobileMenuOpen(false)}
             />
@@ -647,11 +651,11 @@ export default function DashboardManager() {
                       }
                     }}
                   />
-              </div>
+                </div>
 
                 {/* Portail Organisation */}
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   className="w-full justify-start border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
                   disabled
@@ -661,12 +665,16 @@ export default function DashboardManager() {
                 </Button>
 
                 {/* Portail Vendeur */}
-                <Button 
-                  onClick={() => {
-                    handleSwitchToBoutique();
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setMobileMenuOpen(false);
+                    // Use setTimeout to ensure menu closes before navigation
+                    setTimeout(() => {
+                      handleSwitchToBoutique();
+                    }, 100);
                   }}
-                  variant="outline" 
+                  variant="outline"
                   size="sm"
                   className="w-full justify-start border-purple-300 text-purple-700 hover:bg-purple-50 hover:border-purple-400"
                 >
@@ -676,7 +684,8 @@ export default function DashboardManager() {
 
                 {/* Profile Info - Clickable */}
                 <Button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     // Navigate to settings tab which contains profile
                     setActiveTab('settings');
                     setMobileMenuOpen(false);
@@ -698,12 +707,13 @@ export default function DashboardManager() {
                 </Button>
 
                 {/* Logout */}
-                <Button 
-                  onClick={() => {
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     handleLogout();
                     setMobileMenuOpen(false);
                   }}
-                  variant="ghost" 
+                  variant="ghost"
                   size="sm"
                   className="w-full justify-start text-red-600 hover:bg-red-50"
                 >
@@ -714,7 +724,7 @@ export default function DashboardManager() {
             </div>
           </>
         )}
-                    
+
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
           {/* Error Messages */}
@@ -725,17 +735,17 @@ export default function DashboardManager() {
                   <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
-                          </div>
+                </div>
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-red-800">
                     Erreur de chargement des statistiques
                   </h3>
                   <div className="mt-2 text-sm text-red-700">
                     <p>{statsError}</p>
-                          </div>
-                        </div>
-                      </div>
-                            </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Tabs */}
@@ -744,43 +754,43 @@ export default function DashboardManager() {
               {/* Mobile: Icons only tabs - no overflow */}
               <div className="lg:hidden overflow-hidden">
                 <TabsList className="grid grid-cols-6 w-full bg-gray-50/50 h-14 p-1 gap-1">
-                  <TabsTrigger 
-                    value="overview" 
+                  <TabsTrigger
+                    value="overview"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
                     title="Vue d'ensemble"
                   >
                     <Eye className="h-5 w-5" />
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="edit" 
+                  <TabsTrigger
+                    value="edit"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
                     title="Modifier"
                   >
                     <Edit className="h-5 w-5" />
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="participants" 
+                  <TabsTrigger
+                    value="participants"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
                     title="Participants"
                   >
                     <Users className="h-5 w-5" />
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="rapport" 
+                  <TabsTrigger
+                    value="rapport"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
                     title="Rapports"
                   >
                     <FileText className="h-5 w-5" />
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="create" 
+                  <TabsTrigger
+                    value="create"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
                     title="Créer"
                   >
                     <Plus className="h-5 w-5" />
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="settings" 
+                  <TabsTrigger
+                    value="settings"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 transition-all duration-200 hover:bg-white/50 rounded-lg p-2"
                     title="Paramètres & Équipe"
                   >
@@ -792,43 +802,43 @@ export default function DashboardManager() {
               {/* Desktop: Grid layout */}
               <div className="hidden lg:block">
                 <TabsList className="grid w-full grid-cols-6 bg-gray-50/50 h-14 p-1">
-                  <TabsTrigger 
-                    value="overview" 
+                  <TabsTrigger
+                    value="overview"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                   >
                     <Eye className="h-4 w-4 mr-2" />
                     Vue d'ensemble
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="edit" 
+                  <TabsTrigger
+                    value="edit"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     Modifier
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="participants" 
+                  <TabsTrigger
+                    value="participants"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                   >
                     <Users className="h-4 w-4 mr-2" />
                     Participants
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="rapport" 
+                  <TabsTrigger
+                    value="rapport"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                   >
                     <FileText className="h-4 w-4 mr-2" />
                     Rapports
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="create" 
+                  <TabsTrigger
+                    value="create"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Créer
                   </TabsTrigger>
-                  <TabsTrigger 
-                    value="settings" 
+                  <TabsTrigger
+                    value="settings"
                     className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:text-blue-600 font-medium transition-all duration-200 hover:bg-white/50 rounded-lg"
                   >
                     <Settings className="h-4 w-4 mr-2" />
@@ -839,43 +849,43 @@ export default function DashboardManager() {
             </div>
 
             <TabsContent value="overview" className="space-y-6">
-              <CampaignOverview 
+              <CampaignOverview
                 campaign={activeCampaign}
                 stats={stats}
                 loading={statsLoading}
                 school={school}
               />
-          </TabsContent>
+            </TabsContent>
 
             <TabsContent value="edit" className="space-y-6">
-              <CampaignEditor 
+              <CampaignEditor
                 campaign={activeCampaign}
                 onUpdate={handleCampaignUpdate}
                 loading={statsLoading}
               />
-          </TabsContent>
+            </TabsContent>
 
             <TabsContent value="participants" className="space-y-6">
-              <ParticipantsList 
+              <ParticipantsList
                 campaign={activeCampaign}
                 onRefresh={handleRefresh}
                 school={school}
               />
-          </TabsContent>
+            </TabsContent>
 
             <TabsContent value="rapport" className="space-y-6">
-              <RapportView 
+              <RapportView
                 campaign={activeCampaign}
                 school={school}
               />
-          </TabsContent>
+            </TabsContent>
 
             <TabsContent value="create" className="space-y-6">
-              <CampaignCreator 
+              <CampaignCreator
                 onCampaignCreated={handleCampaignCreated}
                 school={school}
               />
-          </TabsContent>
+            </TabsContent>
 
             <TabsContent value="settings" className="space-y-6">
               {schoolLoading ? (
@@ -885,8 +895,8 @@ export default function DashboardManager() {
                 </div>
               ) : school?.id ? (
                 <div className="space-y-6">
-                  <SchoolSettings 
-                    school={school} 
+                  <SchoolSettings
+                    school={school}
                     onUpdate={refreshSchoolData}
                   />
                   <TeamManagement schoolId={school.id} />
@@ -896,11 +906,11 @@ export default function DashboardManager() {
                   <p className="text-red-500">Erreur: Impossible de charger les paramètres de l'école</p>
                 </div>
               )}
-          </TabsContent>
-        </Tabs>
-      </main>
-              </div>
-              
+            </TabsContent>
+          </Tabs>
+        </main>
+      </div>
+
       {/* Welcome Modal for new users */}
       <WelcomeModal
         isOpen={showWelcomeModal}

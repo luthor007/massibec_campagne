@@ -1,4 +1,5 @@
 import dbConnect from '../../../lib/mongodb';
+import mongoose from 'mongoose';
 import Order from '../../../models/Order';
 import StoreVisit from '../../../models/StoreVisit';
 import ConversionEvent from '../../../models/ConversionEvent';
@@ -32,15 +33,83 @@ export default async function handler(req, res) {
       }
     }
 
-    if (!finalStoreId && !campaignId && !schoolId) {
+    const normalizedCampaignId = campaignId ? campaignId.toString() : null;
+    const normalizedSchoolId = schoolId ? schoolId.toString() : null;
+    const normalizedStoreId = finalStoreId ? finalStoreId.toString() : null;
+
+    if (!normalizedStoreId && !normalizedCampaignId && !normalizedSchoolId) {
       return res.status(400).json({ message: 'storeId, campaignId, or schoolId required' });
     }
 
     // Build query for orders
+    // For completed campaigns, we need to include all orders regardless of campaign status
     const orderQuery = {};
-    if (finalStoreId) orderQuery.store = finalStoreId;
-    if (campaignId) orderQuery.campaignId = campaignId;
-    if (schoolId) orderQuery.school = schoolId;
+
+    // First, try to get the user from the store
+    let storeOwnerId = null;
+    if (normalizedStoreId) {
+      const Store = (await import('../../../models/Store')).default;
+      const storeDoc = await Store.findById(normalizedStoreId).lean();
+      if (storeDoc && storeDoc.user) {
+        storeOwnerId = storeDoc.user;
+      }
+    }
+
+    // Build base conditions - prioritize user over store for better accuracy
+    // IMPORTANT: When a user joins a campaign from another school, orders are associated
+    // with the campaign's school, not the user's school. So we should NOT filter by school
+    // when we have a campaignId, as it will exclude orders from campaigns of other schools.
+    const baseConditions = {};
+    if (storeOwnerId) {
+      // User is more reliable than store for finding orders
+      const ownerIdString = storeOwnerId.toString();
+      baseConditions.user = mongoose.Types.ObjectId.isValid(ownerIdString)
+        ? new mongoose.Types.ObjectId(ownerIdString)
+        : ownerIdString;
+    } else if (normalizedStoreId) {
+      // Fallback to store if user not found
+      const storeCandidates = [];
+      if (mongoose.Types.ObjectId.isValid(normalizedStoreId)) {
+        storeCandidates.push(new mongoose.Types.ObjectId(normalizedStoreId));
+      }
+      storeCandidates.push(normalizedStoreId);
+      baseConditions.store = storeCandidates.length > 1 ? { $in: storeCandidates } : storeCandidates[0];
+    }
+
+    // Only filter by school if we DON'T have a campaignId
+    // When campaignId is present, orders belong to the campaign's school, not the user's school
+    // This allows school_managers to see their orders from campaigns of other schools
+    if (normalizedSchoolId && !normalizedCampaignId) {
+      // School can be ObjectId string or ObjectId
+      const schoolCandidates = [normalizedSchoolId];
+      if (mongoose.Types.ObjectId.isValid(normalizedSchoolId)) {
+        schoolCandidates.push(new mongoose.Types.ObjectId(normalizedSchoolId));
+      }
+      baseConditions.school = schoolCandidates.length > 1 ? { $in: schoolCandidates } : schoolCandidates[0];
+    }
+
+    // If campaignId is provided, match orders with this campaignId
+    // Also include orders without campaignId for legacy compatibility
+    if (normalizedCampaignId) {
+      if (mongoose.Types.ObjectId.isValid(normalizedCampaignId)) {
+        const campaignObjectId = new mongoose.Types.ObjectId(normalizedCampaignId);
+        orderQuery.$or = [
+          { ...baseConditions, campaignId: campaignObjectId },
+          { ...baseConditions, campaignId: normalizedCampaignId },
+          { ...baseConditions, campaignId: null },
+          { ...baseConditions, campaignId: { $exists: false } }
+        ];
+      } else {
+        orderQuery.$or = [
+          { ...baseConditions, campaignId: normalizedCampaignId },
+          { ...baseConditions, campaignId: null },
+          { ...baseConditions, campaignId: { $exists: false } }
+        ];
+      }
+    } else {
+      // No campaignId, use base conditions directly
+      Object.assign(orderQuery, baseConditions);
+    }
 
     // Build query for visits and events
     // Match visits/events for the store, regardless of campaignId
@@ -48,45 +117,118 @@ export default async function handler(req, res) {
     const visitQuery = {};
     const eventQuery = {};
 
-    if (finalStoreId) {
+    if (normalizedStoreId) {
       // Always match by storeId first (most important filter)
-      visitQuery.storeId = finalStoreId;
-      eventQuery.storeId = finalStoreId;
+      visitQuery.storeId = normalizedStoreId;
+      eventQuery.storeId = normalizedStoreId;
 
       // If campaignId is provided, prefer visits/events with that campaignId
       // but also include visits/events without campaignId (tracked before campaignId was available)
-      if (campaignId) {
+      if (normalizedCampaignId) {
         // Use $or to match visits with this campaignId OR without campaignId (null or missing)
         visitQuery.$or = [
-          { campaignId: campaignId },
+          { campaignId: normalizedCampaignId },
           { campaignId: null },
           { campaignId: { $exists: false } }
         ];
         eventQuery.$or = [
-          { campaignId: campaignId },
+          { campaignId: normalizedCampaignId },
           { campaignId: null },
           { campaignId: { $exists: false } }
         ];
       }
       // If no campaignId, match all visits/events for this store
-    } else if (campaignId) {
+    } else if (normalizedCampaignId) {
       // StoreId not provided but campaignId is, match by campaignId
-      visitQuery.campaignId = campaignId;
-      eventQuery.campaignId = campaignId;
-    } else if (schoolId) {
+      visitQuery.campaignId = normalizedCampaignId;
+      eventQuery.campaignId = normalizedCampaignId;
+    } else if (normalizedSchoolId) {
       // Fallback: match by schoolId if no storeId or campaignId
-      visitQuery.schoolId = schoolId;
-      eventQuery.schoolId = schoolId;
+      visitQuery.schoolId = normalizedSchoolId;
+      eventQuery.schoolId = normalizedSchoolId;
     }
 
     // Fetch all data
     // Note: Using lean() returns plain JavaScript objects, but createdAt dates are still Date objects
     // We need to ensure they're properly converted to Quebec timezone
+    console.log('[DeepAnalytics] Order query:', JSON.stringify(orderQuery, null, 2));
+
+    // Also try a simpler query to debug - use user + campaignId (more reliable)
+    const simpleQuery = {};
+    if (storeOwnerId) {
+      const ownerIdString = storeOwnerId.toString();
+      simpleQuery.user = mongoose.Types.ObjectId.isValid(ownerIdString)
+        ? new mongoose.Types.ObjectId(ownerIdString)
+        : ownerIdString;
+    } else if (normalizedStoreId) {
+      simpleQuery.store = mongoose.Types.ObjectId.isValid(normalizedStoreId)
+        ? new mongoose.Types.ObjectId(normalizedStoreId)
+        : normalizedStoreId;
+    }
+    if (normalizedCampaignId && mongoose.Types.ObjectId.isValid(normalizedCampaignId)) {
+      simpleQuery.campaignId = new mongoose.Types.ObjectId(normalizedCampaignId);
+    }
+    console.log('[DeepAnalytics] Simple query (store + campaignId only):', JSON.stringify(simpleQuery, null, 2));
+
+    // Try simple query first to see if we get any results
+    const simpleOrders = await Order.find(simpleQuery).limit(5).lean();
+    console.log('[DeepAnalytics] Simple query found:', simpleOrders.length, 'orders');
+    if (simpleOrders.length > 0) {
+      console.log('[DeepAnalytics] Sample order from simple query:', {
+        _id: simpleOrders[0]._id?.toString(),
+        campaignId: simpleOrders[0].campaignId?.toString(),
+        store: simpleOrders[0].store?.toString(),
+        status: simpleOrders[0].status,
+        createdAt: simpleOrders[0].createdAt
+      });
+    }
+
     const [orders, visits, events] = await Promise.all([
       Order.find(orderQuery).lean(),
       StoreVisit.find(visitQuery).lean(),
       ConversionEvent.find(eventQuery).lean()
     ]);
+
+    console.log('[DeepAnalytics] Found orders:', orders.length, 'for storeId:', finalStoreId, 'campaignId:', campaignId);
+    if (orders.length > 0) {
+      console.log('[DeepAnalytics] Sample order:', {
+        _id: orders[0]._id?.toString(),
+        campaignId: orders[0].campaignId?.toString(),
+        status: orders[0].status,
+        createdAt: orders[0].createdAt,
+        store: orders[0].store?.toString()
+      });
+    } else {
+      // If no orders found, check if there are any orders for this store at all
+      const allStoreOrders = await Order.find({ store: simpleQuery.store }).limit(5).lean();
+      console.log('[DeepAnalytics] Total orders for this store (any campaign):', allStoreOrders.length);
+      if (allStoreOrders.length > 0) {
+        console.log('[DeepAnalytics] Sample store order:', {
+          _id: allStoreOrders[0]._id?.toString(),
+          campaignId: allStoreOrders[0].campaignId?.toString(),
+          store: allStoreOrders[0].store?.toString(),
+          status: allStoreOrders[0].status
+        });
+      } else {
+        // Try to find orders by user instead
+        // First, we need to find the user who owns this store
+        const Store = (await import('../../../models/Store')).default;
+        const storeDoc = await Store.findById(finalStoreId).lean();
+        if (storeDoc && storeDoc.user) {
+          const userOrders = await Order.find({ user: storeDoc.user }).limit(5).lean();
+          console.log('[DeepAnalytics] Total orders for this user:', userOrders.length);
+          if (userOrders.length > 0) {
+            console.log('[DeepAnalytics] Sample user order:', {
+              _id: userOrders[0]._id?.toString(),
+              campaignId: userOrders[0].campaignId?.toString(),
+              store: userOrders[0].store?.toString(),
+              user: userOrders[0].user?.toString(),
+              status: userOrders[0].status
+            });
+          }
+        }
+      }
+    }
 
     // Calculate metrics
     // For gross sales, calculate original subtotal before discount (products sum) + donations
@@ -149,6 +291,9 @@ export default async function handler(req, res) {
     // Get location breakdown (simplified - can be enhanced with IP geolocation)
     const locationBreakdown = getLocationBreakdown(visits);
 
+    // Get source breakdown
+    const sourceBreakdown = getSourceBreakdown(visits);
+
     // Calculate conversion rate over time
     const conversionRateOverTime = calculateConversionRateOverTime(events, visits);
 
@@ -169,7 +314,8 @@ export default async function handler(req, res) {
       deviceTypeBreakdown,
       locationBreakdown,
       conversionRateOverTime,
-      overallConversionRate
+      overallConversionRate,
+      sourceBreakdown
     });
 
   } catch (error) {
@@ -384,6 +530,32 @@ function getLocationBreakdown(visits) {
   return breakdown;
 }
 
+// Get source breakdown
+function getSourceBreakdown(visits) {
+  const breakdown = {
+    qr: 0,
+    facebook: 0,
+    instagram: 0,
+    twitter: 0,
+    email: 0,
+    direct: 0,
+    link: 0,
+    other: 0,
+    unknown: 0
+  };
+
+  visits.forEach(visit => {
+    const source = visit.source || 'unknown';
+    if (breakdown[source] !== undefined) {
+      breakdown[source]++;
+    } else {
+      breakdown.other++;
+    }
+  });
+
+  return breakdown;
+}
+
 // Calculate conversion rate over time
 function calculateConversionRateOverTime(events, visits) {
   // Get today's date in Quebec timezone
@@ -453,4 +625,3 @@ function calculateConversionRateOverTime(events, visits) {
     conversions: data.conversions
   })).sort((a, b) => new Date(a.date) - new Date(b.date));
 }
-

@@ -41,3 +41,4 @@ node scripts/verify-email.js test@example.com
 - Assurez-vous que votre fichier `.env.local` contient `MONGODB_URI`
 
 
+

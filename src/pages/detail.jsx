@@ -290,11 +290,23 @@ export default function CampaignDetails({
   };
 
   if (status === 'loading' || (loadingCampaign && !initialCampaignData) || (loadingProducts && !initialProducts)) {
-    return <p>Chargement des informations...</p>;
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-lg">Chargement des informations...</p>
+        </div>
+      </Layout>
+    );
   }
 
   if (error) {
-    return <p>Erreur: {error}</p>;
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-lg text-red-600">Erreur: {error}</p>
+        </div>
+      </Layout>
+    );
   }
 
   if (!session) {
@@ -303,7 +315,7 @@ export default function CampaignDetails({
 
   if (!campaignData) {
     return (
-      <Layout className="pt-24">
+      <Layout>
         <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden">
           <div className="container mx-auto px-4 py-12 overflow-x-hidden">
             <div className="text-center">
@@ -322,10 +334,10 @@ export default function CampaignDetails({
   }
 
   return (
-    <Layout className="pt-24">
-      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden">
-        <header className="bg-primary text-primary-foreground py-12">
-          <div className="container mx-auto px-4 overflow-x-hidden">
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden w-full">
+        <header className="bg-primary text-primary-foreground py-12 w-full">
+          <div className="w-full max-w-7xl mx-auto px-4 overflow-x-hidden">
             {/* Back arrow */}
             <Link
               href="/dashboard"
@@ -363,7 +375,7 @@ export default function CampaignDetails({
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-12 space-y-12">
+        <main className="w-full max-w-7xl mx-auto px-4 py-12 space-y-12">
           {/* Section: Nos Produits et Profits */}
           <section>
             <h2 className="text-3xl font-semibold mb-6">Nos Produits et Profits</h2>

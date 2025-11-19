@@ -58,6 +58,7 @@ import MetricCard from '@/components/Dashboard/StudentStats/MetricCard'
 import DeepAnalyticsCard from '@/components/Dashboard/StudentStats/DeepAnalyticsCard'
 import ConversionFunnelCard from '@/components/Dashboard/StudentStats/ConversionFunnelCard'
 import DeviceTypeCard from '@/components/Dashboard/StudentStats/DeviceTypeCard'
+import VisitSourceCard from '@/components/Dashboard/StudentStats/VisitSourceCard'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell
@@ -177,14 +178,19 @@ export default function StatistiquesEtudiantUltime({
   initialCampaignData,
   initialOrders,
   initialProducts,
-  initialLeaderboard
+  initialLeaderboard,
+  initialSelectedCampaignId
 }) {
 
   const [activeTab, setActiveTab] = useState("apercu")
   const [loading, setLoading] = useState(!(initialOrders && initialProducts && initialSchoolData && initialCampaignContext))
   const [error, setError] = useState(null)
   const [schoolFetchFailed, setSchoolFetchFailed] = useState(false)
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null)
+  const [selectedCampaignId, setSelectedCampaignId] = useState(
+    initialSelectedCampaignId ||
+    initialCampaignContext?.activeCampaignId ||
+    null
+  )
 
   const [orders, setOrders] = useState(initialOrders || [])
   const [school, setSchool] = useState(initialSchoolData || null)
@@ -235,17 +241,20 @@ export default function StatistiquesEtudiantUltime({
   const userId = session?.user?.id
   // Campaign-first identifiers
   const activeCampaignId = campaignContext?.activeCampaignId
-  const schoolId = session?.user?.school
-  // Get school ID from campaign context or fallback to user's school
-  const effectiveSchoolId = campaignContext?.schoolId || schoolId
+  // DEPRECATED: Don't use user's school - always use campaign's school
+  // const schoolId = session?.user?.school
+  // Get school ID from campaign context ONLY (never from user's school)
+  // When a user joins a campaign from another school, we must use the campaign's school
+  const effectiveSchoolId = campaignContext?.schoolId || null
 
   // Get current campaign or fallback to active campaign
+  // This works for both active and completed campaigns
   const getCurrentCampaign = useCallback(() => {
     if (!campaignContext?.campaigns || campaignContext.campaigns.length === 0) {
       return null
     }
 
-    // If selectedCampaignId is set, use it
+    // If selectedCampaignId is set, use it (works for completed campaigns too)
     if (selectedCampaignId) {
       const selected = campaignContext.campaigns.find(c => c._id?.toString() === selectedCampaignId?.toString())
       if (selected) return selected
@@ -259,7 +268,7 @@ export default function StatistiquesEtudiantUltime({
       if (active) return active
     }
 
-    // Final fallback: first campaign
+    // Final fallback: first campaign (including completed ones)
     return campaignContext.campaigns[0]
   }, [selectedCampaignId, campaignContext])
 
@@ -327,12 +336,14 @@ export default function StatistiquesEtudiantUltime({
   }, [session, initialCampaignContext]);
 
   // Initialize selectedCampaignId when campaigns are loaded
+  // This ensures completed campaigns are still accessible
   useEffect(() => {
     if (campaignContext?.campaigns && campaignContext.campaigns.length > 0 && !selectedCampaignId) {
-      // Prefer activeCampaignId if available, otherwise use first campaign
+      // Prefer activeCampaignId if available, otherwise use first campaign (including completed ones)
       const campaignToSelect = campaignContext.activeCampaignId
         ? campaignContext.campaigns.find(c => c._id?.toString() === campaignContext.activeCampaignId?.toString())
         : null
+      // If activeCampaignId doesn't match any campaign (e.g., campaign completed), use first campaign
       const initialCampaignId = campaignToSelect?._id || campaignContext.campaigns[0]?._id
       if (initialCampaignId) {
         console.log('[Stats] Initializing selectedCampaignId to:', initialCampaignId)
@@ -375,8 +386,8 @@ export default function StatistiquesEtudiantUltime({
     onCampaignSwitch: handleCampaignSwitch,
     onJoinCampaign: handleJoinCampaignClick,
     initialCampaigns: initialCampaignContext?.campaigns || [],
-    initialActiveCampaignId: initialCampaignContext?.activeCampaignId || null
-  }), [handleCampaignSwitch, handleJoinCampaignClick, initialCampaignContext]);
+    initialActiveCampaignId: initialSelectedCampaignId || initialCampaignContext?.activeCampaignId || null
+  }), [handleCampaignSwitch, handleJoinCampaignClick, initialCampaignContext, initialSelectedCampaignId]);
 
   // Onboarding logic for stats page
   useEffect(() => {
@@ -664,35 +675,69 @@ export default function StatistiquesEtudiantUltime({
     }
   }, [initialOrders])
 
-  // Fetch Top Sellers - only if not provided via SSR
+  // Fetch Top Sellers - always fetch for completed campaigns, even if SSR data exists
   const fetchTopSellers = useCallback(async (schoolId, userId) => {
-    if (initialLeaderboard) {
-      // Skip if we have SSR data
+    const currentCampaign = getCurrentCampaign()
+    const campaignId = currentCampaign?._id?.toString() || null
+    const campaignNumber = currentCampaign?.campaignNumber
+
+    // Ensure we have a valid schoolId - get from campaign if available
+    const finalSchoolId = currentCampaign?.school?._id?.toString() ||
+      currentCampaign?.schoolId?.toString() ||
+      schoolId
+
+    if (!finalSchoolId) {
+      console.warn('[Stats] No schoolId available for top sellers fetch')
+      return
+    }
+
+    // Check if campaign is completed (endDate is in the past)
+    const isCampaignCompleted = currentCampaign?.endDate
+      ? new Date(currentCampaign.endDate) < new Date()
+      : false;
+
+    // Skip only if we have valid SSR data AND campaign is not completed
+    // For completed campaigns, always fetch fresh data
+    if (!isCampaignCompleted &&
+      initialLeaderboard &&
+      initialLeaderboard.topPerformers &&
+      initialLeaderboard.topPerformers.length > 0 &&
+      initialLeaderboard.userRank !== null &&
+      initialLeaderboard.userRank !== undefined) {
+      // Only skip if we have complete SSR data and campaign is active
+      console.log('[Stats] Skipping top sellers fetch - using SSR data for active campaign')
       return;
     }
 
-    const currentCampaign = getCurrentCampaign()
-    const campaignId = currentCampaign?._id?.toString() || null
+    // Always fetch for completed campaigns or if SSR data is incomplete
+    console.log('[Stats] Will fetch top sellers - campaign completed:', isCampaignCompleted)
 
+    // Always fetch for completed campaigns or if SSR data is incomplete
     try {
-      const response = await fetch(`/api/schools/${schoolId}/topsellers/${userId}`, {
+      console.log('[Stats] Fetching top sellers with:', { schoolId: finalSchoolId, userId, campaignId })
+      const response = await fetch(`/api/schools/${finalSchoolId}/topsellers/${userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ campaignId })
+        body: JSON.stringify({ campaignId, campaignNumber })
       })
       if (!response.ok) {
         console.warn(`Top sellers API returned ${response.status}: ${response.statusText}`)
         throw new Error(`Failed to fetch top sellers: ${response.status}`)
       }
       const data = await response.json()
-      setTopPerformers(data.topPerformers)
-      setUserRank(data.userRank)
-      setUserEarnings(data.userTotalEarnings)
-      setUserProductsSold(data.userTotalProductsSold)
+      console.log('[Stats] Top sellers data received:', {
+        topPerformersCount: data.topPerformers?.length || 0,
+        userRank: data.userRank,
+        hasTopPerformers: !!data.topPerformers
+      })
+      setTopPerformers(data.topPerformers || [])
+      setUserRank(data.userRank !== null && data.userRank !== undefined ? data.userRank : null)
+      setUserEarnings(data.userTotalEarnings ? parseFloat(data.userTotalEarnings) : 0)
+      setUserProductsSold(data.userTotalProductsSold || 0)
     } catch (error) {
-      console.warn('Top sellers fetch failed, using defaults:', error.message)
+      console.error('Top sellers fetch failed:', error)
       // Fallback defaults
       setTopPerformers([])
       setUserRank(null)
@@ -823,9 +868,21 @@ export default function StatistiquesEtudiantUltime({
         return
       }
 
-      // Get the Campaign._id
+      // Get the Campaign._id (works for completed campaigns too)
       const campaignId = currentCampaign._id?.toString()
-      const schoolId = effectiveSchoolId
+      // Get schoolId from campaign or fallback to effectiveSchoolId
+      const schoolId = currentCampaign?.school?._id?.toString() ||
+        currentCampaign?.schoolId?.toString() ||
+        effectiveSchoolId
+
+      console.log('[Stats] Fetching deep analytics with:', {
+        storeId,
+        campaignId,
+        schoolId,
+        effectiveSchoolId,
+        campaignSchool: currentCampaign?.school?._id?.toString(),
+        campaignSchoolId: currentCampaign?.schoolId?.toString()
+      })
 
       const params = new URLSearchParams()
       // Use storeId (can be ObjectId string or _id from populated object)
@@ -835,17 +892,22 @@ export default function StatistiquesEtudiantUltime({
 
       const response = await fetch(`/api/stats/deep-analytics?${params.toString()}`)
       if (!response.ok) {
-        throw new Error('Failed to fetch deep analytics')
+        throw new Error(`Failed to fetch deep analytics: ${response.status}`)
       }
       const data = await response.json()
+      console.log('[Stats] Deep analytics data received:', {
+        totalOrders: data.totalOrders,
+        totalSales: data.totalSales,
+        hasOrders: data.totalOrders > 0
+      })
       setDeepAnalytics(data)
     } catch (error) {
-      console.error('Error fetching deep analytics:', error)
+      console.error('[Stats] Error fetching deep analytics:', error)
       setDeepAnalytics(null)
     } finally {
       setDeepAnalyticsLoading(false)
     }
-  }, [user?._id, userStoreId, effectiveSchoolId, selectedCampaignId, campaignContext?.campaigns?.length, campaignContext?.activeCampaignId])
+  }, [user?._id, userStoreId, effectiveSchoolId, selectedCampaignId, campaignContext?.campaigns?.length, campaignContext?.activeCampaignId, getCurrentCampaign])
 
   // Fetch Products - only if not provided via SSR
   const fetchProducts = useCallback(async () => {
@@ -903,30 +965,39 @@ export default function StatistiquesEtudiantUltime({
         return; // Still loading campaign context
       }
 
-      if (user && (activeCampaignId || effectiveSchoolId)) {
+      // Get current campaign (works for completed campaigns too)
+      const currentCampaign = getCurrentCampaign()
+      const currentCampaignId = currentCampaign?._id?.toString() || activeCampaignId
+
+      if (user && (currentCampaignId || effectiveSchoolId)) {
         if (cancelled) return
-        await fetchCampaignStatsContext(activeCampaignId, effectiveSchoolId)
+        await fetchCampaignStatsContext(currentCampaignId || activeCampaignId, effectiveSchoolId)
+
+        // Get schoolId from current campaign or use effectiveSchoolId
+        const currentCampaignForSchool = getCurrentCampaign()
+        const schoolIdForFetch = currentCampaignForSchool?.school?._id?.toString() ||
+          currentCampaignForSchool?.schoolId?.toString() ||
+          effectiveSchoolId
 
         // Only fetch these if we have a valid school ID
-        if (effectiveSchoolId && effectiveSchoolId !== 'unknown') {
+        if (schoolIdForFetch && schoolIdForFetch !== 'unknown') {
           if (cancelled) return
-          // Skip fetching leaderboard if we have SSR data
-          if (!initialLeaderboard) {
-            fetchTopSellers(effectiveSchoolId, userId)
-          }
+          // Always fetch leaderboard - it will check internally if SSR data is complete
+          // This ensures completed campaigns get fresh data
+          fetchTopSellers(schoolIdForFetch, userId)
           // Note: fetchSchoolRaffle is no longer called here - totalRaffle is calculated from productBreakdown
-          fetchWeeklyEarnings(effectiveSchoolId, userId)
+          fetchWeeklyEarnings(schoolIdForFetch, userId)
         }
 
         // Fetch deep analytics if user has a store (check userStoreId from API or user.store)
-        // Also fetch when campaign changes
+        // Also fetch when campaign changes - works for completed campaigns too
         const storeId = userStoreId || user?.store?._id || user?.store
         if (storeId) {
           if (cancelled) return
           fetchDeepAnalytics()
         }
-      } else if (user && !effectiveSchoolId) {
-        // If no school id can be resolved, stop loading to avoid infinite spinner
+      } else if (user && !effectiveSchoolId && !currentCampaign) {
+        // If no school id can be resolved and no campaign found, stop loading to avoid infinite spinner
         if (!cancelled) setLoading(false)
       }
     }
@@ -936,7 +1007,7 @@ export default function StatistiquesEtudiantUltime({
     return () => {
       cancelled = true
     }
-  }, [user?._id, activeCampaignId, effectiveSchoolId, userId, userStoreId, selectedCampaignId, campaignContext?.campaigns?.length, campaignContext?.activeCampaignId, initialLeaderboard])
+  }, [user?._id, activeCampaignId, effectiveSchoolId, userId, userStoreId, selectedCampaignId, campaignContext?.campaigns?.length, campaignContext?.activeCampaignId, initialLeaderboard, getCurrentCampaign])
 
   // Fetch orders and products on mount; ensure loading finishes even if these endpoints fail
   useEffect(() => {
@@ -1921,7 +1992,10 @@ export default function StatistiquesEtudiantUltime({
               salesTarget={user?.objectifPersonnel || 1000}
               productsSold={totalProductsSold}
               customersReached={uniqueCustomersReached}
-              daysLeft={orderDeadline ? Math.ceil((new Date(orderDeadline) - new Date()) / (1000 * 60 * 60 * 24)) : 0}
+              daysLeft={orderDeadline ? (() => {
+                const days = Math.ceil((new Date(orderDeadline) - new Date()) / (1000 * 60 * 60 * 24));
+                return days < 0 ? 'Campagne terminée' : days;
+              })() : 0}
               leaderboardPosition={userRank}
               milestones={profitRewards}
               topPerformers={topPerformers}
@@ -2043,6 +2117,11 @@ export default function StatistiquesEtudiantUltime({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
                   <ConversionFunnelCard funnelData={deepAnalytics?.conversionFunnel} />
                   <DeviceTypeCard deviceData={deepAnalytics?.deviceTypeBreakdown} />
+                </div>
+
+                {/* Visit Sources Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                  <VisitSourceCard sourceData={deepAnalytics?.sourceBreakdown} />
                 </div>
 
                 {/* Sales by Product Card */}
@@ -2708,7 +2787,9 @@ function CampaignOverview({
           {/* Remove AnimatePresence and isIncreasing since we removed state */}
           <div className="text-left sm:text-right">
             <p className="text-xs sm:text-sm text-muted-foreground">Temps Restant:</p>
-            <p className="text-lg sm:text-xl font-bold">{daysLeft} jours</p>
+            <p className="text-lg sm:text-xl font-bold">
+              {typeof daysLeft === 'string' ? daysLeft : `${daysLeft} jours`}
+            </p>
           </div>
         </div>
       </CardContent>
@@ -2812,14 +2893,44 @@ export async function getServerSideProps(context) {
       };
     }
 
-    // Fetch orders and products in parallel
-    const campaignId = dashboardData.initialCampaignContext?.activeCampaignId;
-    const schoolId = dashboardData.initialSchoolData?._id;
+    const campaigns = dashboardData.initialCampaignContext?.campaigns || [];
+    const queryCampaignId = Array.isArray(context.query?.campaignId)
+      ? context.query.campaignId[0]
+      : context.query?.campaignId;
+
+    const findCampaignById = (id) => {
+      if (!id) return null;
+      return campaigns.find(c => c?._id?.toString() === id.toString());
+    };
+
+    let selectedCampaignId = null;
+
+    const queryCampaign = findCampaignById(queryCampaignId);
+    if (queryCampaign) {
+      selectedCampaignId = queryCampaign._id?.toString() || null;
+    }
+
+    if (!selectedCampaignId && dashboardData.initialCampaignContext?.activeCampaignId) {
+      const activeCampaign = findCampaignById(dashboardData.initialCampaignContext.activeCampaignId);
+      if (activeCampaign) {
+        selectedCampaignId = activeCampaign._id?.toString() || null;
+      }
+    }
+
+    if (!selectedCampaignId && campaigns.length > 0) {
+      selectedCampaignId = campaigns[0]._id?.toString() || null;
+    }
+
+    const selectedCampaign = findCampaignById(selectedCampaignId);
+    const schoolId =
+      selectedCampaign?.school?._id?.toString() ||
+      dashboardData.initialSchoolData?._id ||
+      null;
 
     const [initialOrders, initialProducts, initialLeaderboard] = await Promise.all([
-      getOrdersSSR(session, campaignId),
+      getOrdersSSR(session, selectedCampaignId),
       getProductsSSR(),
-      schoolId ? getTopSellersSSR(session, schoolId, campaignId) : Promise.resolve({
+      schoolId ? getTopSellersSSR(session, schoolId, selectedCampaignId) : Promise.resolve({
         topPerformers: [],
         userRank: null,
         userTotalEarnings: '0.00',
@@ -2833,7 +2944,8 @@ export async function getServerSideProps(context) {
         ...dashboardData,
         initialOrders: initialOrders || [],
         initialProducts: initialProducts || [],
-        initialLeaderboard: initialLeaderboard || null
+        initialLeaderboard: initialLeaderboard || null,
+        initialSelectedCampaignId: selectedCampaignId || null
       },
     };
   } catch (error) {

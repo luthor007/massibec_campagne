@@ -32,11 +32,10 @@ const SchoolCodeDisplay = ({ school, compact = false }) => {
           onClick={copySchoolCode}
           variant="outline"
           size="sm"
-          className={`transition-all duration-200 ${
-            copied 
-              ? 'border-green-300 text-green-600 bg-green-50' 
+          className={`transition-all duration-200 ${copied
+              ? 'border-green-300 text-green-600 bg-green-50'
               : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
-          }`}
+            }`}
         >
           {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         </Button>
@@ -67,20 +66,19 @@ const SchoolCodeDisplay = ({ school, compact = false }) => {
           <Button
             onClick={copySchoolCode}
             variant="outline"
-            className={`flex items-center space-x-2 transition-all duration-200 ${
-              copied 
-                ? 'border-green-300 text-green-600 bg-green-50' 
+            className={`flex items-center space-x-2 transition-all duration-200 ${copied
+                ? 'border-green-300 text-green-600 bg-green-50 hover:bg-green-100'
                 : 'border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400'
-            }`}
+              }`}
           >
-            <Copy className="h-4 w-4" />
+            {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             <span>{copied ? 'Copié!' : 'Copier'}</span>
           </Button>
         </div>
       </div>
       <div className="mt-4 p-4 bg-white rounded-lg border border-blue-100">
         <p className="text-sm text-gray-600">
-          <strong>Instructions pour les {terminology.participants} :</strong> Les {terminology.participants} doivent utiliser ce code de 6 chiffres lors de leur inscription 
+          <strong>Instructions pour les {terminology.participants} :</strong> Les {terminology.participants} doivent utiliser ce code de 6 chiffres lors de leur inscription
           pour rejoindre {terminology.organization === 'école' ? "l'" : "l'"}{terminology.organization} et participer aux campagnes de financement. Partagez ce code avec les parents et les {terminology.participants}.
         </p>
       </div>

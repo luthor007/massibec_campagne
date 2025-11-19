@@ -11,11 +11,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check, PartyPopper } from 'lucide-react'
+import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check, PartyPopper, AlertCircle } from 'lucide-react'
 import { getTerminology } from '@/utils/organizationHelpers'
 import { trackPaymentCompleted } from '@/lib/analytics'
 
-export default function CheckoutForm({ total, originalTotal, discount = 0, discountAmount = 0, onClose, items, removeAllItem, campaignId, schoolId, storeId, initialCampaignData, initialDeliveryOptions }) {
+export default function CheckoutForm({ total, originalTotal, discount = 0, discountAmount = 0, onClose, items, removeAllItem, campaignId, schoolId, storeId, initialCampaignData, initialDeliveryOptions, isExample = false }) {
   const [formData, setFormData] = useState({
     email: '',
     nom: '',
@@ -427,6 +427,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (isSubmitting) return
+
+    // Prevent submission in example mode
+    if (isExample) {
+      toast.error('Cette boutique est un exemple. Les commandes ne peuvent pas être passées ici.')
+      return
+    }
+
     if (!owner || !owner._id) {
       toast.error('Informations du propriétaire non disponibles. Veuillez réessayer plus tard.')
       return
@@ -608,7 +615,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
       setSavedFinalTotal(null) // Reset saved total
       window.location.reload()
       merciTimeoutRef.current = null
-    }, 1800)
+    }, 5000) // Increased from 1800ms to 5000ms (5 seconds)
   }
 
   const handlePaymentCancel = () => {
@@ -638,6 +645,21 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               Quelques informations et vous y êtes !
             </DialogDescription>
           </DialogHeader>
+          {isExample && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mt-4">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold text-yellow-900 mb-1">
+                    🛍️ Boutique Exemple
+                  </h3>
+                  <p className="text-sm text-yellow-800">
+                    Cette boutique est un exemple pour vous montrer à quoi ressemble une boutique Massibec. Les commandes ne peuvent pas être passées ici. Pour créer votre propre boutique, inscrivez-vous en tant qu'élève ou école.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-5 pb-20 sm:pb-6 bg-white">
             <div className="space-y-3">
               {/* Full Name Field */}
@@ -973,14 +995,16 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !owner || isLoadingOwner}
-                className="w-full sm:flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center justify-center py-4 text-base sm:text-lg font-bold shadow-xl hover:shadow-2xl transition-all transform hover:scale-[1.02] active:scale-[0.98] order-1 sm:order-2"
+                disabled={isSubmitting || !owner || isLoadingOwner || isExample}
+                className="w-full sm:flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center justify-center py-4 text-base sm:text-lg font-bold shadow-xl hover:shadow-2xl transition-all transform hover:scale-[1.02] active:scale-[0.98] order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Traitement...
                   </>
+                ) : isExample ? (
+                  'Boutique exemple - Commande désactivée'
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-5 w-5" />
@@ -1132,13 +1156,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                         <>
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-gray-700 flex-1">
-                              <strong>4. Question de sécurité :</strong> {formData.nom || 'Votre nom'}
+                              <strong>4. Question de sécurité :</strong> Numéro de commande
                             </p>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard(formData.nom || '', 'question')}
+                              onClick={() => copyToClipboard('Numéro de commande', 'question')}
                               title="Copier la question"
                             >
                               {copiedField === 'question' ? (
@@ -1151,13 +1175,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
 
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-gray-700 flex-1">
-                              <strong>5. Réponse :</strong> {formData.email}
+                              <strong>5. Réponse :</strong> {orderId ? `Cmd-${orderId}` : 'N/A'}
                             </p>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard(formData.email || '', 'reponse')}
+                              onClick={() => copyToClipboard(orderId ? `Cmd-${orderId}` : '', 'reponse')}
                               title="Copier la réponse"
                             >
                               {copiedField === 'reponse' ? (

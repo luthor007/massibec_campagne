@@ -1,5 +1,6 @@
 // pages/index.jsx
 
+import { useEffect } from 'react'
 import Layout from '../components/Layout'
 import Link from 'next/link'
 import { Button } from "@/components/ui/button"
@@ -8,9 +9,15 @@ import { ArrowRight, Cake, ShoppingBag, TrendingUp, Percent } from 'lucide-react
 import useIsMobile from '../utils/useIsMobile'
 import { motion } from 'framer-motion'
 import Progress from '@/components/ui/progress' // Ensure this component exists
+import { trackPageVisit } from '../lib/funnelAnalytics'
 
 export default function Home() {
   const isMobile = useIsMobile(); // Correctly invoke the hook
+
+  useEffect(() => {
+    // Track home page visit
+    trackPageVisit('home');
+  }, []);
 
   return (
     <Layout>
@@ -50,15 +57,16 @@ export default function Home() {
             </Button>
           </Link>
           {isMobile && (
-            <Link href="/boutique/6727e71469f266eb88bbfd79" passHref>
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto py-4 px-6 text-xl font-semibold border-blue-600 text-blue-600 hover:bg-blue-50 shadow-lg rounded-lg transition transform duration-300 ease-in-out"
-              >
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full sm:w-auto py-4 px-6 text-xl font-semibold border-blue-600 text-blue-600 hover:bg-blue-50 shadow-lg rounded-lg transition transform duration-300 ease-in-out"
+              asChild
+            >
+              <Link href="/exemple">
                 Voir un exemple
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           )}
         </motion.div>
 

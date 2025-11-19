@@ -18,12 +18,32 @@ export default async function handler(req, res) {
       const limitNumber = parseInt(limit);
 
       // Query object with search conditions
-      let query = {
-        $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } },
-        ],
-      };
+      let queryConditions = [];
+
+      // Add search conditions if search term is provided
+      if (search && search.trim().length > 0) {
+        queryConditions.push({
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+          ]
+        });
+      }
+
+      // Filter by campaign if campaignId is provided
+      // Products with empty campaigns array are available for all campaigns (backward compatibility)
+      if (campaignId && mongoose.Types.ObjectId.isValid(campaignId)) {
+        queryConditions.push({
+          $or: [
+            { campaigns: { $exists: false } }, // Products without campaigns field (legacy)
+            { campaigns: { $size: 0 } }, // Products with empty campaigns array (available everywhere)
+            { campaigns: mongoose.Types.ObjectId(campaignId) } // Products associated with this campaign
+          ]
+        });
+      }
+
+      // Build final query
+      let query = queryConditions.length > 0 ? { $and: queryConditions } : {};
 
       // Products are universal, so we don't filter by school
       // But we keep the schoolId parameter for backward compatibility
@@ -36,22 +56,28 @@ export default async function handler(req, res) {
       try {
         // First, try to get product count
         const total = await Product.countDocuments({});
-        
+
         if (total > 0) {
           // Try to fetch products with error handling for each document
+          // Use .lean() to get plain JavaScript objects with all nested fields including attributes
           const productDocs = await Product.find(query)
             .sort({ order: 1, createdAt: -1 }) // Sort by order first, then by creation date
             .skip((pageNumber - 1) * limitNumber)
-            .limit(limitNumber);
-          
+            .limit(limitNumber)
+            .lean(); // Use lean() to get plain objects with nested attributes properly included
+
           // Validate and filter out corrupted products
-          products = productDocs.filter((product) => {
+          products = productDocs.map((product) => {
             try {
-              return product && product._id && product.name;
+              if (product && product._id && product.name) {
+                // product is already a plain object from .lean(), but ensure it's valid
+                return product;
+              }
+              return null;
             } catch (e) {
-              return false;
+              return null;
             }
-          });
+          }).filter(Boolean);
         }
       } catch (error) {
         console.error('Error fetching products (will return empty list):', error.message);
@@ -60,14 +86,14 @@ export default async function handler(req, res) {
 
       // Get campaign for custom pricing - prioritize campaignId over schoolId
       let activeCampaign = null;
-      
+
       if (campaignId && mongoose.Types.ObjectId.isValid(campaignId)) {
         // Directly fetch campaign by ID (campaign-based approach)
         // Populate customPrices.productId just like in /api/campaigns/index.js
         activeCampaign = await Campaign.findById(campaignId)
           .populate('customPrices.productId', '_id')
           .lean();
-        
+
         console.log(`[products API] Fetched campaign ${campaignId}, customPrices count:`, activeCampaign?.customPrices?.length || 0);
         if (activeCampaign?.customPrices?.length > 0) {
           console.log(`[products API] Sample customPrice:`, {
@@ -85,16 +111,16 @@ export default async function handler(req, res) {
         const school = await School.findById(schoolId);
         if (school) {
           // Try to find campaign in Campaign collection first
-          activeCampaign = await Campaign.findOne({ 
-            school: schoolId, 
+          activeCampaign = await Campaign.findOne({
+            school: schoolId,
             isActive: true,
             status: { $in: ['approved', 'active', 'pending_approval', 'pending_school_approval'] }
           })
-          .populate('customPrices.productId', '_id')
-          .lean();
-          
+            .populate('customPrices.productId', '_id')
+            .lean();
+
           console.log(`[products API] Fetched campaign by schoolId ${schoolId}, customPrices count:`, activeCampaign?.customPrices?.length || 0);
-          
+
           // If not found, fallback to school's embedded campaigns
           if (!activeCampaign) {
             const schoolCampaign = school.campaigns?.find(campaign => campaign.isActive);
@@ -112,12 +138,12 @@ export default async function handler(req, res) {
       const sanitizedProducts = products.filter((product) => {
         // Filter out products with invalid data
         try {
-          return product && 
-                 product._id && 
-                 product.name && 
-                 typeof product.name === 'string' &&
-                 product.price !== undefined &&
-                 product.cost !== undefined;
+          return product &&
+            product._id &&
+            product.name &&
+            typeof product.name === 'string' &&
+            product.price !== undefined &&
+            product.cost !== undefined;
         } catch (e) {
           console.error('Corrupted product detected:', product._id);
           return false;
@@ -126,7 +152,7 @@ export default async function handler(req, res) {
         try {
           let finalPrice = product.price;
           let hasCustomPrice = false;
-          
+
           // Check for custom pricing in active campaign
           if (activeCampaign && activeCampaign.customPrices && activeCampaign.customPrices.length > 0) {
             const productIdStr = product._id.toString();
@@ -135,7 +161,7 @@ export default async function handler(req, res) {
                 console.log(`[products API] WARNING: customPrice entry has no productId`);
                 return false;
               }
-              
+
               // Handle ObjectId (Mongoose or MongoDB ObjectId)
               let cpProductId = null;
               if (cp.productId._id) {
@@ -156,14 +182,14 @@ export default async function handler(req, res) {
                   return false;
                 }
               }
-              
+
               const matches = cpProductId === productIdStr;
               if (matches) {
                 console.log(`[products API] Found matching customPrice for product ${productIdStr}: price ${cp.price}`);
               }
               return matches;
             });
-            
+
             if (customPrice && customPrice.price !== undefined && customPrice.price !== null) {
               finalPrice = customPrice.price;
               hasCustomPrice = true;
@@ -171,21 +197,76 @@ export default async function handler(req, res) {
             }
           }
 
+          // Get attributes from product, ensuring all fields are present
+          const productAttributes = product.attributes || {};
+
+          // Debug logging for all products in development
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[API GET] Product ${product._id.toString()} (${product.name}):`, {
+              'product.attributes exists': !!product.attributes,
+              'product.attributes type': typeof product.attributes,
+              'productAttributes': productAttributes,
+              'productAttributes keys': Object.keys(productAttributes),
+              'product.freezable': product.freezable
+            });
+          }
+
+          // Debug logging for specific product
+          if (product._id.toString() === '671efae6111752b9d6c8db12') {
+            console.log('[API GET] Product attributes from DB:', JSON.stringify(productAttributes));
+            console.log('[API GET] Product attributes type:', typeof productAttributes);
+            console.log('[API GET] Product attributes quebecProduct:', productAttributes.quebecProduct);
+            console.log('[API GET] Product raw:', JSON.stringify(product));
+          }
+
+          const sanitizedAttributes = {
+            freezable: productAttributes.freezable !== undefined ? productAttributes.freezable : (product.freezable !== undefined ? product.freezable : false),
+            glutenFree: productAttributes.glutenFree !== undefined ? productAttributes.glutenFree : false,
+            vegetarian: productAttributes.vegetarian !== undefined ? productAttributes.vegetarian : false,
+            vegan: productAttributes.vegan !== undefined ? productAttributes.vegan : false,
+            nutFree: productAttributes.nutFree !== undefined ? productAttributes.nutFree : false,
+            halal: productAttributes.halal !== undefined ? productAttributes.halal : false,
+            kosher: productAttributes.kosher !== undefined ? productAttributes.kosher : false,
+            organic: productAttributes.organic !== undefined ? productAttributes.organic : false,
+            quebecProduct: productAttributes.quebecProduct !== undefined ? productAttributes.quebecProduct : false,
+            allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+          };
+
+          // Debug logging for all products in development
+          if (process.env.NODE_ENV === 'development') {
+            const hasAnyAttr = Object.values(sanitizedAttributes).some((val, idx) => {
+              if (idx === 9) return val && String(val).trim().length > 0; // allergens
+              return val === true;
+            });
+            console.log(`[API GET] Product ${product._id.toString()} sanitized attributes:`, {
+              sanitizedAttributes,
+              hasAnyAttribute: hasAnyAttr
+            });
+          }
+
+          // Debug logging for specific product
+          if (product._id.toString() === '671efae6111752b9d6c8db12') {
+            console.log('[API GET] Sanitized attributes:', JSON.stringify(sanitizedAttributes));
+          }
+
           return {
-          id: product._id.toString(),
-          name: sanitizeHtml(String(product.name || '')),
-          description: sanitizeHtml(String(product.description || '')),
-          price: Number(finalPrice) || 0, // Use finalPrice instead of product.price
-          originalPrice: Number(product.price) || 0, // Keep original price for reference
-          cost: Number(product.cost) || 0,
-          image: sanitizeHtml(String(product.image || '')),
-          ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
-          nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
-          school: product.school,
-          isDefault: Boolean(product.isDefault),
-          productId: String(product.productId || ''),
-          order: Number(product.order) || 0,
-          hasCustomPrice: hasCustomPrice
+            id: product._id.toString(),
+            name: sanitizeHtml(String(product.name || '')),
+            description: sanitizeHtml(String(product.description || '')),
+            price: Number(finalPrice) || 0, // Use finalPrice instead of product.price
+            originalPrice: Number(product.price) || 0, // Keep original price for reference
+            cost: Number(product.cost) || 0,
+            image: sanitizeHtml(String(product.image || '')),
+            ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
+            nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
+            school: product.school,
+            isDefault: Boolean(product.isDefault),
+            productId: String(product.productId || ''),
+            order: Number(product.order) || 0,
+            hasCustomPrice: hasCustomPrice,
+            attributes: sanitizedAttributes,
+            freezable: product.freezable, // Keep for backward compatibility
+            campaigns: product.campaigns ? product.campaigns.map(c => c.toString ? c.toString() : String(c)) : []
           };
         } catch (error) {
           console.error('Error sanitizing product:', error);
@@ -201,7 +282,7 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       console.error('Erreur lors de la récupération des produits:', error);
-      
+
       // Return empty array instead of error to prevent blank screen
       res.status(200).json({
         total: 0,
@@ -223,6 +304,8 @@ export default async function handler(req, res) {
         productId,
         ingredientsImage,
         nutritionImage,
+        attributes,
+        campaigns,
       } = req.body;
 
       // Validate required fields
@@ -274,7 +357,7 @@ export default async function handler(req, res) {
       const maxOrderProduct = await Product.findOne().sort({ order: -1 }).lean();
       const nextOrder = maxOrderProduct ? (maxOrderProduct.order + 1) : 0;
 
-      const product = await Product.create({
+      const productData = {
         name,
         description,
         cost,
@@ -286,7 +369,35 @@ export default async function handler(req, res) {
         order: nextOrder,
         ingredientsImage: sanitizedIngredientsImage,
         nutritionImage: sanitizedNutritionImage,
-      });
+      };
+
+      // Add attributes if provided
+      if (attributes && typeof attributes === 'object') {
+        productData.attributes = {
+          freezable: attributes.freezable !== undefined ? attributes.freezable : false,
+          glutenFree: attributes.glutenFree || false,
+          vegetarian: attributes.vegetarian || false,
+          vegan: attributes.vegan || false,
+          nutFree: attributes.nutFree || false,
+          halal: attributes.halal || false,
+          kosher: attributes.kosher || false,
+          organic: attributes.organic || false,
+          quebecProduct: attributes.quebecProduct || false,
+          allergens: attributes.allergens ? sanitizeHtml(String(attributes.allergens).trim(), { allowedTags: [] }).substring(0, 500) : ''
+        };
+      }
+
+      // Add campaigns if provided (array of campaign IDs)
+      if (campaigns && Array.isArray(campaigns)) {
+        // Validate that all campaign IDs are valid MongoDB ObjectIds
+        const mongoose = require('mongoose');
+        const validCampaignIds = campaigns.filter(campaignId => {
+          return mongoose.Types.ObjectId.isValid(campaignId);
+        });
+        productData.campaigns = validCampaignIds;
+      }
+
+      const product = await Product.create(productData);
 
       res.status(201).json({
         id: product._id.toString(),

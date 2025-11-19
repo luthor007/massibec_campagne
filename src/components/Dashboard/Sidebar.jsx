@@ -7,7 +7,7 @@ import { useRouter } from 'next/router';
 
 const Sidebar = ({ onClose }) => {
   const router = useRouter();
-  
+
   const navigationItems = [
     {
       name: 'Overview',
@@ -75,22 +75,24 @@ const Sidebar = ({ onClose }) => {
           <X className="h-4 w-4" />
         </Button>
       </div>
-      
+
       {/* Navigation */}
       <nav className="flex flex-col p-4 space-y-1 flex-1">
         {navigationItems.map((item) => {
           const isActive = router.pathname === item.href;
           const Icon = item.icon;
-          
+
           return (
             <Link key={item.href} href={item.href} passHref legacyBehavior>
-              <a 
-                className={`flex items-center p-3 rounded-lg transition-all duration-200 group ${
-                  isActive 
-                    ? 'bg-blue-600 text-white shadow-lg' 
+              <a
+                className={`flex items-center p-3 rounded-lg transition-all duration-200 group ${isActive
+                    ? 'bg-blue-600 text-white shadow-lg'
                     : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                }`}
-                onClick={onClose}
+                  }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
               >
                 <Icon className={`w-5 h-5 mr-3 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'}`} />
                 <div className="flex-1">

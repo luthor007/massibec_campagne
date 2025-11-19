@@ -10,10 +10,12 @@ export default function Layout({ children }) {
   const showFooter = !session && status !== 'loading';
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground overflow-x-hidden max-w-full">
+    <div className="flex flex-col min-h-screen bg-background text-foreground overflow-x-hidden w-full">
       <Header />
-      <main className="flex-grow container mx-auto px-4 py-8 sm:px-6 lg:px-8 pt-16 md:pt-20 overflow-x-hidden max-w-full">
-        {children}
+      <main className="flex-grow w-full px-4 py-8 sm:px-6 lg:px-8 pt-16 md:pt-20 overflow-x-hidden">
+        <div className="w-full max-w-7xl mx-auto">
+          {children}
+        </div>
       </main>
       {showFooter && <Footer />}
     </div>

@@ -16,6 +16,7 @@ import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip'
 import { toast } from 'sonner'
 import { isTestCampaign } from '../../utils/campaignHelpers'
 import { trackVisit } from '../../lib/analytics'
+import { getDateStringInTimezone } from '../../utils/dateHelpers'
 import dbConnect from '../../lib/mongodb'
 import Store from '../../models/Store'
 import User from '../../models/User'
@@ -58,6 +59,30 @@ export default function Boutique({
   const [discountEnabled, setDiscountEnabled] = useState(true)
   const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [isExpired, setIsExpired] = useState(false)
+
+  // Helper function to format dates in Quebec timezone for display
+  const formatDateForDisplay = (dateString, options = {}) => {
+    if (!dateString) return ''
+
+    try {
+      // First, get the date in Quebec timezone as YYYY-MM-DD
+      const quebecDateString = getDateStringInTimezone(new Date(dateString), 'America/Montreal')
+
+      // Parse it back to create a date at midnight Quebec time
+      const [year, month, day] = quebecDateString.split('-').map(Number)
+      const quebecDate = new Date(year, month - 1, day)
+
+      // Format with the requested options
+      return quebecDate.toLocaleDateString('fr-CA', {
+        timeZone: 'America/Montreal',
+        ...options
+      })
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      // Fallback to original method
+      return new Date(dateString).toLocaleDateString('fr-CA', options)
+    }
+  }
 
   // Timer countdown for order deadline
   useEffect(() => {
@@ -288,7 +313,9 @@ export default function Boutique({
       const highlightElement = (selector, className = 'ring-4 ring-blue-500 ring-opacity-75') => {
         const element = document.querySelector(selector);
         if (element) {
-          element.classList.add(className);
+          // Split className string into individual classes and add them separately
+          const classes = className.split(' ').filter(c => c.trim());
+          element.classList.add(...classes);
           return element;
         }
         return null;
@@ -514,9 +541,13 @@ export default function Boutique({
         <div className="flex items-center gap-2 sm:gap-3">
           <Clock className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-sm sm:text-base font-semibold">⏰ Date limite : {new Date(orderDeadline).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p className="text-sm sm:text-base font-semibold" suppressHydrationWarning>
+              ⏰ Date limite : {formatDateForDisplay(orderDeadline, { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
             {deliveryDate && (
-              <p className="text-sm sm:text-base opacity-90 mt-0.5">📦 Livraison le {new Date(deliveryDate).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}</p>
+              <p className="text-sm sm:text-base opacity-90 mt-0.5" suppressHydrationWarning>
+                📦 Livraison le {formatDateForDisplay(deliveryDate, { day: 'numeric', month: 'long' })}
+              </p>
             )}
             {isExpired ? (
               <p className="text-xs sm:text-sm opacity-90 mt-1 font-semibold">⚠️ La période de commande est terminée</p>
@@ -946,6 +977,18 @@ export async function getServerSideProps(context) {
         .limit(100)
         .lean()
 
+      // Debug: Check if attributes are in the database
+      if (process.env.NODE_ENV === 'development' && productDocs.length > 0) {
+        const sampleDoc = productDocs.find(p => p.name === 'Pâté à la viande') || productDocs[0];
+        console.log(`[Boutique SSR] Sample productDoc from DB (with campaign):`, {
+          name: sampleDoc.name,
+          hasAttributes: !!sampleDoc.attributes,
+          attributes: sampleDoc.attributes,
+          attributesType: typeof sampleDoc.attributes,
+          allKeys: Object.keys(sampleDoc)
+        });
+      }
+
       products = productDocs
         .filter(product => product && product._id && product.name)
         .map(product => {
@@ -979,6 +1022,21 @@ export async function getServerSideProps(context) {
             }
           }
 
+          // Get attributes from product, ensuring all fields are present
+          const productAttributes = product.attributes || {};
+          const sanitizedAttributes = {
+            freezable: productAttributes.freezable !== undefined ? productAttributes.freezable : (product.freezable !== undefined ? product.freezable : false),
+            glutenFree: productAttributes.glutenFree !== undefined ? productAttributes.glutenFree : false,
+            vegetarian: productAttributes.vegetarian !== undefined ? productAttributes.vegetarian : false,
+            vegan: productAttributes.vegan !== undefined ? productAttributes.vegan : false,
+            nutFree: productAttributes.nutFree !== undefined ? productAttributes.nutFree : false,
+            halal: productAttributes.halal !== undefined ? productAttributes.halal : false,
+            kosher: productAttributes.kosher !== undefined ? productAttributes.kosher : false,
+            organic: productAttributes.organic !== undefined ? productAttributes.organic : false,
+            quebecProduct: productAttributes.quebecProduct !== undefined ? productAttributes.quebecProduct : false,
+            allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+          };
+
           const productData = {
             id: product._id.toString(),
             name: sanitizeHtml(String(product.name || '')),
@@ -992,7 +1050,25 @@ export async function getServerSideProps(context) {
             isDefault: Boolean(product.isDefault),
             productId: String(product.productId || ''),
             order: Number(product.order) || 0,
-            hasCustomPrice: hasCustomPrice
+            hasCustomPrice: hasCustomPrice,
+            attributes: sanitizedAttributes,
+            freezable: product.freezable // Keep for backward compatibility
+          }
+
+          // Debug: Log products with attributes
+          if (process.env.NODE_ENV === 'development') {
+            const hasAnyAttr = Object.values(sanitizedAttributes).some((val, idx) => {
+              if (idx === 9) return val && String(val).trim().length > 0; // allergens
+              return val === true;
+            });
+            if (hasAnyAttr || product.attributes || product.freezable !== undefined) {
+              console.log(`[Boutique SSR] Product "${productData.name}":`, {
+                'product.attributes from DB': product.attributes,
+                'product.freezable from DB': product.freezable,
+                'sanitizedAttributes': sanitizedAttributes,
+                'hasAnyAttribute': hasAnyAttr
+              });
+            }
           }
 
           // Debug: Log products with ingredient/nutrition images
@@ -1011,24 +1087,62 @@ export async function getServerSideProps(context) {
         .sort({ order: 1, createdAt: -1 })
         .limit(100)
         .lean()
+        .select('+attributes') // Explicitly include attributes field
 
       products = productDocs
         .filter(product => product && product._id && product.name)
-        .map(product => ({
-          id: product._id.toString(),
-          name: sanitizeHtml(String(product.name || '')),
-          description: sanitizeHtml(String(product.description || '')),
-          price: Number(product.price) || 0,
-          originalPrice: Number(product.price) || 0,
-          cost: Number(product.cost) || 0,
-          image: sanitizeHtml(String(product.image || '')),
-          ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
-          nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
-          isDefault: Boolean(product.isDefault),
-          productId: String(product.productId || ''),
-          order: Number(product.order) || 0,
-          hasCustomPrice: false
-        }))
+        .map(product => {
+          // Get attributes from product, ensuring all fields are present
+          const productAttributes = product.attributes || {};
+          const sanitizedAttributes = {
+            freezable: productAttributes.freezable !== undefined ? productAttributes.freezable : (product.freezable !== undefined ? product.freezable : false),
+            glutenFree: productAttributes.glutenFree !== undefined ? productAttributes.glutenFree : false,
+            vegetarian: productAttributes.vegetarian !== undefined ? productAttributes.vegetarian : false,
+            vegan: productAttributes.vegan !== undefined ? productAttributes.vegan : false,
+            nutFree: productAttributes.nutFree !== undefined ? productAttributes.nutFree : false,
+            halal: productAttributes.halal !== undefined ? productAttributes.halal : false,
+            kosher: productAttributes.kosher !== undefined ? productAttributes.kosher : false,
+            organic: productAttributes.organic !== undefined ? productAttributes.organic : false,
+            quebecProduct: productAttributes.quebecProduct !== undefined ? productAttributes.quebecProduct : false,
+            allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+          };
+
+          const productData = {
+            id: product._id.toString(),
+            name: sanitizeHtml(String(product.name || '')),
+            description: sanitizeHtml(String(product.description || '')),
+            price: Number(product.price) || 0,
+            originalPrice: Number(product.price) || 0,
+            cost: Number(product.cost) || 0,
+            image: sanitizeHtml(String(product.image || '')),
+            ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
+            nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
+            isDefault: Boolean(product.isDefault),
+            productId: String(product.productId || ''),
+            order: Number(product.order) || 0,
+            hasCustomPrice: false,
+            attributes: sanitizedAttributes,
+            freezable: product.freezable // Keep for backward compatibility
+          };
+
+          // Debug: Log products with attributes
+          if (process.env.NODE_ENV === 'development') {
+            const hasAnyAttr = Object.values(sanitizedAttributes).some((val, idx) => {
+              if (idx === 9) return val && String(val).trim().length > 0; // allergens
+              return val === true;
+            });
+            if (hasAnyAttr || product.attributes || product.freezable !== undefined) {
+              console.log(`[Boutique SSR] Product "${productData.name}" (no campaign):`, {
+                'product.attributes from DB': product.attributes,
+                'product.freezable from DB': product.freezable,
+                'sanitizedAttributes': sanitizedAttributes,
+                'hasAnyAttribute': hasAnyAttr
+              });
+            }
+          }
+
+          return productData;
+        })
     }
 
     // Normalize deliveryOptions (similar to /api/stores/[id])
@@ -1096,7 +1210,65 @@ export async function getServerSideProps(context) {
           schoolName: schoolName,
           deliveryOptions: normalizedDeliveryOptions
         },
-        initialProducts: products
+        initialProducts: (() => {
+          // Debug: Check products before final mapping
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[Boutique SSR] Before final mapping - products count: ${products.length}`);
+            if (products.length > 0) {
+              const sample = products[0];
+              console.log(`[Boutique SSR] Sample product before mapping:`, {
+                name: sample.name,
+                hasAttributes: !!sample.attributes,
+                attributes: sample.attributes,
+                keys: Object.keys(sample)
+              });
+            }
+          }
+
+          return products.map(p => {
+            // Ensure attributes are always included and properly serialized
+            // Handle both cases: p.attributes is undefined/null OR p.attributes is an empty object
+            const existingAttributes = p.attributes && typeof p.attributes === 'object' ? p.attributes : {};
+            const productWithAttributes = {
+              ...p,
+              attributes: {
+                freezable: existingAttributes.freezable !== undefined ? existingAttributes.freezable : (p.freezable !== undefined ? p.freezable : false),
+                glutenFree: existingAttributes.glutenFree !== undefined ? existingAttributes.glutenFree : false,
+                vegetarian: existingAttributes.vegetarian !== undefined ? existingAttributes.vegetarian : false,
+                vegan: existingAttributes.vegan !== undefined ? existingAttributes.vegan : false,
+                nutFree: existingAttributes.nutFree !== undefined ? existingAttributes.nutFree : false,
+                halal: existingAttributes.halal !== undefined ? existingAttributes.halal : false,
+                kosher: existingAttributes.kosher !== undefined ? existingAttributes.kosher : false,
+                organic: existingAttributes.organic !== undefined ? existingAttributes.organic : false,
+                quebecProduct: existingAttributes.quebecProduct !== undefined ? existingAttributes.quebecProduct : false,
+                allergens: existingAttributes.allergens !== undefined ? String(existingAttributes.allergens) : ''
+              }
+            };
+
+            // Debug logging
+            if (process.env.NODE_ENV === 'development') {
+              if (!p.attributes || Object.keys(p.attributes || {}).length === 0) {
+                console.log(`[Boutique SSR] Product "${p.name}" being returned - ensuring attributes exist:`, {
+                  'p.attributes': p.attributes,
+                  'p.freezable': p.freezable,
+                  'productWithAttributes.attributes': productWithAttributes.attributes,
+                  'productKeys': Object.keys(p)
+                });
+              }
+              // Always log first product to see what's being returned
+              if (products.indexOf(p) === 0) {
+                console.log(`[Boutique SSR] First product being returned:`, {
+                  name: productWithAttributes.name,
+                  hasAttributes: !!productWithAttributes.attributes,
+                  attributes: productWithAttributes.attributes,
+                  allKeys: Object.keys(productWithAttributes)
+                });
+              }
+            }
+
+            return productWithAttributes;
+          });
+        })()
       }
     }
   } catch (error) {

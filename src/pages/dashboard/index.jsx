@@ -17,6 +17,7 @@ import { getStoreUrl } from '@/utils/storeUrlHelpers';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../api/auth/[...nextauth]';
 import { getDashboardSSRData } from '../../lib/dashboardSSR';
+import { prefetchSalesTools } from '@/utils/salesToolsPrefetcher';
 
 export default function Dashboard({
   initialCampaignContext,
@@ -146,6 +147,11 @@ export default function Dashboard({
 
   const handleOnboardingClose = useCallback(() => {
     setShowOnboardingTooltip(false);
+  }, []);
+
+  // Warm up heavy sales tools so the vendre page loads instantly
+  useEffect(() => {
+    prefetchSalesTools();
   }, []);
 
   // Memoize campaign handlers

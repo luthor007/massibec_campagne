@@ -26,37 +26,58 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'ID de campagne requis' });
     }
 
-    // Find the campaign with populated school
-    const campaign = await Campaign.findById(campaignId).populate('school', 'name');
-    
-    if (!campaign) {
-      return res.status(404).json({ message: 'Campagne non trouvée' });
-    }
-
-    // Check if user is school manager
+    // Check if user is school manager or supplier
     const user = await User.findById(token.sub);
-    if (!user || user.role !== 'school_manager') {
+    if (!user || (user.role !== 'school_manager' && user.role !== 'fournisseur')) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
 
-    // Get school
-    const school = await School.findById(campaign.school._id || campaign.school);
-    
-    if (!school) {
-      return res.status(404).json({ message: 'École non trouvée' });
+    // Find the campaign - try Campaign collection first, then legacy school.campaigns
+    let campaign = await Campaign.findById(campaignId).populate('school', 'name');
+    let school = null;
+    let campaignData = null;
+    let isLegacy = false;
+
+    if (campaign) {
+      // Campaign found in separate collection
+      school = await School.findById(campaign.school._id || campaign.school);
+      campaignData = campaign;
+    } else {
+      // Try to find in legacy school.campaigns array
+      const schools = await School.find({
+        'campaigns._id': campaignId
+      }).lean();
+
+      if (schools.length > 0) {
+        school = schools[0];
+        campaignData = school.campaigns.find(c => c._id?.toString() === campaignId);
+        isLegacy = true;
+      }
     }
 
-    // Verify user belongs to this school
-    if (user.schoolManagerInfo?.organisme?.toString() !== school._id.toString()) {
-      return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
+    if (!campaignData || !school) {
+      return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    // Get campaign data with fallback
-    const { campaign: campaignData, fallbackSplit } = await getCampaignDataWithFallback(
-      school._id, 
-      school, 
-      campaignId
-    );
+    // For school managers, verify they belong to this school
+    if (user.role === 'school_manager') {
+      if (user.schoolManagerInfo?.organisme?.toString() !== school._id.toString()) {
+        return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
+      }
+    }
+    // For suppliers, allow access to all campaigns (no verification needed)
+
+    // Get campaign data with fallback (only if not legacy)
+    let fallbackSplit = null;
+    if (!isLegacy) {
+      const campaignDataResult = await getCampaignDataWithFallback(
+        school._id,
+        school,
+        campaignId
+      );
+      campaignData = campaignDataResult.campaign;
+      fallbackSplit = campaignDataResult.fallbackSplit;
+    }
 
     // Get all users enrolled in this campaign (students AND school_managers who joined)
     const participants = await User.find({
@@ -72,7 +93,7 @@ export default async function handler(req, res) {
 
     // Calculate participant statistics
     const participantsWithStats = participants.map(participant => {
-      const participantOrders = orders.filter(order => 
+      const participantOrders = orders.filter(order =>
         order.user.toString() === participant._id.toString()
       );
 
@@ -87,7 +108,7 @@ export default async function handler(req, res) {
       let totalSchoolBenefit = 0;
       let totalRaffleBenefit = 0;
       let totalTips = 0;
-      
+
       // Separate donation breakdown
       let totalStudentDonationBenefit = 0;
       let totalSchoolDonationBenefit = 0;
@@ -99,7 +120,7 @@ export default async function handler(req, res) {
         totalSchoolBenefit += profits.totalOrganizationBenefit;
         totalRaffleBenefit += profits.totalRaffleBenefit;
         totalTips += order.tip || 0;
-        
+
         // Add donation breakdown if available
         if (order.tipBreakdown) {
           totalStudentDonationBenefit += (order.tipBreakdown.studentCash || 0) + (order.tipBreakdown.studentSchoolAccount || 0);
@@ -113,16 +134,16 @@ export default async function handler(req, res) {
       // Handle both students and school_managers
       // For students, use parentInfo; for school_managers, use their own name/info
       const isStudent = participant.role === 'student';
-      const parentName = isStudent 
-        ? (participant.parentInfo ? 
-            `${participant.parentInfo.prenomParent} ${participant.parentInfo.nomParent}` : 
-            'N/A')
+      const parentName = isStudent
+        ? (participant.parentInfo ?
+          `${participant.parentInfo.prenomParent} ${participant.parentInfo.nomParent}` :
+          'N/A')
         : participant.name; // For school_managers, use their own name
       const parentPhone = isStudent
         ? (participant.parentInfo?.telephone || 'N/A')
-        : (participant.schoolManagerInfo?.telephone || 
-           participant.schoolManagerInfo?.cellulaire || 
-           'N/A');
+        : (participant.schoolManagerInfo?.telephone ||
+          participant.schoolManagerInfo?.cellulaire ||
+          'N/A');
 
       return {
         _id: participant._id,
@@ -136,7 +157,7 @@ export default async function handler(req, res) {
         goal,
         progress,
         orderCount: participantOrders.length,
-        lastOrderDate: participantOrders.length > 0 
+        lastOrderDate: participantOrders.length > 0
           ? Math.max(...participantOrders.map(o => new Date(o.createdAt).getTime()))
           : null,
         // Profit breakdown
@@ -162,12 +183,12 @@ export default async function handler(req, res) {
     res.status(200).json({
       participants: participantsWithStats,
       campaign: {
-        _id: campaign._id,
-        campaignNumber: campaign.campaignNumber,
-        status: campaign.status,
-        financialGoal: campaign.financialGoal,
-        name: campaign.name,
-        campaignCode: campaign.campaignCode
+        _id: campaignData._id,
+        campaignNumber: campaignData.campaignNumber,
+        status: campaignData.status || 'active',
+        financialGoal: campaignData.financialGoal || campaignData.objectifFinancier,
+        name: campaignData.name || campaignData.nomCampagne,
+        campaignCode: campaignData.campaignCode || (school.code ? `${school.code}-C${campaignData.campaignNumber}` : null)
       }
     });
 

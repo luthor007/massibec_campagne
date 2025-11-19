@@ -48,3 +48,4 @@ SchoolManagerSchema.index({ user: 1, status: 1 });
 export default mongoose.models.SchoolManager || mongoose.model('SchoolManager', SchoolManagerSchema);
 
 
+

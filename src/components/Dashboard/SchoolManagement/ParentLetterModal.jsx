@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Copy, Mail, Facebook, MessageSquare, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { getTerminology } from '@/utils/organizationHelpers';
+import { getDateStringInTimezone } from '@/utils/dateHelpers';
 
 const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
   const [copiedSection, setCopiedSection] = useState(null);
@@ -20,15 +21,25 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
 
   const formatDateWithTimezone = (date) => {
     if (!date) return '';
-    const dateObj = new Date(date);
-    if (Number.isNaN(dateObj.getTime())) return '';
 
-    return new Intl.DateTimeFormat('fr-CA', {
-      timeZone: QUEBEC_TIMEZONE,
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    }).format(dateObj);
+    try {
+      const dateObj = new Date(date);
+      if (Number.isNaN(dateObj.getTime())) return '';
+
+      // Use UTC methods to extract date components directly
+      // This avoids timezone conversion issues when dates are stored as UTC midnight
+      const year = dateObj.getUTCFullYear();
+      const month = dateObj.getUTCMonth(); // 0-11
+      const day = dateObj.getUTCDate();
+
+      const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+      return `${day} ${months[month]} ${year}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
   };
 
   const formatDate = (date) => formatDateWithTimezone(date);
@@ -73,23 +84,23 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
     if (campaign.profitSplits && campaign.profitSplits.length > 0) {
       // First, try to find meat pie by checking product name
       let meatPieSplit = null;
-      
+
       // Check all profitSplits to find meat pie (we need to match by product name)
       // Since we have populated productId, check if we can find it
       for (const split of campaign.profitSplits) {
         const productId = split.productId?._id?.toString() || split.productId?.toString();
         const productName = split.productId?.name || '';
-        
+
         // Check if this is the meat pie (pâté à la viande)
         if (productName.toLowerCase().includes('pâté') && productName.toLowerCase().includes('viande')) {
           meatPieSplit = split;
-          
+
           // Get custom price if available
           const customPrice = campaign.customPrices?.find(cp => {
             const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
             return cpProductId === productId;
           });
-          
+
           productInfo.price = customPrice?.price || split.productId?.price || 12.00;
           productInfo.studentCash = split.studentCash !== undefined && split.studentCash !== null ? split.studentCash : 2.00;
           productInfo.studentSchoolAccount = split.studentSchoolAccount !== undefined && split.studentSchoolAccount !== null ? split.studentSchoolAccount : 0;
@@ -98,18 +109,18 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
           break;
         }
       }
-      
+
       // If meat pie not found, use first product
       if (!meatPieSplit && campaign.profitSplits[0]) {
         const firstSplit = campaign.profitSplits[0];
         const productId = firstSplit.productId?._id?.toString() || firstSplit.productId?.toString();
-        
+
         // Get custom price if available
         const customPrice = campaign.customPrices?.find(cp => {
           const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
           return cpProductId === productId;
         });
-        
+
         productInfo.price = customPrice?.price || firstSplit.productId?.price || 12.00;
         productInfo.studentCash = firstSplit.studentCash !== undefined && firstSplit.studentCash !== null ? firstSplit.studentCash : 2.00;
         productInfo.studentSchoolAccount = firstSplit.studentSchoolAccount !== undefined && firstSplit.studentSchoolAccount !== null ? firstSplit.studentSchoolAccount : 0;
@@ -130,27 +141,27 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
   };
   const examplePrice = productInfo.price;
   const totalProfit = profit.studentCash + profit.studentSchoolAccount + profit.schoolProject + profit.raffle;
-  
+
   // Student donation split percentages
   const studentCashPercentage = campaign.donationsForStudents?.splitConfig?.studentCash || 40;
   const studentAccountPercentage = campaign.donationsForStudents?.splitConfig?.studentAccount || 60;
-  
+
   // Get donation presets (only if enabled)
-  const studentDonationPresets = campaign.donationsForStudents?.enabled 
+  const studentDonationPresets = campaign.donationsForStudents?.enabled
     ? (campaign.donationsForStudents?.presets || [2, 5, 10, 20, 30])
     : [];
-  const schoolDonationPresets = campaign.donationsForSchool?.enabled 
+  const schoolDonationPresets = campaign.donationsForSchool?.enabled
     ? (campaign.donationsForSchool?.presets || [2, 5, 10, 20, 30])
     : [];
-  
+
   // Check if any donations are enabled
   const studentDonationsEnabled = campaign.donationsForStudents?.enabled ?? false;
   const schoolDonationsEnabled = campaign.donationsForSchool?.enabled ?? false;
   const anyDonationsEnabled = studentDonationsEnabled || schoolDonationsEnabled;
-  
+
   // Format order dates and times
   const formatDateLong = (date) => formatDateWithTimezone(date);
-  
+
   // Format order time range
   const orderTimeRange = "minuit et midi";
 
@@ -159,7 +170,7 @@ const ParentLetterModal = ({ isOpen, onClose, campaign, school }) => {
     let example = `Exemple de répartition du profit
 (sur un pâté à la viande vendu ${examplePrice.toFixed(2)} $)
 ${profit.studentCash.toFixed(2)} $ comptant pour le/la ${terminology.participant}`;
-    
+
     // Add student donation mention only if enabled
     if (studentDonationsEnabled && studentDonationPresets.length > 0) {
       const filteredPresets = studentDonationPresets.filter(p => p > 0);
@@ -167,11 +178,11 @@ ${profit.studentCash.toFixed(2)} $ comptant pour le/la ${terminology.participant
         example += ` (+ don proposé au moment du paiement : ${filteredPresets.join(' $, ')} $ ou autre)`;
       }
     }
-    
+
     example += `.
 ${profit.studentSchoolAccount.toFixed(2)} $ crédité dans le compte ${terminology.organization} du/de la ${terminology.participant}.
 ${profit.schoolProject.toFixed(2)} $ pour les projets de ${terminology.organization === 'école' ? "l'" : "l'"}${terminology.organization}`;
-    
+
     // Add school donation mention only if enabled
     if (schoolDonationsEnabled && schoolDonationPresets.length > 0) {
       const filteredPresets = schoolDonationPresets.filter(p => p > 0);
@@ -179,12 +190,12 @@ ${profit.schoolProject.toFixed(2)} $ pour les projets de ${terminology.organizat
         example += ` (+ possibilité de don : ${filteredPresets.join(' $, ')} $ ou autre)`;
       }
     }
-    
+
     example += `.
 ${profit.raffle.toFixed(2)} $ pour les tirages.
 
 Total des profits répartis : ${totalProfit.toFixed(2)} $`;
-    
+
     // Add donation tip only if any donations are enabled
     if (anyDonationsEnabled) {
       example += `
@@ -194,7 +205,7 @@ En partageant votre boutique à vos proches, vous maximisez vos ventes, vos dons
       example += `
 En partageant votre boutique à vos proches, vous maximisez vos ventes et vos profits!`;
     }
-    
+
     return example;
   };
 
@@ -203,9 +214,9 @@ En partageant votre boutique à vos proches, vous maximisez vos ventes et vos pr
     if (!anyDonationsEnabled) {
       return '';
     }
-    
+
     let section = `\n\nExplication des dons\n`;
-    
+
     if (studentDonationsEnabled && schoolDonationsEnabled) {
       // Both enabled
       section += `Les dons recueillis lors des ventes seront versés en partie à Massibec, qui se chargera ensuite de remettre les montants destinés à ${terminology.organization === 'école' ? "l'" : "l'"}${terminology.organization}.
@@ -219,10 +230,10 @@ Ainsi, vous conserverez dans votre compte une portion des dons ${terminology.par
       // Only school donations enabled
       section += `Les dons recueillis lors des ventes pour ${terminology.organization === 'école' ? "l'" : "l'"}${terminology.organization} devront être transférés à 100 % à Massibec, qui les reversera ensuite à ${terminology.organization === 'école' ? "l'" : "l'"}${terminology.organization}.`;
     }
-    
+
     section += `
 Le détail complet de ces répartitions, incluant les dons et les montants à remettre, sera clairement indiqué au moment où vous passerez votre commande à Massibec, et pourra être suivi en tout temps dans l'onglet Statistiques de votre tableau de bord.`;
-    
+
     return section;
   };
 
@@ -261,7 +272,7 @@ Confirmez votre inscription en vérifiant le courriel reçu (jetez un coup d'œi
 Les deux parents peuvent s'inscrire s'ils souhaitent gérer les ventes séparément :
 Par exemple, un parent peut vendre pour un des enfants et l'autre pour le second — ou tous deux pour le même, selon votre préférence. Mais nous vous suggérons tout de même de gérer qu'une seule plateforme autant que possible. Ce sera plus facile de combler des caisses complètes à la fin de la campagne.
 Une fois inscrit, entrez dans votre plateforme et ajoutez la campagne en entrant le code suivant :
- → Code de campagne : ${school.code}
+ → Code de campagne : ${campaign.campaignCode || `${school.code}-C${campaign.campaignNumber || 1}`}
 
 2. Tableau de bord
 Votre boutique comporte 6 onglets principaux :
@@ -339,7 +350,7 @@ Merci de communiquer avec moi pour prévoir la livraison le ${formatDate(campaig
             <span className="break-words">Lettre aux parents - Campagne #{campaign.campaignNumber}</span>
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm px-0 sm:px-2">
-            Voici votre lettre aux parents personnalisée avec les informations de votre campagne. 
+            Voici votre lettre aux parents personnalisée avec les informations de votre campagne.
             Vous pouvez la copier et l'envoyer aux parents de vos {terminology.participants}.
           </DialogDescription>
         </DialogHeader>
@@ -368,7 +379,7 @@ Merci de communiquer avec moi pour prévoir la livraison le ${formatDate(campaig
                   <span className="font-medium">Objectif:</span> ${campaign.financialGoal}
                 </div>
                 <div>
-                  <span className="font-medium">Statut:</span> 
+                  <span className="font-medium">Statut:</span>
                   <Badge className="ml-2" variant="outline">
                     {campaign.status === 'pending_approval' ? 'En attente' : campaign.status}
                   </Badge>
@@ -382,7 +393,10 @@ Merci de communiquer avec moi pour prévoir la livraison le ${formatDate(campaig
             <Button
               onClick={() => copyToClipboard(parentLetter, 'Lettre complète')}
               variant="outline"
-              className="flex items-center justify-center space-x-2 w-full sm:w-auto text-sm sm:text-base"
+              className={`flex items-center justify-center space-x-2 w-full sm:w-auto text-sm sm:text-base transition-all duration-200 ${copiedSection === 'Lettre complète'
+                ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                : ''
+                }`}
             >
               {copiedSection === 'Lettre complète' ? (
                 <CheckCircle className="h-4 w-4 text-green-600" />
@@ -391,11 +405,14 @@ Merci de communiquer avec moi pour prévoir la livraison le ${formatDate(campaig
               )}
               <span className="truncate">Copier la lettre complète</span>
             </Button>
-            
+
             <Button
               onClick={() => copyToClipboard(facebookMessage, 'Message Facebook')}
               variant="outline"
-              className="flex items-center justify-center space-x-2 w-full sm:w-auto text-sm sm:text-base"
+              className={`flex items-center justify-center space-x-2 w-full sm:w-auto text-sm sm:text-base transition-all duration-200 ${copiedSection === 'Message Facebook'
+                ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                : ''
+                }`}
             >
               {copiedSection === 'Message Facebook' ? (
                 <CheckCircle className="h-4 w-4 text-green-600" />

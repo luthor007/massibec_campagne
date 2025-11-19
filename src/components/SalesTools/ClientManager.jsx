@@ -27,14 +27,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Mail, Phone, User, Download, Upload, FileText, Smartphone, Mail as MailIcon } from 'lucide-react';
 
-export default function ClientManager({ clients, storeId, onRefresh }) {
+export default function ClientManager({ clients, storeId, campaignId, onRefresh, selectedClients = [], onSelectionChange }) {
   const [newClient, setNewClient] = useState({ name: '', email: '', phone: '', notes: '' });
   const [editingClient, setEditingClient] = useState(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [deleteClientId, setDeleteClientId] = useState(null);
-  const [selectedClients, setSelectedClients] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [importedContacts, setImportedContacts] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
@@ -56,11 +55,12 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
           storeId
         }),
       });
-      
+
       if (response.ok) {
         setNewClient({ name: '', email: '', phone: '', notes: '' });
         setShowAddDialog(false);
         onRefresh();
+        toast.success('Client ajouté avec succès');
       } else {
         const error = await response.json();
         toast.error(`Erreur: ${error.message}`);
@@ -81,16 +81,21 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
 
     setIsLoading(true);
     try {
+      const { _id, ...updateData } = editingClient;
       const response = await fetch('/api/clients', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingClient),
+        body: JSON.stringify({
+          id: _id,
+          ...updateData
+        }),
       });
-      
+
       if (response.ok) {
         setEditingClient(null);
         setShowEditDialog(false);
         onRefresh();
+        toast.success('Client mis à jour avec succès');
       } else {
         const error = await response.json();
         toast.error(`Erreur: ${error.message}`);
@@ -109,7 +114,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
       const response = await fetch(`/api/clients?id=${clientId}`, {
         method: 'DELETE',
       });
-      
+
       if (response.ok) {
         setDeleteClientId(null);
         onRefresh();
@@ -126,18 +131,22 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
   };
 
   const toggleClientSelection = (clientId) => {
-    setSelectedClients(prev => 
-      prev.includes(clientId) 
-        ? prev.filter(id => id !== clientId)
-        : [...prev, clientId]
-    );
+    const newSelection = selectedClients.includes(clientId)
+      ? selectedClients.filter(id => id !== clientId)
+      : [...selectedClients, clientId];
+
+    if (onSelectionChange) {
+      onSelectionChange(newSelection);
+    }
   };
 
   const selectAllClients = () => {
-    if (selectedClients.length === clients.length) {
-      setSelectedClients([]);
-    } else {
-      setSelectedClients(clients.map(c => c._id));
+    const newSelection = selectedClients.length === clients.length
+      ? []
+      : clients.map(c => c._id);
+
+    if (onSelectionChange) {
+      onSelectionChange(newSelection);
     }
   };
 
@@ -163,12 +172,12 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
   const parseVCard = (vcardContent) => {
     const contacts = [];
     const vcardBlocks = vcardContent.split('BEGIN:VCARD');
-    
+
     vcardBlocks.forEach(block => {
       if (block.trim()) {
         const lines = block.split('\n');
         let contact = { name: '', email: '', phone: '' };
-        
+
         lines.forEach(line => {
           if (line.startsWith('FN:')) {
             contact.name = line.replace('FN:', '').trim();
@@ -178,29 +187,29 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
             contact.phone = line.replace('TEL:', '').trim();
           }
         });
-        
+
         if (contact.name && contact.email) {
           contacts.push(contact);
         }
       }
     });
-    
+
     return contacts;
   };
 
   const parseCSV = (csvContent) => {
     const lines = csvContent.split('\n');
     const contacts = [];
-    
+
     // Skip header row
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      
+
       // Handle CSV with quotes
       const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
       const cleanValues = values.map(v => v.replace(/^"|"$/g, '').trim());
-      
+
       if (cleanValues.length >= 2) {
         contacts.push({
           name: cleanValues[0] || '',
@@ -210,7 +219,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
         });
       }
     }
-    
+
     return contacts;
   };
 
@@ -253,7 +262,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
     setIsImporting(true);
     try {
       const contactsToImport = selectedContacts.map(index => importedContacts[index]);
-      
+
       for (const contact of contactsToImport) {
         const response = await fetch('/api/clients', {
           method: 'POST',
@@ -263,12 +272,12 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
             storeId
           }),
         });
-        
+
         if (!response.ok) {
           console.error(`Failed to import contact: ${contact.name}`);
         }
       }
-      
+
       setShowImportDialog(false);
       setImportedContacts([]);
       setSelectedContacts([]);
@@ -283,8 +292,8 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
   };
 
   const toggleContactSelection = (index) => {
-    setSelectedContacts(prev => 
-      prev.includes(index) 
+    setSelectedContacts(prev =>
+      prev.includes(index)
         ? prev.filter(i => i !== index)
         : [...prev, index]
     );
@@ -310,6 +319,46 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
               </CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!storeId) {
+                    toast.error('StoreId manquant. Impossible de synchroniser.');
+                    console.error('[ClientManager] storeId is missing:', storeId);
+                    return;
+                  }
+
+                  setIsLoading(true);
+                  try {
+                    console.log('[ClientManager] Syncing clients for storeId:', storeId, 'campaignId:', campaignId);
+                    const response = await fetch('/api/clients/sync', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ storeId, campaignId })
+                    });
+                    if (response.ok) {
+                      const data = await response.json();
+                      toast.success(data.message || `${data.synced || 0} client(s) synchronisé(s)`);
+                      onRefresh();
+                    } else {
+                      const error = await response.json();
+                      console.error('[ClientManager] Sync error:', error);
+                      toast.error(`Erreur: ${error.message || 'Erreur lors de la synchronisation'}`);
+                    }
+                  } catch (error) {
+                    console.error('[ClientManager] Error syncing clients:', error);
+                    toast.error('Erreur lors de la synchronisation');
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                disabled={isLoading || !storeId}
+                className="w-full sm:w-auto"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                {isLoading ? 'Synchronisation...' : 'Synchroniser depuis commandes'}
+              </Button>
               <Button variant="outline" size="sm" onClick={exportToCSV} className="w-full sm:w-auto">
                 <Download className="h-4 w-4 mr-2" />
                 Exporter CSV
@@ -330,11 +379,49 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
             <div className="text-center py-12">
               <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun client</h3>
-              <p className="text-gray-500 mb-4">Commencez par ajouter vos premiers clients</p>
-              <Button onClick={() => setShowAddDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter un client
-              </Button>
+              <p className="text-gray-500 mb-4">
+                Synchronisez vos clients depuis vos commandes ou ajoutez-les manuellement
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!storeId) {
+                      toast.error('StoreId manquant. Impossible de synchroniser.');
+                      return;
+                    }
+                    setIsLoading(true);
+                    try {
+                      const response = await fetch('/api/clients/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ storeId, campaignId })
+                      });
+                      if (response.ok) {
+                        const data = await response.json();
+                        toast.success(data.message || `${data.synced || 0} client(s) synchronisé(s)`);
+                        onRefresh();
+                      } else {
+                        const error = await response.json();
+                        toast.error(`Erreur: ${error.message || 'Aucune commande trouvée'}`);
+                      }
+                    } catch (error) {
+                      console.error('Error syncing clients:', error);
+                      toast.error('Erreur lors de la synchronisation');
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading || !storeId}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isLoading ? 'Synchronisation...' : 'Synchroniser depuis commandes'}
+                </Button>
+                <Button onClick={() => setShowAddDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Ajouter un client
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
@@ -384,8 +471,8 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                     </div>
                   </div>
                   <div className="flex space-x-2 self-end sm:self-auto">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => {
                         setEditingClient(client);
@@ -394,8 +481,8 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => setDeleteClientId(client._id)}
                     >
@@ -424,7 +511,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
               <Input
                 id="clientName"
                 value={newClient.name}
-                onChange={(e) => setNewClient({...newClient, name: e.target.value})}
+                onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
                 placeholder="Nom complet"
               />
             </div>
@@ -434,7 +521,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                 id="clientEmail"
                 type="email"
                 value={newClient.email}
-                onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
                 placeholder="email@example.com"
               />
             </div>
@@ -443,7 +530,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
               <Input
                 id="clientPhone"
                 value={newClient.phone}
-                onChange={(e) => setNewClient({...newClient, phone: e.target.value})}
+                onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
                 placeholder="(555) 123-4567"
               />
             </div>
@@ -452,7 +539,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
               <Textarea
                 id="clientNotes"
                 value={newClient.notes}
-                onChange={(e) => setNewClient({...newClient, notes: e.target.value})}
+                onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })}
                 placeholder="Notes sur le client..."
               />
             </div>
@@ -484,7 +571,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                 <Input
                   id="editClientName"
                   value={editingClient.name}
-                  onChange={(e) => setEditingClient({...editingClient, name: e.target.value})}
+                  onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
                 />
               </div>
               <div>
@@ -493,7 +580,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                   id="editClientEmail"
                   type="email"
                   value={editingClient.email}
-                  onChange={(e) => setEditingClient({...editingClient, email: e.target.value})}
+                  onChange={(e) => setEditingClient({ ...editingClient, email: e.target.value })}
                 />
               </div>
               <div>
@@ -501,7 +588,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                 <Input
                   id="editClientPhone"
                   value={editingClient.phone || ''}
-                  onChange={(e) => setEditingClient({...editingClient, phone: e.target.value})}
+                  onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
                 />
               </div>
               <div>
@@ -509,7 +596,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                 <Textarea
                   id="editClientNotes"
                   value={editingClient.notes || ''}
-                  onChange={(e) => setEditingClient({...editingClient, notes: e.target.value})}
+                  onChange={(e) => setEditingClient({ ...editingClient, notes: e.target.value })}
                 />
               </div>
             </div>
@@ -536,7 +623,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={() => deleteClient(deleteClientId)}
               className="bg-red-600 hover:bg-red-700"
             >
@@ -555,7 +642,7 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
               Importez vos contacts depuis votre iPhone, Outlook, Gmail ou un fichier CSV
             </DialogDescription>
           </DialogHeader>
-          
+
           {importedContacts.length === 0 ? (
             <div className="space-y-6">
               {/* Import Methods */}
@@ -683,8 +770,8 @@ export default function ClientManager({ clients, storeId, onRefresh }) {
                   }}>
                     Annuler
                   </Button>
-                  <Button 
-                    onClick={importSelectedContacts} 
+                  <Button
+                    onClick={importSelectedContacts}
                     disabled={selectedContacts.length === 0 || isImporting}
                   >
                     {isImporting ? 'Importation...' : `Importer ${selectedContacts.length} contact(s)`}

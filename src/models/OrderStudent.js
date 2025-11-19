@@ -20,6 +20,7 @@ const OrderStudentSchema = new mongoose.Schema({
     studentSchoolAccountBenefit: { type: Number, required: true }, // Bénéfice étudiant compte scolaire
     schoolProjectBenefit: { type: Number, required: true }, // Bénéfice projet école
     raffleBenefit: { type: Number, required: true }, // Bénéfice pour le tirage
+    isAdditional: { type: Boolean, default: false }, // True if product was added beyond sold quantities
     // Legacy fields for backward compatibility
     studentBenefit: { type: Number }, // Bénéfice pour l'élève (legacy)
     organizationBenefit: { type: Number }, // Bénéfice pour l'organisation (legacy)

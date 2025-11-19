@@ -114,11 +114,16 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
       <p>
         <strong>Destinataire :</strong> {sellerName} <br />
         <strong>Adresse courriel :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a> <br />
-        {autoDeposit ? null : <><strong>Question de sécurité :</strong> {firstName}<br /></>}
-        {autoDeposit ? null : <strong>Réponse :</strong>} {autoDeposit ? null : <a href={`mailto:${customerEmail}`}>{customerEmail}</a>}<br />
+        {autoDeposit ? null : <><strong>Question de sécurité :</strong> Numéro de commande<br /></>}
+        {autoDeposit ? null : <><strong>Réponse :</strong> Cmd-{orderId}<br /></>}
         <strong>Montant :</strong> {((totalAmount || 0) + (totalDonation || 0)).toFixed(2)} $<br />
         {autoDeposit ? <><strong>Message :</strong> #{orderId}</> : null}
       </p>
+      {autoDeposit ? null : (
+        <p style={{ fontSize: '14px', color: '#666', fontStyle: 'italic', marginTop: '10px' }}>
+          <strong>Note :</strong> Si vous n'avez pas activé le dépôt automatique, utilisez Cmd-{orderId} comme réponse à la question de sécurité.
+        </p>
+      )}
 
 
       <h3 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Détails de la commande :</h3>

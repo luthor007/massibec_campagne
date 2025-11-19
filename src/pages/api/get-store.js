@@ -1,6 +1,8 @@
 // src/pages/api/get-store.js
 import dbConnect from '../../lib/mongodb';
 import Store from '../../models/Store';
+import Campaign from '../../models/Campaign';
+import School from '../../models/School';
 import { getToken } from 'next-auth/jwt';
 import mongoose from 'mongoose';
 
@@ -23,26 +25,72 @@ export default async function handler(req, res) {
 
       const userId = token.sub;
 
-      // Normalize campaignId to ObjectId for consistent comparison
-      const normalizedCampaignId = mongoose.Types.ObjectId.isValid(campaignId)
-        ? new mongoose.Types.ObjectId(campaignId)
-        : campaignId;
+      console.log('[get-store] userId:', userId, 'campaignId:', campaignId);
 
-      console.log('[get-store] userId:', userId, 'campaignId:', campaignId, 'normalizedCampaignId:', normalizedCampaignId);
+      let store = null;
 
-      // Find store by user and campaignId
-      // First try with normalized ObjectId, then fallback to string comparison
-      let store = await Store.findOne({
-        user: userId,
-        campaignId: normalizedCampaignId
-      });
+      // Handle legacy campaign IDs (format: legacy-{schoolId})
+      if (campaignId && typeof campaignId === 'string' && campaignId.startsWith('legacy-')) {
+        // Extract schoolId from legacy campaign ID
+        const schoolId = campaignId.replace('legacy-', '');
 
-      // If not found with ObjectId, try with string (for backwards compatibility)
-      if (!store) {
+        console.log('[get-store] Legacy campaign detected, schoolId:', schoolId);
+
+        // For legacy campaigns, we need to find an active campaign for the school
+        // and use that to find the store
+        if (mongoose.Types.ObjectId.isValid(schoolId)) {
+          const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+          // Try to find an active campaign for this school
+          const activeCampaign = await Campaign.findOne({
+            school: schoolObjectId,
+            isActive: true
+          }).sort({ campaignNumber: -1 });
+
+          if (activeCampaign) {
+            console.log('[get-store] Found active campaign for legacy school:', activeCampaign._id);
+            // Use the active campaign's ID to find the store
+            store = await Store.findOne({
+              user: userId,
+              campaignId: activeCampaign._id
+            });
+          } else {
+            // No active campaign found - try to find any store for this user
+            // (in case there's a store without a proper campaignId)
+            console.log('[get-store] No active campaign found, trying to find any store for user');
+            store = await Store.findOne({
+              user: userId
+            });
+          }
+        } else {
+          // Invalid schoolId format - try to find any store for this user
+          console.log('[get-store] Invalid schoolId format, trying to find any store for user');
+          store = await Store.findOne({
+            user: userId
+          });
+        }
+      } else {
+        // Normal campaign ID - normalize to ObjectId for consistent comparison
+        const normalizedCampaignId = mongoose.Types.ObjectId.isValid(campaignId)
+          ? new mongoose.Types.ObjectId(campaignId)
+          : campaignId;
+
+        console.log('[get-store] normalizedCampaignId:', normalizedCampaignId);
+
+        // Find store by user and campaignId
+        // First try with normalized ObjectId, then fallback to string comparison
         store = await Store.findOne({
           user: userId,
-          campaignId: campaignId
+          campaignId: normalizedCampaignId
         });
+
+        // If not found with ObjectId, try with string (for backwards compatibility)
+        if (!store) {
+          store = await Store.findOne({
+            user: userId,
+            campaignId: campaignId
+          });
+        }
       }
 
       console.log('[get-store] Store found:', !!store, store ? `Store ID: ${store._id}` : 'No store');

@@ -3,9 +3,47 @@ import School from '../../../models/School';
 import Campaign from '../../../models/Campaign';
 import User from '../../../models/User';
 import SchoolManager from '../../../models/SchoolManager';
+import FunnelEvent from '../../../models/FunnelEvent';
 import { getToken } from 'next-auth/jwt';
 import { generateCampaignCode } from '../../../utils/campaignHelpers';
 import { parseLocalDate } from '../../../utils/dateHelpers';
+import crypto from 'crypto';
+
+// Helper function to track funnel events server-side
+async function trackFunnelEventServer(eventType, userType, userId, metadata = {}) {
+  try {
+    const sessionId = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+
+    // Calculate time since previous event
+    let timeSincePreviousEvent = null;
+    try {
+      const previousEvent = await FunnelEvent.findOne({ userId })
+        .sort({ createdAt: -1 })
+        .lean();
+      if (previousEvent) {
+        timeSincePreviousEvent = Date.now() - new Date(previousEvent.createdAt).getTime();
+      }
+    } catch (error) {
+      console.error('Error calculating time since previous event:', error);
+    }
+
+    const enrichedMetadata = {
+      ...metadata,
+      timeSincePreviousEvent: timeSincePreviousEvent !== null ? timeSincePreviousEvent : undefined
+    };
+
+    const funnelEvent = new FunnelEvent({
+      eventType,
+      userType,
+      userId: userId || null,
+      sessionId,
+      metadata: enrichedMetadata
+    });
+    await funnelEvent.save();
+  } catch (error) {
+    console.error('Error tracking funnel event server-side:', error);
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
@@ -76,7 +114,7 @@ export default async function handler(req, res) {
 
       // Find the school - check SchoolManager relationships first, then fall back to legacy schoolManagerInfo
       let school;
-      
+
       if (schoolId) {
         // If schoolId is provided, verify the user has access to it
         const schoolManagerRecord = await SchoolManager.findOne({
@@ -84,14 +122,14 @@ export default async function handler(req, res) {
           school: schoolId,
           status: 'active'
         }).lean();
-        
+
         // Also check legacy schoolManagerInfo
         const hasLegacyAccess = user.schoolManagerInfo?.organisme?.toString() === schoolId.toString();
-        
+
         if (!schoolManagerRecord && !hasLegacyAccess) {
           return res.status(403).json({ message: 'Vous n\'avez pas accès à cette école' });
         }
-        
+
         school = await School.findById(schoolId);
       } else {
         // Find school from user associations
@@ -100,17 +138,17 @@ export default async function handler(req, res) {
           user: userId,
           status: 'active'
         }).lean();
-        
+
         if (schoolManager?.school) {
           school = await School.findById(schoolManager.school);
         }
-        
+
         // If no school from SchoolManager, check legacy schoolManagerInfo
         if (!school && user.schoolManagerInfo?.organisme) {
           school = await School.findById(user.schoolManagerInfo.organisme);
         }
       }
-      
+
       if (!school) {
         return res.status(404).json({ message: 'École non trouvée' });
       }
@@ -118,14 +156,14 @@ export default async function handler(req, res) {
       // Create new campaign
       const newCampaignNumber = school.currentCampaignNumber + 1;
       const campaignCode = generateCampaignCode(school.code, newCampaignNumber);
-      
+
       // Generate automatic campaign name: "Nom Organisation - Mois Année"
-      const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 
-                      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
       const startMonth = startDateObj.getMonth();
       const startYear = startDateObj.getFullYear();
       const campaignName = `${school.name} - ${months[startMonth]} ${startYear}`;
-      
+
       const newCampaign = new Campaign({
         name: campaignName,
         campaignNumber: newCampaignNumber,
@@ -172,7 +210,15 @@ export default async function handler(req, res) {
 
       await school.save();
 
-      res.status(201).json({ 
+      // Track school campaign creation
+      await trackFunnelEventServer('school_campaign_created', 'school', userId.toString(), {
+        campaignId: newCampaign._id.toString(),
+        campaignCode: campaignCode,
+        schoolId: school._id.toString(),
+        financialGoal: parseFloat(financialGoal)
+      });
+
+      res.status(201).json({
         message: 'Campagne créée avec succès. En attente d\'approbation de Massibec.',
         campaign: {
           ...newCampaign.toObject(),

@@ -3,6 +3,7 @@ import User from '../models/User';
 import Campaign from '../models/Campaign';
 import School from '../models/School';
 import Store from '../models/Store';
+import Client from '../models/Client';
 import Order from '../models/Order';
 import Product from '../models/Product';
 import mongoose from 'mongoose';
@@ -17,6 +18,61 @@ export async function getDashboardSSRData(session) {
     }
 
     await dbConnect();
+
+    const calculateSalesStatsForStore = async (storeIdentifier) => {
+        if (!storeIdentifier) {
+            return { total: 0, thisMonth: 0, growth: 0 };
+        }
+
+        const normalizedStoreId = typeof storeIdentifier === 'string'
+            ? storeIdentifier
+            : (storeIdentifier?._id?.toString?.() || storeIdentifier?.toString?.());
+
+        const storeObjectId = normalizedStoreId && mongoose.Types.ObjectId.isValid(normalizedStoreId)
+            ? new mongoose.Types.ObjectId(normalizedStoreId)
+            : null;
+
+        const storeConditions = [];
+        if (normalizedStoreId) {
+            storeConditions.push({ storeId: normalizedStoreId });
+        }
+        if (storeObjectId) {
+            storeConditions.push({ store: storeObjectId });
+        }
+
+        if (storeConditions.length === 0) {
+            return { total: 0, thisMonth: 0, growth: 0 };
+        }
+
+        const baseFilter = { $or: storeConditions };
+
+        const currentMonth = new Date();
+        currentMonth.setDate(1);
+        currentMonth.setHours(0, 0, 0, 0);
+
+        const lastMonth = new Date(currentMonth);
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+        const totalOrders = await Order.countDocuments(baseFilter);
+        const thisMonthOrders = await Order.countDocuments({
+            ...baseFilter,
+            createdAt: { $gte: currentMonth }
+        });
+        const lastMonthOrders = await Order.countDocuments({
+            ...baseFilter,
+            createdAt: { $gte: lastMonth, $lt: currentMonth }
+        });
+
+        const growth = lastMonthOrders > 0
+            ? Math.round(((thisMonthOrders - lastMonthOrders) / lastMonthOrders) * 100)
+            : (thisMonthOrders > 0 ? 100 : 0);
+
+        return {
+            total: totalOrders,
+            thisMonth: thisMonthOrders,
+            growth
+        };
+    };
 
     // Get user with campaigns populated
     const user = await User.findById(session.user.id)
@@ -79,6 +135,8 @@ export async function getDashboardSSRData(session) {
     let initialSchoolData = null;
     let initialCampaignData = null;
     let initialStoreInfo = null;
+    let initialClients = [];
+    let initialSalesStats = { total: 0, thisMonth: 0, growth: 0 };
 
     if (campaignContext.mode === 'legacy') {
         const school = await School.findById(campaignContext.schoolId).lean();
@@ -96,7 +154,7 @@ export async function getDashboardSSRData(session) {
                 status: 'legacy',
                 isActive: true,
                 objectifPersonnel: campaignContext.objectifPersonnel,
-                joinedAt: user.createdAt || new Date(),
+                joinedAt: user.createdAt ? new Date(user.createdAt).toISOString() : new Date().toISOString(),
                 isLegacy: true
             }];
             initialSchoolData = {
@@ -315,6 +373,36 @@ export async function getDashboardSSRData(session) {
                         schoolName: schoolName || null,
                         deliveryOptions: normalizedDeliveryOptions
                     };
+
+                    try {
+                        const userStores = await Store.find({ user: session.user.id }).lean();
+                        const userStoreIds = userStores.map(userStore => userStore._id);
+                        if (userStoreIds.length > 0) {
+                            const clients = await Client.find({ storeId: { $in: userStoreIds } })
+                                .sort({ createdAt: -1 })
+                                .lean();
+
+                            initialClients = clients.map(client => ({
+                                ...client,
+                                _id: client._id.toString(),
+                                storeId: client.storeId?.toString() || client.storeId,
+                                userId: client.userId?.toString() || client.userId,
+                                totalSpent: client.totalSpent || 0,
+                                lastOrderDate: client.lastOrderDate ? new Date(client.lastOrderDate).toISOString() : null,
+                                createdAt: client.createdAt ? new Date(client.createdAt).toISOString() : null,
+                                updatedAt: client.updatedAt ? new Date(client.updatedAt).toISOString() : null
+                            }));
+                        }
+                    } catch (clientError) {
+                        console.error('Error preloading clients for SSR:', clientError);
+                    }
+
+                    try {
+                        initialSalesStats = await calculateSalesStatsForStore(store._id);
+                    } catch (statsError) {
+                        console.error('Error calculating sales stats for SSR:', statsError);
+                        initialSalesStats = { total: 0, thisMonth: 0, growth: 0 };
+                    }
                 }
             }
         }
@@ -329,7 +417,9 @@ export async function getDashboardSSRData(session) {
         },
         initialStoreInfo: initialStoreInfo || null,
         initialSchoolData: initialSchoolData || null,
-        initialCampaignData: initialCampaignData || null
+        initialCampaignData: initialCampaignData || null,
+        initialClients,
+        initialSalesStats
     };
 }
 
@@ -612,32 +702,45 @@ export async function getDetailPageSSR(session) {
             })) || []
         } : null;
 
-        const serializedCampaign = campaignData ? {
-            _id: campaignData._id.toString(),
-            campaignNumber: campaignData.campaignNumber,
-            campaignCode: campaignData.campaignCode,
-            startDate: campaignData.startDate?.toISOString() || null,
-            endDate: campaignData.endDate?.toISOString() || null,
-            deliveryDate: campaignData.deliveryDate?.toISOString() || null,
-            financialGoal: campaignData.financialGoal || null,
-            status: campaignData.status,
-            isActive: campaignData.isActive,
-            profitSplitType: campaignData.profitSplitType,
-            customPrices: campaignData.customPrices?.map(cp => ({
-                productId: cp.productId?._id?.toString() || cp.productId?.toString(),
-                price: cp.price
-            })) || [],
-            profitSplits: campaignData.profitSplits?.map(ps => ({
-                productId: ps.productId?._id?.toString() || ps.productId?.toString(),
-                studentCash: ps.studentCash,
-                studentSchoolAccount: ps.studentSchoolAccount,
-                raffle: ps.raffle,
-                schoolProject: ps.schoolProject
-            })) || [],
-            donationsForStudents: campaignData.donationsForStudents || null,
-            donationsForSchool: campaignData.donationsForSchool || null,
-            school: campaignData.school?._id?.toString() || campaignData.school?.toString() || null
-        } : null;
+        // Serialize campaign data, ensuring all values are JSON-serializable
+        const serializedCampaign = campaignData ? (() => {
+            const customPrices = (campaignData.customPrices || []).map(cp => {
+                const productId = cp.productId?._id?.toString() || cp.productId?.toString();
+                return {
+                    productId: productId || null,
+                    price: cp.price ?? null
+                };
+            }).filter(cp => cp.productId !== null && cp.productId !== undefined);
+
+            const profitSplits = (campaignData.profitSplits || []).map(ps => {
+                const productId = ps.productId?._id?.toString() || ps.productId?.toString();
+                return {
+                    productId: productId || null,
+                    studentCash: ps.studentCash ?? null,
+                    studentSchoolAccount: ps.studentSchoolAccount ?? null,
+                    raffle: ps.raffle ?? null,
+                    schoolProject: ps.schoolProject ?? null
+                };
+            }).filter(ps => ps.productId !== null && ps.productId !== undefined);
+
+            return {
+                _id: campaignData._id.toString(),
+                campaignNumber: campaignData.campaignNumber ?? null,
+                campaignCode: campaignData.campaignCode ?? null,
+                startDate: campaignData.startDate?.toISOString() || null,
+                endDate: campaignData.endDate?.toISOString() || null,
+                deliveryDate: campaignData.deliveryDate?.toISOString() || null,
+                financialGoal: campaignData.financialGoal ?? null,
+                status: campaignData.status ?? 'draft',
+                isActive: campaignData.isActive ?? false,
+                profitSplitType: campaignData.profitSplitType ?? 'percentage',
+                customPrices: customPrices,
+                profitSplits: profitSplits,
+                donationsForStudents: campaignData.donationsForStudents || null,
+                donationsForSchool: campaignData.donationsForSchool || null,
+                school: campaignData.school?._id?.toString() || campaignData.school?.toString() || null
+            };
+        })() : null;
 
         const serializedSchool = schoolData ? {
             _id: schoolData._id.toString(),
@@ -670,12 +773,29 @@ export async function getDetailPageSSR(session) {
             order: Number(product.order) || 0
         }));
 
-        return {
+        // Final serialization check - ensure all data is JSON-serializable
+        const result = {
             campaignData: serializedCampaign,
             schoolData: serializedSchool,
             products: serializedProducts,
             user: serializedUser
         };
+
+        // Deep serialize to catch any remaining non-serializable values
+        try {
+            JSON.parse(JSON.stringify(result));
+        } catch (serializationError) {
+            console.error('Serialization error in getDetailPageSSR:', serializationError);
+            // Return safe fallback
+            return {
+                campaignData: null,
+                schoolData: null,
+                products: [],
+                user: serializedUser
+            };
+        }
+
+        return result;
     } catch (error) {
         console.error('Error fetching detail page SSR:', error);
         return {
@@ -740,14 +860,75 @@ export async function getTopSellersSSR(session, schoolId, campaignId = null) {
         // Get campaign data for earnings calculation
         const { campaign, fallbackSplit } = await getCampaignDataWithFallback(schoolId, school, campaignId);
 
+        // Determine useful campaign metadata (dates, normalized IDs)
+        let startDate = null;
+        let endDate = null;
+
+        if (campaign) {
+            if (campaign.startDate) {
+                startDate = new Date(campaign.startDate);
+            }
+            if (campaign.endDate) {
+                endDate = new Date(campaign.endDate);
+            } else if (campaign.deliveryDate) {
+                endDate = new Date(campaign.deliveryDate);
+            }
+            if (endDate) {
+                endDate.setDate(endDate.getDate() + 30); // include post-campaign fulfilment window
+            }
+        }
+
+        const normalizedSchoolId = school?._id?.toString() || schoolId?.toString?.() || schoolId;
+        const campaignIdForQuery = campaignId || (campaign?._id?.toString() || null);
+
+        const buildCampaignConditions = (id) => {
+            if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+                return [];
+            }
+            const campaignObjectId = new mongoose.Types.ObjectId(id);
+            const idAsString = campaignObjectId.toString();
+
+            return [
+                { campaignId: campaignObjectId },
+                { campaignId: idAsString },
+                { campaignId: id },
+                { campaignId: null },
+                { campaignId: { $exists: false } }
+            ];
+        };
+
+        const campaignConditions = buildCampaignConditions(campaignIdForQuery);
+
         // Calculate total earnings for each student (filtered by campaign if provided)
         const studentData = await Promise.all(students.map(async (student) => {
             const userId = student._id.toString();
 
             // Build order query
-            const orderQuery = { user: userId };
-            if (campaignId && mongoose.Types.ObjectId.isValid(campaignId)) {
-                orderQuery.campaignId = new mongoose.Types.ObjectId(campaignId);
+            const orderQuery = {
+                user: userId
+            };
+
+            if (startDate || endDate) {
+                const createdAtRange = {};
+                if (startDate) createdAtRange.$gte = startDate;
+                if (endDate) createdAtRange.$lte = endDate;
+                if (Object.keys(createdAtRange).length > 0) {
+                    orderQuery.createdAt = createdAtRange;
+                }
+            }
+
+            if (normalizedSchoolId) {
+                const schoolCandidates = [normalizedSchoolId];
+                if (mongoose.Types.ObjectId.isValid(normalizedSchoolId)) {
+                    schoolCandidates.push(new mongoose.Types.ObjectId(normalizedSchoolId));
+                }
+                orderQuery.school = schoolCandidates.length > 1
+                    ? { $in: schoolCandidates }
+                    : normalizedSchoolId;
+            }
+
+            if (campaignConditions.length > 0) {
+                orderQuery.$or = campaignConditions;
             }
 
             // Get all orders for this student

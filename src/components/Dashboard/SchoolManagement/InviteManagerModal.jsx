@@ -148,3 +148,4 @@ const InviteManagerModal = ({ isOpen, onClose, schoolId, onInviteSent }) => {
 export default InviteManagerModal;
 
 
+

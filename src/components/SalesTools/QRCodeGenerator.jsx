@@ -18,7 +18,7 @@ export default function QRCodeGenerator({ storeInfo }) {
 
   const generateQRCode = async () => {
     try {
-      const storeUrl = getFullStoreUrl(storeInfo);
+      const storeUrl = getFullStoreUrl(storeInfo, 'qr');
       const url = await QRCodeLib.toDataURL(storeUrl, {
         width: 400,
         margin: 2,
@@ -43,14 +43,17 @@ export default function QRCodeGenerator({ storeInfo }) {
   };
 
   const copyLink = () => {
-    const storeUrl = getFullStoreUrl(storeInfo);
-    navigator.clipboard.writeText(storeUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const storeUrl = getFullStoreUrl(storeInfo, 'qr');
+    navigator.clipboard.writeText(storeUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch((err) => {
+      console.error('Erreur lors de la copie:', err);
+    });
   };
 
   const shareLink = async () => {
-    const storeUrl = getFullStoreUrl(storeInfo);
+    const storeUrl = getFullStoreUrl(storeInfo, 'qr');
 
     if (navigator.share) {
       try {
@@ -67,7 +70,7 @@ export default function QRCodeGenerator({ storeInfo }) {
     }
   };
 
-  const storeUrl = getFullStoreUrl(storeInfo);
+  const storeUrl = getFullStoreUrl(storeInfo, 'qr');
 
   return (
     <Card>
@@ -104,7 +107,10 @@ export default function QRCodeGenerator({ storeInfo }) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <Button
             variant="outline"
-            className="w-full"
+            className={`w-full transition-all duration-200 ${copied
+                ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                : ''
+              }`}
             onClick={copyLink}
           >
             {copied ? (

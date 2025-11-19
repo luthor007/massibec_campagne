@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Progress } from '@/components/ui/progress' // Ensure this component exists and is correctly implemented
 import { trackCheckoutReached } from '@/lib/analytics'
 
-export default function Cart({ id, campaignId, schoolId, campaignData, initialDeliveryOptions }) {
+export default function Cart({ id, campaignId, schoolId, campaignData, initialDeliveryOptions, isExample = false }) {
   const [items, setItems] = useState([])
   const [showCheckout, setShowCheckout] = useState(false)
   const [discount, setDiscount] = useState(0)
@@ -84,6 +84,9 @@ export default function Cart({ id, campaignId, schoolId, campaignData, initialDe
 
   // Handle Checkout Modal
   const handleCheckout = useCallback(() => {
+    if (isExample) {
+      return // Don't open checkout in example mode
+    }
     setShowCheckout(true)
     // Notify onboarding flow that checkout opened
     if (typeof window !== 'undefined') {
@@ -98,7 +101,7 @@ export default function Cart({ id, campaignId, schoolId, campaignData, initialDe
         userId: null // Will be extracted from session in API
       })
     }
-  }, [id, campaignId, schoolId])
+  }, [id, campaignId, schoolId, isExample])
 
   // Remove a Specific Item
   const removeItem = useCallback((id) => {
@@ -249,11 +252,12 @@ export default function Cart({ id, campaignId, schoolId, campaignData, initialDe
             <span>{discountedTotal.toFixed(2)}$</span>
           </div>
           <Button
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg cart-checkout-button"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 sm:py-4 text-base font-semibold shadow-lg cart-checkout-button disabled:opacity-50 disabled:cursor-not-allowed"
             data-testid="checkout-button"
             onClick={handleCheckout}
+            disabled={isExample}
           >
-            Passer la commande
+            {isExample ? 'Boutique exemple - Commande désactivée' : 'Passer la commande'}
           </Button>
         </CardFooter>
       )}
@@ -272,6 +276,7 @@ export default function Cart({ id, campaignId, schoolId, campaignData, initialDe
           initialCampaignData={campaignData}
           initialDeliveryOptions={initialDeliveryOptions}
           className="sm:max-h-600px"
+          isExample={isExample}
         />
       )}
     </Card>

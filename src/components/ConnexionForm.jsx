@@ -73,7 +73,7 @@ export default function ConnexionForm() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    
+
     try {
       const result = await signIn('credentials', {
         redirect: false, // Prevent automatic redirection by next-auth
@@ -116,6 +116,13 @@ export default function ConnexionForm() {
             await signOut({ callbackUrl: '/resend-verification' });
             return; // Exit early to prevent further execution
           }
+
+          // Track login
+          const { trackLogin } = await import('@/lib/funnelAnalytics');
+          const userType = userRole === 'student' ? 'student' : userRole === 'school_manager' ? 'school' : 'anonymous';
+          // Check if this is a returning user (has previous login events)
+          const isReturning = data.user.createdAt && new Date(data.user.createdAt).getTime() < Date.now() - 24 * 60 * 60 * 1000;
+          trackLogin(data.user._id, userType, isReturning);
 
           // Redirect based on the user role
           if (userRole === 'school_manager') {
@@ -185,16 +192,16 @@ export default function ConnexionForm() {
           />
         </div>
         <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
->
-      <Button
-        variant="default"
-        size="lg"
-        type="submit"
-        disabled={isLoading}
-        className={`
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Button
+            variant="default"
+            size="lg"
+            type="submit"
+            disabled={isLoading}
+            className={`
           relative overflow-hidden transition-all duration-300 ease-out
           transform hover:scale-105 hover:shadow-lg
           bg-gradient-to-r from-blue-500 to-indigo-600
@@ -202,40 +209,40 @@ export default function ConnexionForm() {
           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
           disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
         `}
-        onMouseEnter={() => !isLoading && setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <motion.span
-          className="relative z-10 flex items-center space-x-2"
-          animate={{ x: isHovered && !isLoading ? 5 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          {isLoading ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Connexion...</span>
-            </>
-          ) : (
-            <>
-              <LogIn className="w-5 h-5" />
-              <span>Se connecter</span>
-            </>
-          )}
-        </motion.span>
-        <motion.div
-          className="absolute inset-0 bg-white"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: isHovered && !isLoading ? 1.5 : 0, opacity: isHovered && !isLoading ? 0.15 : 0 }}
-          transition={{ duration: 0.3 }}
-          style={{ borderRadius: '100%', zIndex: 0 }}
-        />
-      </Button>
-    </motion.div>
+            onMouseEnter={() => !isLoading && setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            <motion.span
+              className="relative z-10 flex items-center space-x-2"
+              animate={{ x: isHovered && !isLoading ? 5 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Connexion...</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5" />
+                  <span>Se connecter</span>
+                </>
+              )}
+            </motion.span>
+            <motion.div
+              className="absolute inset-0 bg-white"
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: isHovered && !isLoading ? 1.5 : 0, opacity: isHovered && !isLoading ? 0.15 : 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ borderRadius: '100%', zIndex: 0 }}
+            />
+          </Button>
+        </motion.div>
       </form>
       <p className="mt-4 text-center">
-          <Link  href="/forgot-password" className="text-blue-500 hover:underline">Mot de passe oublié ?</Link>
+        <Link href="/forgot-password" className="text-blue-500 hover:underline">Mot de passe oublié ?</Link>
 
       </p>
-      </>
+    </>
   )
 }

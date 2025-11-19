@@ -2,10 +2,29 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
+import FunnelEvent from '../../../models/FunnelEvent';
+import crypto from 'crypto';
+
+// Helper function to track funnel events server-side
+async function trackFunnelEventServer(eventType, userType, userId, metadata = {}) {
+  try {
+    const sessionId = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const funnelEvent = new FunnelEvent({
+      eventType,
+      userType,
+      userId: userId || null,
+      sessionId,
+      metadata
+    });
+    await funnelEvent.save();
+  } catch (error) {
+    console.error('Error tracking funnel event server-side:', error);
+  }
+}
 
 export default async function handler(req, res) {
   const session = await getServerSession(req, res, authOptions);
-  
+
   if (!session) {
     return res.status(401).json({ message: 'Non autorisé' });
   }
@@ -23,7 +42,7 @@ export default async function handler(req, res) {
       const progress = user.onboardingProgress || {};
       const totalSteps = 6;
       const completedSteps = Object.values(progress).filter(step => step === true).length;
-      
+
       return res.status(200).json({
         progress,
         completedSteps,
@@ -35,14 +54,14 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const { step, completed } = req.body;
-      
+
       if (!step || typeof completed !== 'boolean') {
         return res.status(400).json({ message: 'Étape et statut requis' });
       }
 
       const validSteps = [
         'joinedCampaign',
-        'personalizedStore', 
+        'personalizedStore',
         'visitedStore',
         'viewedOrders',
         'viewedStats',
@@ -65,6 +84,15 @@ export default async function handler(req, res) {
         };
       }
 
+      // Track onboarding step completion
+      if (completed) {
+        const userType = user.role === 'student' ? 'student' : 'school';
+        await trackFunnelEventServer('onboarding_step_completed', userType, user._id.toString(), {
+          step,
+          userId: user._id.toString()
+        });
+      }
+
       // Mettre à jour l'étape
       user.onboardingProgress[step] = completed;
 
@@ -75,6 +103,12 @@ export default async function handler(req, res) {
 
       if (allStepsCompleted && !user.onboardingProgress.completedAt) {
         user.onboardingProgress.completedAt = new Date();
+
+        // Track onboarding completion
+        const userType = user.role === 'student' ? 'student' : 'school';
+        await trackFunnelEventServer('onboarding_completed', userType, user._id.toString(), {
+          userId: user._id.toString()
+        });
       }
 
       await user.save();

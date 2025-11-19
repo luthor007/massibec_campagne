@@ -52,3 +52,4 @@ ManagerInvitationSchema.index({ email: 1, school: 1, status: 1 });
 export default mongoose.models.ManagerInvitation || mongoose.model('ManagerInvitation', ManagerInvitationSchema);
 
 
+

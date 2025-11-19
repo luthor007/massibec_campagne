@@ -2,48 +2,48 @@
 import mongoose from 'mongoose';
 
 const ProductSchema = new mongoose.Schema({
-  name: { 
-    type: String, 
-    required: true, 
+  name: {
+    type: String,
+    required: true,
     trim: true,
     maxlength: 200,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return v && typeof v === 'string' && v.trim().length > 0 && v.trim().length <= 200;
       },
       message: 'Product name must be a non-empty string between 1 and 200 characters'
     }
   },
-  description: { 
-    type: String, 
-    required: true, 
+  description: {
+    type: String,
+    required: true,
     trim: true,
-    maxlength: 1000 
+    maxlength: 1000
   },
-  price: { 
-    type: Number, 
-    required: true, 
+  price: {
+    type: Number,
+    required: true,
     min: 0,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return !isNaN(v) && v >= 0;
       },
       message: 'Price must be a valid number >= 0'
     }
   },
-  cost: { 
-    type: Number, 
-    required: true, 
+  cost: {
+    type: Number,
+    required: true,
     min: 0,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return !isNaN(v) && v >= 0;
       },
       message: 'Cost must be a valid number >= 0'
     }
   },
-  image: { 
-    type: String, 
+  image: {
+    type: String,
     required: true,
     trim: true
   },
@@ -57,29 +57,113 @@ const ProductSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
-  productId: { 
-    type: String, 
+  productId: {
+    type: String,
     required: true,
     unique: true,
     trim: true,
     default: () => Math.floor(Math.random() * 900000) + 100000 // 6-digit number
   },
   isDefault: { type: Boolean, default: false },
-  order: { 
-    type: Number, 
+  order: {
+    type: Number,
     default: 0,
     required: false
   },
+  // Attributs du produit
+  attributes: {
+    freezable: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    glutenFree: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    vegetarian: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    vegan: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    nutFree: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    halal: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    kosher: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    organic: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    quebecProduct: {
+      type: Boolean,
+      default: false,
+      required: false
+    },
+    allergens: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 500
+    }
+  },
+  // Campagnes associées - si vide, le produit est disponible pour toutes les campagnes
+  campaigns: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Campaign'
+  }],
   // Supprimé: school - les produits sont universels
 }, {
   // Add collection-level encoding safety
   versionKey: false,
-  minimize: true,
+  minimize: false, // Set to false to ensure nested objects like attributes are saved
   timestamps: true // Enable createdAt and updatedAt
 });
 
 // Ensure all string fields are properly encoded
-ProductSchema.pre('save', function(next) {
+ProductSchema.pre('save', function (next) {
+  // Migrate old format (freezable at root) to new format (attributes object)
+  if (this.freezable !== undefined && (!this.attributes || this.attributes.freezable === undefined)) {
+    if (!this.attributes) {
+      this.attributes = {};
+    }
+    this.attributes.freezable = this.freezable;
+    // Don't delete this.freezable to maintain backward compatibility
+  }
+
+  // Ensure attributes object exists with defaults
+  if (!this.attributes) {
+    this.attributes = {
+      freezable: false,
+      glutenFree: false,
+      vegetarian: false,
+      vegan: false,
+      nutFree: false,
+      halal: false,
+      kosher: false,
+      organic: false,
+      quebecProduct: false,
+      allergens: ''
+    };
+  }
+
   // Sanitize string fields to ensure valid UTF-8
   if (this.name && typeof this.name === 'string') {
     this.name = Buffer.from(this.name, 'utf8').toString('utf8');
@@ -98,6 +182,9 @@ ProductSchema.pre('save', function(next) {
   }
   if (this.productId && typeof this.productId === 'string') {
     this.productId = Buffer.from(this.productId, 'utf8').toString('utf8');
+  }
+  if (this.attributes && this.attributes.allergens && typeof this.attributes.allergens === 'string') {
+    this.attributes.allergens = Buffer.from(this.attributes.allergens, 'utf8').toString('utf8');
   }
   next();
 });

@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import CampaignCard from './CampaignCard';
-import { 
-  Search, 
-  Filter, 
-  Grid3X3, 
-  List, 
+import {
+  Search,
+  Filter,
+  Grid3X3,
+  List,
   Calendar,
   TrendingUp,
   Clock,
@@ -18,7 +19,9 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
-  Trash2
+  Trash2,
+  Eye,
+  Edit
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
@@ -26,25 +29,48 @@ const SupplierCampaignManager = ({ campaigns, loading, onRefresh, onApprove, onR
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [schoolFilter, setSchoolFilter] = useState('');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' or 'list'
   const [sortBy, setSortBy] = useState('date'); // 'date', 'school', 'status', 'progress'
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null); // { id: string, name: string }
   const [deleting, setDeleting] = useState(false);
 
+  // Helper function to get status badge
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, label: 'En attente' },
+      pending_approval: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, label: 'En attente' },
+      approved: { color: 'bg-blue-100 text-blue-800', icon: CheckCircle, label: 'Approuvée' },
+      active: { color: 'bg-green-100 text-green-800', icon: CheckCircle, label: 'Active' },
+      completed: { color: 'bg-gray-100 text-gray-800', icon: CheckCircle, label: 'Terminée' },
+      rejected: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Rejetée' },
+      locked: { color: 'bg-gray-100 text-gray-800', icon: Clock, label: 'Verrouillée' }
+    };
+
+    const config = statusConfig[status] || statusConfig.pending;
+    const Icon = config.icon;
+
+    return (
+      <Badge className={`${config.color} border-0`}>
+        <Icon className="w-3 h-3 mr-1" />
+        {config.label}
+      </Badge>
+    );
+  };
+
   // Filtrage et tri des campagnes
   const filteredAndSortedCampaigns = useMemo(() => {
     let filtered = campaigns.filter(campaign => {
-      const matchesSearch = 
+      const matchesSearch =
         campaign.nomCampagne?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         campaign.school?.nomEcole?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesStatus = statusFilter === 'all' || !statusFilter || 
-        campaign.status === statusFilter || 
+
+      const matchesStatus = statusFilter === 'all' || !statusFilter ||
+        campaign.status === statusFilter ||
         (statusFilter === 'pending' && campaign.status === 'pending_approval') ||
         (statusFilter === 'pending_approval' && campaign.status === 'pending');
       const matchesSchool = schoolFilter === 'all' || !schoolFilter || campaign.school?._id === schoolFilter;
-      
+
       return matchesSearch && matchesStatus && matchesSchool;
     });
 
@@ -79,14 +105,14 @@ const SupplierCampaignManager = ({ campaigns, loading, onRefresh, onApprove, onR
     const active = campaigns.filter(c => c.status === 'active').length;
     const completed = campaigns.filter(c => c.status === 'completed').length;
     const rejected = campaigns.filter(c => c.status === 'rejected').length;
-    
+
     const expired = campaigns.filter(c => {
       if (c.status !== 'active' || !c.finCampagne) return false;
       const endDate = new Date(c.finCampagne);
       if (isNaN(endDate.getTime())) return false;
       return new Date() > endDate;
     }).length;
-    
+
     const expiringSoon = campaigns.filter(c => {
       if (c.status !== 'active' || !c.finCampagne) return false;
       const endDate = new Date(c.finCampagne);
@@ -94,13 +120,13 @@ const SupplierCampaignManager = ({ campaigns, loading, onRefresh, onApprove, onR
       const daysRemaining = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
       return daysRemaining <= 7 && daysRemaining > 0;
     }).length;
-    
+
     return { total, pending, approved, active, completed, rejected, expired, expiringSoon };
   }, [campaigns]);
 
   const handleDeleteCampaign = async () => {
     if (!deleteTarget) return;
-    
+
     setDeleting(true);
     try {
       const response = await fetch(`/api/campaigns/${deleteTarget.id}/delete`, {
@@ -125,9 +151,9 @@ const SupplierCampaignManager = ({ campaigns, loading, onRefresh, onApprove, onR
   };
 
   const openDeleteDialog = (campaign) => {
-    setDeleteTarget({ 
-      id: campaign._id?.toString() || campaign._id, 
-      name: campaign.nomCampagne || `Campagne #${campaign.campaignNumber}` 
+    setDeleteTarget({
+      id: campaign._id?.toString() || campaign._id,
+      name: campaign.nomCampagne || `Campagne #${campaign.campaignNumber}`
     });
     setDeleteDialogOpen(true);
   };
@@ -301,19 +327,140 @@ const SupplierCampaignManager = ({ campaigns, loading, onRefresh, onApprove, onR
             <Calendar className="w-12 h-12 mx-auto text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune campagne trouvée</h3>
             <p className="text-gray-500">
-              {searchTerm || statusFilter || schoolFilter 
+              {searchTerm || statusFilter || schoolFilter
                 ? 'Aucune campagne ne correspond aux critères de recherche.'
                 : 'Aucune campagne n\'a été créée pour le moment.'
               }
             </p>
           </CardContent>
         </Card>
+      ) : viewMode === 'list' ? (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campagne</TableHead>
+                    <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">École</TableHead>
+                    <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</TableHead>
+                    <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</TableHead>
+                    <TableHead className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Participants</TableHead>
+                    <TableHead className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ventes</TableHead>
+                    <TableHead className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Progression</TableHead>
+                    <TableHead className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedCampaigns.map((campaign) => {
+                    const campaignId = campaign._id?.toString() || campaign._id;
+                    const isSelected = campaignId === selectedCampaignId?.toString();
+                    const progress = campaign.objectifFinancier ? Math.min(((campaign.totalSales || 0) / campaign.objectifFinancier) * 100, 100) : 0;
+
+                    return (
+                      <TableRow
+                        key={campaign._id}
+                        className={`hover:bg-gray-50 cursor-pointer ${isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                        onClick={() => onViewDetails(campaign)}
+                      >
+                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{campaign.nomCampagne || campaign.name || `Campagne #${campaign.campaignNumber}`}</div>
+                          <div className="text-sm text-gray-500">#{campaign.campaignNumber}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{campaign.school?.nomEcole || campaign.school?.name || 'N/A'}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                          {getStatusBadge(campaign.status)}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          <div>{campaign.debutCampagne ? new Date(campaign.debutCampagne).toLocaleDateString('fr-CA') : 'N/A'}</div>
+                          <div>{campaign.finCampagne ? new Date(campaign.finCampagne).toLocaleDateString('fr-CA') : 'N/A'}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                          {campaign.totalParticipants || 0}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium text-green-600">
+                          ${(campaign.totalSales || 0).toLocaleString('fr-CA')}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
+                              <div
+                                className={`h-2 rounded-full ${progress >= 100 ? 'bg-green-500' :
+                                    progress >= 75 ? 'bg-blue-500' :
+                                      progress >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                style={{ width: `${Math.min(progress, 100)}%` }}
+                              ></div>
+                            </div>
+                            <span className="text-xs text-gray-600 min-w-[50px]">{progress.toFixed(1)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onViewDetails(campaign);
+                              }}
+                              className="p-2"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {!campaign.locked && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEdit(campaign);
+                                }}
+                                className="p-2"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {(campaign.status === 'pending' || campaign.status === 'pending_approval') && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onApprove(campaign);
+                                  }}
+                                  className="p-2 text-green-600 hover:text-green-700"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReject(campaign);
+                                  }}
+                                  className="p-2 text-red-600 hover:text-red-700"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       ) : (
-        <div className={
-          viewMode === 'grid' 
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-            : 'space-y-4'
-        }>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAndSortedCampaigns.map((campaign) => (
             <CampaignCard
               key={campaign._id}

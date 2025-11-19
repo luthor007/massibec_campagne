@@ -10,6 +10,7 @@ import { getTerminology } from '../../utils/organizationHelpers';
 import CampaignSelector from '../../components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '../../components/Dashboard/JoinCampaignModal';
 import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip';
+import OrderPlacementModal from '../../components/Dashboard/OrderPlacementModal';
 import useOnboarding from '../../hooks/useOnboarding';
 import { getDashboardSSRData, getOrdersSSR } from '../../lib/dashboardSSR';
 import { authOptions } from '../api/auth/[...nextauth]';
@@ -35,7 +36,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, AlertTriangle, AlertCircle, Copy, Check, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, AlertTriangle, AlertCircle, Copy, Check, CheckCircle, Edit2 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,9 @@ export default function Commandes({
   const [schoolFetchFailed, setSchoolFetchFailed] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [showOrderPlacementModal, setShowOrderPlacementModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
   const [newOrderId, setNewOrderId] = useState(null);
   const [priceToPay, setPriceToPay] = useState();
   const [school, setSchool] = useState(initialSchoolData || null);
@@ -81,6 +84,12 @@ export default function Commandes({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+  const [editingDeliveryOption, setEditingDeliveryOption] = useState(null);
+  const [showEditDeliveryModal, setShowEditDeliveryModal] = useState(false);
+  const [editDeliveryOption, setEditDeliveryOption] = useState('');
+  const [editCustomDeliveryOption, setEditCustomDeliveryOption] = useState('');
+  const [editCustomerDeliveryAddress, setEditCustomerDeliveryAddress] = useState('');
+  const [isSavingDeliveryOption, setIsSavingDeliveryOption] = useState(false);
 
   // Campaign-related state - initialize from SSR props
   const [campaignContext, setCampaignContext] = useState(initialCampaignContext || null);
@@ -570,11 +579,101 @@ export default function Commandes({
     }
   };
 
+  // Fonction pour ouvrir le modal d'édition de l'option de livraison
+  const handleEditDeliveryOption = (order) => {
+    setEditingDeliveryOption(order);
+    setEditDeliveryOption(order.deliveryOption || '');
+    setEditCustomDeliveryOption(order.customDeliveryOption || '');
+    setEditCustomerDeliveryAddress(order.customerDeliveryAddress || '');
+    setShowEditDeliveryModal(true);
+  };
+
+  // Fonction pour sauvegarder l'option de livraison modifiée
+  const handleSaveDeliveryOption = async () => {
+    if (!editingDeliveryOption || isSavingDeliveryOption) return;
+
+    // Determine final delivery option value
+    let finalDeliveryOption = editDeliveryOption;
+    let finalCustomDeliveryOption = editCustomDeliveryOption;
+    let finalCustomerDeliveryAddress = editCustomerDeliveryAddress;
+
+    // If custom text was entered without selecting an option, use it as the delivery option
+    if (!editDeliveryOption && editCustomDeliveryOption) {
+      finalDeliveryOption = 'Autre';
+      finalCustomDeliveryOption = editCustomDeliveryOption;
+    }
+
+    // If "__custom__" was selected, use the custom text
+    if (editDeliveryOption === '__custom__') {
+      if (editCustomDeliveryOption) {
+        finalDeliveryOption = 'Autre';
+        finalCustomDeliveryOption = editCustomDeliveryOption;
+      } else {
+        toast.error('Veuillez entrer une option personnalisée');
+        return;
+      }
+    }
+
+    setIsSavingDeliveryOption(true);
+    try {
+      const orderToUpdate = orders.find(order => order._id === editingDeliveryOption._id);
+      if (!orderToUpdate) return;
+
+      // Optimistic update
+      setOrders(orders.map(order =>
+        order._id === editingDeliveryOption._id
+          ? {
+            ...order,
+            deliveryOption: finalDeliveryOption,
+            customDeliveryOption: finalCustomDeliveryOption,
+            customerDeliveryAddress: finalCustomerDeliveryAddress,
+          }
+          : order
+      ));
+
+      const response = await fetch(`/api/command/${editingDeliveryOption._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deliveryOption: finalDeliveryOption,
+          customDeliveryOption: finalCustomDeliveryOption,
+          customerDeliveryAddress: finalCustomerDeliveryAddress,
+        }),
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setOrders(orders.map(order =>
+          order._id === editingDeliveryOption._id
+            ? {
+              ...order,
+              deliveryOption: orderToUpdate.deliveryOption,
+              customDeliveryOption: orderToUpdate.customDeliveryOption,
+              customerDeliveryAddress: orderToUpdate.customerDeliveryAddress,
+            }
+            : order
+        ));
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur lors de la mise à jour de l\'option de livraison');
+      }
+
+      toast.success('Option de livraison mise à jour avec succès');
+      setShowEditDeliveryModal(false);
+      setEditingDeliveryOption(null);
+      setEditDeliveryOption('');
+      setEditCustomDeliveryOption('');
+      setEditCustomerDeliveryAddress('');
+    } catch (error) {
+      setError(error.message);
+      toast.error('Erreur lors de la sauvegarde de l\'option de livraison');
+    } finally {
+      setIsSavingDeliveryOption(false);
+    }
+  };
 
   // Fonction pour gérer le passage de la commande
   const handlePlaceOrder = async () => {
     if (isSubmitting) return; // Prevent multiple submissions
-    setIsSubmitting(true);
 
     try {
       if (!session || !session.user) {
@@ -621,10 +720,9 @@ export default function Commandes({
       }
 
       // Check if there are any orders not marked as "Payé"
-      const unpaidOrders = orders.filter(order => order.status !== 'Payé' && order.status !== 'Commander' && order.status !== 'Complété' && !order.isTest);
+      const unpaidOrders = orders.filter(order => order.status !== 'Payé' && order.status !== 'Commandé' && order.status !== 'Complété' && !order.isTest);
       if (unpaidOrders.length > 0) {
-        toast.error('Assurez-vous que les commandes que vous voulez passer à Massibec soient au statut "Payé" pour qu\'elles puissent être envoyées à Massibec.');
-        setIsSubmitting(false);
+        toast.error('Assurez-vous que les commandes que vous voulez passer à Massibec soient au status (payé) pour qu\'elle puisse être envoyer à Massibec.');
         return;
       }
 
@@ -634,6 +732,9 @@ export default function Commandes({
       );
       const testOrders = orders.filter(order => order.status === 'Payé' && order.isTest);
 
+      // Check if campaign is in test mode
+      const isTest = campaignData ? isTestCampaign(campaignData) : false;
+
       if (testOrders.length > 0) {
         console.log(`Excluding ${testOrders.length} test order(s) from final order`);
         toast.info(`${testOrders.length} commande(s) TEST exclue(s) de la commande finale. Elles ne seront pas envoyées à Massibec.`, {
@@ -641,150 +742,70 @@ export default function Commandes({
         });
       }
 
+      // Allow preview even if only test orders exist (for test campaigns or school_managers in preview mode)
+      // This allows school_managers to preview orders even when they only have test orders
       if (paidOrders.length === 0) {
-        toast.error('Aucune commande payée disponible (les commandes TEST sont exclues).');
-        setIsSubmitting(false);
-        return;
+        // If we have test orders and we're in a test campaign or preview mode, allow preview
+        const hasTestOrders = testOrders.length > 0;
+        const isPreviewMode = typeof window !== 'undefined' &&
+          localStorage.getItem('viewMode') === 'student_preview' &&
+          session?.user?.role === 'school_manager';
+
+        if (hasTestOrders && (isTest || isPreviewMode)) {
+          // Allow preview with test orders only - they'll be excluded from final order
+          console.log('Allowing preview with test orders only (test campaign or preview mode)');
+        } else {
+          toast.error('Aucune commande payée disponible (les commandes TEST sont exclues).');
+          return;
+        }
       }
 
-      console.log('Paid Orders (excluding test):', paidOrders);
+      // Open the order placement modal instead of directly creating the order
+      setShowOrderPlacementModal(true);
+    } catch (error) {
+      toast.error(`Erreur: ${error.message}`);
+      console.log(error);
+    }
+  };
+
+  // Handler for when order is placed from modal
+  const handleOrderPlaced = async (orderData) => {
+    try {
+      // Update status of paid orders to 'Commandé'
+      const paidOrders = orders.filter(order =>
+        order.status === 'Payé' && !order.isTest
+      );
 
       if (paidOrders.length > 0) {
-        // Agréger les produits de toutes les commandes payées
-        const aggregatedStudentProducts = [];
+        await handleStatusChange(
+          paidOrders.map(order => order.orderId),
+          'Commandé'
+        );
+      }
 
-        paidOrders.forEach(order => {
-          order.products.forEach(product => {
-            // Use the product fields directly from the Order model
-            if (product.productName && product.productPrice !== undefined && product.productCost !== undefined) {
-              aggregatedStudentProducts.push({
-                productName: product.productName,
-                quantity: product.quantity,
-                price: product.productPrice,
-                cost: product.productCost,
-              });
-            } else {
-              console.warn(`Détails du produit non trouvés pour le produit dans la commande ${order.orderId}`);
-            }
-          });
-        });
-        console.log('Aggregated Student Products:', aggregatedStudentProducts);
-
-        // Calculer les totaux
-        const studentTotalUnits = aggregatedStudentProducts.reduce((total, product) => total + product.quantity, 0);
-        const studentTotalAmount = aggregatedStudentProducts.reduce((total, product) => total + (product.price * product.quantity), 0);
-        const studentAmountPaid = studentTotalAmount; // Ajustez si nécessaire
-
-        // Use the school data we already have
-        if (!school) {
-          throw new Error('Données de l\'école non disponibles.');
+      // Refresh orders - use the correct API endpoint
+      // Payment instructions are now shown in the modal, so we don't show popup here
+      let campaignId = null;
+      if (campaignContext?.mode === 'campaign') {
+        if (campaignContext.activeCampaignId) {
+          campaignId = campaignContext.activeCampaignId;
+        } else if (campaignContext?.campaigns?.length > 0) {
+          const activeCampaign = campaignContext.campaigns.find(c => c.isActive || c.isActiveCampaign) || campaignContext.campaigns[0];
+          campaignId = activeCampaign?._id;
         }
+      }
 
-        // Get campaign data with fallback to school data
-        const { campaign, fallbackSplit } = await getCampaignDataWithFallback(schoolId, school);
+      const apiUrl = campaignId
+        ? `/api/commandes?campaignId=${campaignId}`
+        : '/api/commandes';
 
-        // Calculer les bénéfices using campaign data
-        let totalStudentBenefit = 0;
-        let totalOrganizationBenefit = 0;
-        let totalRaffleBenefit = 0;
-
-        const calculatedStudentProducts = aggregatedStudentProducts.map(product => {
-          // Try to find product-specific profit split in campaign
-          const profitSplit = campaign?.profitSplits?.find(ps =>
-            ps.productId?.toString() === product.productId?.toString()
-          );
-
-          let studentB, organizationB, raffleB;
-
-          if (profitSplit && campaign.profitSplitType === 'absolute') {
-            // Use absolute per-unit values from campaign - use new fields with fallback to old
-            const studentCash = Number(profitSplit.studentCash) || Number(profitSplit.student) || 0;
-            const studentSchoolAccount = Number(profitSplit.studentSchoolAccount) || 0;
-            const schoolProject = Number(profitSplit.schoolProject) || Number(profitSplit.school) || 0;
-            const raffle = Number(profitSplit.raffle) || 0;
-
-            // Total student benefit is cash + school account
-            studentB = (studentCash + studentSchoolAccount) * product.quantity;
-            organizationB = schoolProject * product.quantity;
-            raffleB = raffle * product.quantity;
-          } else {
-            // Fallback to percentage calculation using school.split
-            const profit = (product.price - product.cost) * product.quantity;
-            const studentPercentage = fallbackSplit?.studentBenefit || 85.6;
-            const organizationPercentage = fallbackSplit?.organizationBenefit || 9.4;
-            const rafflePercentage = fallbackSplit?.raffleBenefit || 5.0;
-
-            studentB = profit * (studentPercentage / 100);
-            organizationB = profit * (organizationPercentage / 100);
-            raffleB = profit * (rafflePercentage / 100);
-          }
-
-          totalStudentBenefit += studentB;
-          totalOrganizationBenefit += organizationB;
-          totalRaffleBenefit += raffleB;
-
-          return {
-            productName: product.productName,
-            quantity: product.quantity,
-            price: product.price,
-            cost: product.cost,
-            profit: (product.price - product.cost) * product.quantity,
-            studentBenefit: studentB,
-            organizationBenefit: organizationB,
-            raffleBenefit: raffleB,
-          };
-        });
-
-        setPriceToPay(studentTotalAmount - totalStudentBenefit);
-
-        const studentOrderData = {
-          timestamp: new Date(),
-          email: session.user.email,
-          studentName: session.user.name,
-          phoneNumber: session.user.parentInfo?.telephone || '000-000-0000',
-          schoolId: school._id,
-          products: calculatedStudentProducts,
-          totalUnits: studentTotalUnits,
-          totalAmount: studentTotalAmount - totalStudentBenefit,
-          amountPaid: 0,
-          studentBenefit: totalStudentBenefit,
-          organizationBenefit: totalOrganizationBenefit,
-          raffleBenefit: totalRaffleBenefit,
-        };
-
-        // Envoyer la commande étudiante à l'API
-        const studentResponse = await fetch('/api/orderStudent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(studentOrderData),
-        });
-
-        if (studentResponse.ok) {
-          toast.success('Commande étudiante créée avec succès.');
-          const data = await studentResponse.json();
-          setNewOrderId(data.orderId); // Supposons que l'API retourne le nouvel orderId
-
-          // Mettre à jour le statut des commandes payées à 'Commander'
-          await handleStatusChange(
-            paidOrders.map(order => order.orderId),
-            'Commander'
-          );
-        } else {
-          const errorData = await studentResponse.json();
-          throw new Error(errorData.message || 'Erreur lors de la création de la commande étudiante');
-        }
-
-
-        // Afficher le popup de confirmation
-        setShowPopup(true);
-      } else {
-        throw new Error('Aucune commande payée disponible pour passer la commande.');
+      const response = await fetch(apiUrl);
+      if (response.ok) {
+        const data = await response.json();
+        setOrders(Array.isArray(data) ? data : []);
       }
     } catch (error) {
-      toast.error('Erreur lors de l\'ajout de la commande.');
-      console.log(error);
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error handling order placement:', error);
     }
   };
 
@@ -855,6 +876,35 @@ export default function Commandes({
   const handleCancelPayment = () => {
     setShowPaymentConfirmation(false);
   };
+
+  // Calculate if we're in the ordering period (campaign end date between midnight and noon)
+  // This hook must be called before any early returns
+  const isOrderingPeriod = useMemo(() => {
+    if (!campaignEndDateInfo?.raw) return false;
+
+    // Allow bypass for testing if TEST_MODE is enabled or if URL has ?test=true
+    const isTestMode = process.env.NEXT_PUBLIC_TEST_MODE === 'true' ||
+      (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('test') === 'true');
+    if (isTestMode) return true;
+
+    const finCampagne = new Date(campaignEndDateInfo.raw);
+    const currentDate = new Date();
+
+    // Set time to start of day for comparison
+    const campaignEndStart = new Date(finCampagne);
+    campaignEndStart.setHours(0, 0, 0, 0);
+
+    const campaignEndNoon = new Date(finCampagne);
+    campaignEndNoon.setHours(12, 0, 0, 0);
+
+    const todayStart = new Date(currentDate);
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Check if today is the campaign end date and current time is before noon
+    return todayStart.getTime() === campaignEndStart.getTime() &&
+      currentDate.getTime() >= campaignEndStart.getTime() &&
+      currentDate.getTime() < campaignEndNoon.getTime();
+  }, [campaignEndDateInfo?.raw]);
 
   // Show loading if session is loading or if we're still fetching orders
   if (status === 'loading' || loading) {
@@ -942,24 +992,34 @@ export default function Commandes({
                     <div className="text-xs text-purple-600 font-medium mb-1">Total revenus</div>
                     <div className="text-xl font-bold text-purple-700">
                       {orders
-                        .filter(o => o.status === 'Payé' && !o.isTest)
+                        .filter(o => !o.isTest)
                         .reduce((sum, o) => {
                           const donations = (o.studentDonation || o.tip || 0) + (o.schoolDonation || 0);
                           return sum + o.totalAmount + donations;
                         }, 0)
                         .toFixed(2)}$</div>
+                    {orders.filter(o => o.status !== 'Payé' && !o.isTest).length > 0 && (
+                      <div className="text-[10px] text-purple-500 mt-1">
+                        {orders.filter(o => o.status === 'Payé' && !o.isTest).length > 0 ? 'Inclut' : 'En attente de paiement'}
+                      </div>
+                    )}
                   </div>
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
                     <div className="text-xs text-orange-600 font-medium mb-1">Total profit</div>
                     <div className="text-xl font-bold text-orange-700">
                       {orders
-                        .filter(o => o.status === 'Payé' && !o.isTest)
+                        .filter(o => !o.isTest)
                         .reduce((sum, o) => {
-                          const profit = calculateStudentProfit(o.products);
+                          const profitDetails = calculateOrderProfitsDetailed(o, campaignData, fallbackSplit);
                           const donation = o.studentDonation || o.tip || 0;
-                          return sum + profit + donation;
+                          return sum + profitDetails.totalStudentBenefit + donation;
                         }, 0)
                         .toFixed(2)}$</div>
+                    {orders.filter(o => o.status !== 'Payé' && !o.isTest).length > 0 && (
+                      <div className="text-[10px] text-orange-500 mt-1">
+                        {orders.filter(o => o.status === 'Payé' && !o.isTest).length > 0 ? 'Inclut' : 'En attente de paiement'}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -983,7 +1043,7 @@ export default function Commandes({
                         Ce statut est attribué automatiquement lorsqu'un client passe une commande.
                         Vous devriez recevoir un virement Interac.
                         <br />
-                        👉 Si vous n'avez pas activé les dépôts automatiques, la réponse de sécurité sera l'adresse courriel du client.
+                        👉 Si vous n'avez pas activé les dépôts automatiques, la réponse de sécurité sera Cmd-(le numéro de commande).
                       </p>
                     </div>
                     <div>
@@ -1183,12 +1243,12 @@ export default function Commandes({
                                 <div className="flex items-center gap-2">
                                   <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${order.status === 'En attente' ? 'bg-yellow-500' :
                                     order.status === 'Payé' ? 'bg-green-500' :
-                                      order.status === 'Commander' ? 'bg-blue-500' :
+                                      order.status === 'Commandé' ? 'bg-blue-500' :
                                         order.status === 'Complété' ? 'bg-gray-500' :
                                           'bg-gray-300'
                                     }`} title={order.status}></span>
-                                  {order.status === 'Commander' || order.status === 'Complété' ? (
-                                    // Allow changing between Commander and Complété (can go back if mistake)
+                                  {order.status === 'Commandé' || order.status === 'Complété' ? (
+                                    // Allow changing between Commandé and Complété (can go back if mistake)
                                     <Select
                                       value={order.status}
                                       onValueChange={(value) => handleStatusChange(order.orderId, value)}
@@ -1197,10 +1257,10 @@ export default function Commandes({
                                         <SelectValue placeholder="Statut" />
                                       </SelectTrigger>
                                       <SelectContent className="bg-white">
-                                        <SelectItem value="Commander" className="text-xs">
+                                        <SelectItem value="Commandé" className="text-xs">
                                           <div className="flex items-center">
                                             <span className="inline-block w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
-                                            Commander
+                                            Commandé
                                           </div>
                                         </SelectItem>
                                         <SelectItem value="Complété" className="text-xs">
@@ -1260,15 +1320,26 @@ export default function Commandes({
                                 </div>
                               </TableCell>
                               <TableCell className="py-2 sticky right-0 bg-white z-10 border-l border-gray-200">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSelectedOrderId(order._id)}
-                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Supprimer la commande"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditDeliveryOption(order)}
+                                    className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    title="Modifier l'option de livraison"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedOrderId(order._id)}
+                                    className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Supprimer la commande"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
@@ -1284,6 +1355,7 @@ export default function Commandes({
                   handlePlaceOrder={handlePlaceOrder}
                   isSubmitting={isSubmitting}
                   campaignEndDateInfo={campaignEndDateInfo}
+                  session={session}
                 />
 
                 {/* Popup pour les instructions de paiement */}
@@ -1565,15 +1637,170 @@ export default function Commandes({
           onClose={handleCloseJoinCampaignModal}
           onSuccess={handleJoinCampaignSuccess}
         />
+
+        {/* Order Placement Modal */}
+        <OrderPlacementModal
+          open={showOrderPlacementModal}
+          onOpenChange={setShowOrderPlacementModal}
+          paidOrders={orders.filter(order => order.status === 'Payé' && !order.isTest)}
+          school={school}
+          schoolId={school?._id}
+          session={session}
+          onOrderPlaced={handleOrderPlaced}
+          campaignContext={campaignContext}
+          isOrderingPeriod={isOrderingPeriod}
+          campaignEndDateLong={campaignEndDateInfo?.long || null}
+        />
+
+        {/* Modal d'édition de l'option de livraison */}
+        <Dialog open={showEditDeliveryModal} onOpenChange={setShowEditDeliveryModal}>
+          <DialogContent className="sm:max-w-[500px] bg-white p-6">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-gray-900 mb-2">
+                Modifier l'option de livraison
+              </DialogTitle>
+              <DialogDescription>
+                Modifiez l'option de livraison pour cette commande. Vous pouvez sélectionner une option existante ou écrire une option personnalisée.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 mt-4">
+              {/* Sélection d'une option existante ou écriture manuelle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Option de livraison
+                </label>
+                <Select
+                  value={editDeliveryOption}
+                  onValueChange={(value) => {
+                    setEditDeliveryOption(value);
+                    // Reset custom fields when selecting a predefined option
+                    if (value !== 'Autre' && value !== 'Livraison (si près de chez moi)') {
+                      setEditCustomDeliveryOption('');
+                      setEditCustomerDeliveryAddress('');
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Sélectionner une option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Options du store */}
+                    {initialStoreInfo?.deliveryOptions
+                      ?.filter(opt => opt.enabled)
+                      .map((opt) => (
+                        <SelectItem key={opt.name} value={opt.name}>
+                          {opt.name}
+                        </SelectItem>
+                      ))}
+                    {/* Option pour écrire manuellement */}
+                    <SelectItem value="__custom__">Écrire manuellement</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Champ pour option personnalisée (si "Autre" ou "Écrire manuellement") */}
+              {(editDeliveryOption === 'Autre' || editDeliveryOption === '__custom__') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {editDeliveryOption === '__custom__' ? 'Option personnalisée' : 'Détails (optionnel)'}
+                  </label>
+                  <Input
+                    value={editCustomDeliveryOption}
+                    onChange={(e) => {
+                      setEditCustomDeliveryOption(e.target.value);
+                      // If "__custom__" is selected and user starts typing, keep it selected
+                      // If "Autre" is selected, just update the custom text
+                    }}
+                    placeholder={editDeliveryOption === '__custom__' ? 'Ex: Livraison au bureau' : 'Ex: Livraison au bureau'}
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+              {/* Champ pour l'adresse de livraison (si "Livraison (si près de chez moi)") */}
+              {editDeliveryOption === 'Livraison (si près de chez moi)' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Adresse de livraison
+                  </label>
+                  <Input
+                    value={editCustomerDeliveryAddress}
+                    onChange={(e) => setEditCustomerDeliveryAddress(e.target.value)}
+                    placeholder="Ex: 123 Rue Principale, Ma ville"
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+            </div>
+
+            <DialogFooter className="mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowEditDeliveryModal(false);
+                  setEditingDeliveryOption(null);
+                  setEditDeliveryOption('');
+                  setEditCustomDeliveryOption('');
+                  setEditCustomerDeliveryAddress('');
+                }}
+                disabled={isSavingDeliveryOption}
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={handleSaveDeliveryOption}
+                disabled={isSavingDeliveryOption || (!editDeliveryOption && !editCustomDeliveryOption)}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isSavingDeliveryOption ? 'Enregistrement...' : 'Enregistrer'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
 }
-const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmitting, campaignEndDateInfo }) => {
+const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmitting, campaignEndDateInfo, session }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isLimitedInventoryMode, setIsLimitedInventoryMode] = useState(false);
+  const [isCheckingInventory, setIsCheckingInventory] = useState(true);
+
+  // Check if we're in limited inventory mode
+  useEffect(() => {
+    const checkInventoryMode = async () => {
+      if (!campaignContext?.activeCampaignId || !session?.user?.id) {
+        setIsCheckingInventory(false);
+        return;
+      }
+
+      try {
+        // Use the correct API endpoint: /api/inventory/[userId]/[campaignId]
+        const response = await fetch(`/api/inventory/${session.user.id}/${campaignContext.activeCampaignId}`);
+        if (response.ok) {
+          const data = await response.json();
+          // If we have any inventory records, we're in limited inventory mode
+          setIsLimitedInventoryMode(data.inventory && Array.isArray(data.inventory) && data.inventory.length > 0);
+        }
+      } catch (error) {
+        console.error('Error checking inventory mode:', error);
+      } finally {
+        setIsCheckingInventory(false);
+      }
+    };
+
+    checkInventoryMode();
+  }, [campaignContext?.activeCampaignId, session?.user?.id]);
 
   // Guard against undefined school
   if (!school) {
+    return null;
+  }
+
+  // Hide button if in limited inventory mode
+  if (isLimitedInventoryMode) {
     return null;
   }
 
@@ -1593,15 +1820,34 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
     return null;
   }
 
-  // Check if current date is within the allowed range
+  // Check if current date is within the allowed ordering period
+  // Ordering period is ONLY on the campaign end date between midnight (00:00) and noon (12:00)
   const currentDate = new Date();
-  const orderEndDate = addDays(finCampagne, 15);
-  const orderEndDateFormatted = format(orderEndDate, 'dd MMMM yyyy', { locale: fr });
-  const campaignEndDateLong = campaignEndDateInfo?.long || format(finCampagne, 'dd MMMM yyyy', { locale: fr });
+  const campaignEndDateLong = campaignEndDateInfo?.long || format(finCampagne, 'd MMMM yyyy', { locale: fr });
 
-  // Check if current date is between campaign end date and 15 days after
-  const isOrderingPeriod = !isBefore(currentDate, finCampagne) &&
-    !isAfter(currentDate, orderEndDate);
+  // Allow bypass for testing if TEST_MODE is enabled or if URL has ?test=true
+  const isTestMode = process.env.NEXT_PUBLIC_TEST_MODE === 'true' ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('test') === 'true');
+
+  // Check if we're on the campaign end date and between midnight and noon
+  const isOrderingPeriod = (() => {
+    if (isTestMode) return true;
+
+    // Set time to start of day for comparison
+    const campaignEndStart = new Date(finCampagne);
+    campaignEndStart.setHours(0, 0, 0, 0);
+
+    const campaignEndNoon = new Date(finCampagne);
+    campaignEndNoon.setHours(12, 0, 0, 0);
+
+    const todayStart = new Date(currentDate);
+    todayStart.setHours(0, 0, 0, 0);
+
+    // Check if today is the campaign end date and current time is before noon
+    return todayStart.getTime() === campaignEndStart.getTime() &&
+      currentDate.getTime() >= campaignEndStart.getTime() &&
+      currentDate.getTime() < campaignEndNoon.getTime();
+  })();
 
   return (
     <motion.div
@@ -1611,7 +1857,7 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
       className="space-y-2" // Added space between button and message
     >
       <Button
-        onClick={isOrderingPeriod ? handlePlaceOrder : undefined}
+        onClick={handlePlaceOrder}
         variant="default"
         size="lg"
         className={`
@@ -1619,17 +1865,17 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
           transform hover:scale-105 hover:shadow-lg
           ${isOrderingPeriod
             ? 'bg-gradient-to-r from-blue-500 to-indigo-600'
-            : 'bg-gray-400 cursor-not-allowed'}
+            : 'bg-gradient-to-r from-gray-500 to-gray-600'}
           text-white font-semibold py-3 px-6 rounded-full
           focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75
         `}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        disabled={!isOrderingPeriod || isSubmitting}
+        disabled={isSubmitting}
       >
         <motion.span
           className="relative z-10 flex items-center space-x-2"
-          animate={{ x: isOrderingPeriod && isHovered ? 5 : 0 }}
+          animate={{ x: isHovered ? 5 : 0 }}
           transition={{ duration: 0.2 }}
         >
           {isSubmitting ? (
@@ -1640,7 +1886,7 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
           ) : (
             <>
               <SendHorizontal className="w-5 h-5" />
-              <span>Passer la commande à Massibec</span>
+              <span>{isOrderingPeriod ? 'Passer la commande à Massibec' : 'Prévisualiser ma commande à Massibec'}</span>
             </>
           )}
         </motion.span>
@@ -1655,18 +1901,16 @@ const CommandeButton = ({ school, campaignContext, handlePlaceOrder, isSubmittin
         )}
       </Button>
 
-
-      {!isOrderingPeriod && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-sm text-gray-600"
-        >
-          Vous pourrez transmettre vos commandes le{' '}
-          <span className="font-medium">{campaignEndDateLong}</span>{' '}
-          entre minuit et midi.
-        </motion.p>
-      )}
+      {/* Always show the message */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-sm text-gray-600"
+      >
+        Vous pourrez passer votre commande le{' '}
+        <span className="font-medium">{campaignEndDateLong}</span>{' '}
+        entre minuit et midi.
+      </motion.p>
     </motion.div>
   );
 };

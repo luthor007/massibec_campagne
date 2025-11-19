@@ -22,6 +22,7 @@ export default async function handler(req, res) {
       userId,
       sessionId,
       deviceType,
+      source,
       metadata = {}
     } = req.body;
 
@@ -164,6 +165,10 @@ export default async function handler(req, res) {
       });
 
       if (!existingVisit) {
+        // Normalize source - validate against enum values
+        const validSources = ['qr', 'facebook', 'instagram', 'twitter', 'email', 'direct', 'link', 'other', 'unknown'];
+        const normalizedSource = source && validSources.includes(source) ? source : 'unknown';
+
         const storeVisit = new StoreVisit({
           storeId: finalStoreId,
           userId: finalUserId || null,
@@ -173,7 +178,8 @@ export default async function handler(req, res) {
           deviceType: finalDeviceType,
           location,
           userAgent,
-          ip
+          ip,
+          source: normalizedSource
         });
 
         await storeVisit.save();

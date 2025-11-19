@@ -2,6 +2,7 @@ import dbConnect from '../../../lib/mongodb';
 import User from '../../../models/User';
 import Campaign from '../../../models/Campaign';
 import School from '../../../models/School';
+import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import { getUserCampaignContext, logLegacyModeWarning } from '../../../utils/campaignHelpers';
@@ -21,9 +22,68 @@ export default async function handler(req, res) {
     }
 
     // Get user with campaigns populated
-    const user = await User.findById(session.user.id)
-      .populate('campaigns.campaignId')
-      .populate('campaigns.schoolId', 'name code logo');
+    // Use lean() and manual population to handle edge cases better
+    let user = await User.findById(session.user.id).lean();
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Manually populate campaigns to handle cases where automatic population fails
+    if (user.campaigns && user.campaigns.length > 0) {
+      const Campaign = mongoose.models.Campaign || mongoose.model('Campaign', new mongoose.Schema({}, { strict: false }));
+      const School = mongoose.models.School || mongoose.model('School', new mongoose.Schema({}, { strict: false }));
+
+      for (let i = 0; i < user.campaigns.length; i++) {
+        const entry = user.campaigns[i];
+
+        // Populate campaignId if not already populated
+        if (entry.campaignId && !entry.campaignId.campaignCode) {
+          try {
+            const campaign = await Campaign.findById(entry.campaignId).lean();
+            if (campaign) {
+              entry.campaignId = campaign;
+            } else {
+              entry.campaignId = null; // Mark as invalid
+            }
+          } catch (err) {
+            console.error(`[users/campaigns] Error populating campaign ${entry.campaignId}:`, err.message);
+            entry.campaignId = null; // Mark as invalid
+          }
+        }
+
+        // Populate schoolId if not already populated
+        if (entry.schoolId && !entry.schoolId.name) {
+          try {
+            const school = await School.findById(entry.schoolId).select('name code logo').lean();
+            if (school) {
+              entry.schoolId = school;
+            } else {
+              entry.schoolId = null; // Mark as invalid
+            }
+          } catch (err) {
+            console.error(`[users/campaigns] Error populating school ${entry.schoolId}:`, err.message);
+            entry.schoolId = null; // Mark as invalid
+          }
+        }
+      }
+    }
+
+    // Debug logging for problematic campaigns
+    if (user.campaigns && user.campaigns.length > 0) {
+      user.campaigns.forEach((entry, index) => {
+        if (!entry.campaignId || !entry.schoolId) {
+          console.log(`[users/campaigns] Campaign entry ${index} has missing data:`, {
+            hasCampaignId: !!entry.campaignId,
+            hasSchoolId: !!entry.schoolId,
+            campaignIdValue: entry.campaignId?._id || entry.campaignId,
+            schoolIdValue: entry.schoolId?._id || entry.schoolId,
+            rawCampaignId: entry.campaignId,
+            rawSchoolId: entry.schoolId
+          });
+        }
+      });
+    }
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -88,9 +148,27 @@ export default async function handler(req, res) {
     }
 
     // Campaign mode - return user's campaigns
-    const campaignsWithDetails = user.campaigns.map(campaignEntry => {
+    // Filter out campaigns where population failed (null campaignId or schoolId)
+    const validCampaigns = user.campaigns.filter(campaignEntry => {
+      const isValid = campaignEntry.campaignId && campaignEntry.schoolId;
+      if (!isValid) {
+        console.warn('[users/campaigns] Filtered out invalid campaign entry:', {
+          campaignId: campaignEntry.campaignId?._id || campaignEntry.campaignId,
+          schoolId: campaignEntry.schoolId?._id || campaignEntry.schoolId,
+          userId: user._id
+        });
+      }
+      return isValid;
+    });
+
+    const campaignsWithDetails = validCampaigns.map(campaignEntry => {
       const campaign = campaignEntry.campaignId;
       const school = campaignEntry.schoolId;
+
+      // Additional safety check - skip if campaign or school is null/undefined
+      if (!campaign || !school) {
+        return null;
+      }
 
       return {
         _id: campaign._id,
@@ -113,7 +191,7 @@ export default async function handler(req, res) {
         isActiveCampaign: user.activeCampaignId &&
           user.activeCampaignId.toString() === campaign._id.toString()
       };
-    });
+    }).filter(Boolean); // Remove any null entries
 
     res.status(200).json({
       campaigns: campaignsWithDetails,

@@ -15,9 +15,25 @@ export default function ShareSection({ isOwner, ownerName, deliveryDate, schoolN
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setCurrentUrl(window.location.href)
+      // Get base URL without existing source parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('source'); // Remove existing source if any
+      setCurrentUrl(url.toString());
     }
   }, [])
+
+  // Helper function to add source parameter to URL
+  const addSourceToUrl = (url, source) => {
+    try {
+      const urlObj = new URL(url);
+      urlObj.searchParams.set('source', source);
+      return urlObj.toString();
+    } catch {
+      // Fallback if URL parsing fails
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}source=${source}`;
+    }
+  }
 
   const formatDeliveryDate = (dateString) => {
     if (!dateString) return 'la date de livraison'
@@ -61,7 +77,9 @@ On l'encourage !`
   }
 
   const copyLink = () => {
-    navigator.clipboard.writeText(currentUrl)
+    // When copying link directly, use 'link' as source
+    const urlWithSource = addSourceToUrl(currentUrl, 'link');
+    navigator.clipboard.writeText(urlWithSource)
       .then(() => {
         setIsLinkCopied(true)
         toast.success('Lien copié!')
@@ -91,7 +109,7 @@ On l'encourage !`
     {
       name: 'Facebook',
       icon: <Facebook className="h-4 w-4" />,
-      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(currentUrl)}&quote=${encodeURIComponent(getShareMessage())}`,
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(addSourceToUrl(currentUrl, 'facebook'))}&quote=${encodeURIComponent(getShareMessage())}`,
       color: 'bg-blue-600 hover:bg-blue-700',
     },
     {
@@ -101,14 +119,15 @@ On l'encourage !`
       color: 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 hover:from-purple-600 hover:via-pink-600 hover:to-orange-600',
       onClick: (e) => {
         e.preventDefault();
-        navigator.clipboard.writeText(getShareMessage());
+        const messageWithSource = getShareMessage().replace(currentUrl, addSourceToUrl(currentUrl, 'instagram'));
+        navigator.clipboard.writeText(messageWithSource);
         toast.success('Message copié! Collez-le dans votre story ou publication Instagram.');
       }
     },
     {
       name: 'Email',
       icon: <Mail className="h-4 w-4" />,
-      href: `mailto:?subject=${encodeURIComponent(isOwner ? 'Campagne de financement Massibec' : 'Découvrez cette boutique')}&body=${encodeURIComponent(getShareMessage())}`,
+      href: `mailto:?subject=${encodeURIComponent(isOwner ? 'Campagne de financement Massibec' : 'Découvrez cette boutique')}&body=${encodeURIComponent(getShareMessage().replace(currentUrl, addSourceToUrl(currentUrl, 'email')))}`,
       color: 'bg-green-600 hover:bg-green-700',
     },
   ]

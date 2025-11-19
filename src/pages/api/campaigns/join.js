@@ -4,10 +4,48 @@ import Campaign from '../../../models/Campaign';
 import School from '../../../models/School';
 import Product from '../../../models/Product';
 import Store from '../../../models/Store';
+import FunnelEvent from '../../../models/FunnelEvent';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import { isUserInCampaign, logLegacyModeWarning } from '../../../utils/campaignHelpers';
 import { generateSlug } from '../../../utils/slugHelpers';
+import crypto from 'crypto';
+
+// Helper function to track funnel events server-side
+async function trackFunnelEventServer(eventType, userType, userId, metadata = {}) {
+  try {
+    const sessionId = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+
+    // Calculate time since previous event
+    let timeSincePreviousEvent = null;
+    try {
+      const previousEvent = await FunnelEvent.findOne({ userId })
+        .sort({ createdAt: -1 })
+        .lean();
+      if (previousEvent) {
+        timeSincePreviousEvent = Date.now() - new Date(previousEvent.createdAt).getTime();
+      }
+    } catch (error) {
+      console.error('Error calculating time since previous event:', error);
+    }
+
+    const enrichedMetadata = {
+      ...metadata,
+      timeSincePreviousEvent: timeSincePreviousEvent !== null ? timeSincePreviousEvent : undefined
+    };
+
+    const funnelEvent = new FunnelEvent({
+      eventType,
+      userType,
+      userId: userId || null,
+      sessionId,
+      metadata: enrichedMetadata
+    });
+    await funnelEvent.save();
+  } catch (error) {
+    console.error('Error tracking funnel event server-side:', error);
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -77,6 +115,15 @@ export default async function handler(req, res) {
     }
 
     await user.save();
+
+    // Track campaign join
+    const userType = user.role === 'student' ? 'student' : 'school';
+    await trackFunnelEventServer('campaign_joined', userType, user._id.toString(), {
+      campaignId: campaign._id.toString(),
+      campaignCode: campaign.campaignCode,
+      schoolId: campaign.school._id.toString(),
+      isFirstCampaign
+    });
 
     // Create a store for this user and campaign if it doesn't exist
     let store = await Store.findOne({ user: user._id, campaignId: campaign._id });

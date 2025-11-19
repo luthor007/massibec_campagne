@@ -8,7 +8,7 @@ const UserSchema = new mongoose.Schema({
   role: { type: String, enum: ['student', 'school_manager'], required: true }, // Define role
 
 
-  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order'}],
+  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
   orderCounter: { type: Number, default: 0 }, // Initialize counter to 0
 
 
@@ -18,7 +18,7 @@ const UserSchema = new mongoose.Schema({
     ref: School,
     required: false, // Make optional for new multi-campaign system
   },
-  
+
   // New multi-campaign fields
   campaigns: [{
     campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', required: true },
@@ -27,7 +27,7 @@ const UserSchema = new mongoose.Schema({
     objectifPersonnel: { type: Number },
     isActive: { type: Boolean, default: true }
   }],
-  
+
   activeCampaignId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Campaign'
@@ -108,7 +108,10 @@ const UserSchema = new mongoose.Schema({
     momentPourJoindre: { type: String, required: function () { return this.role === 'school_manager'; } }
   },
   store: { type: mongoose.Schema.Types.ObjectId, ref: 'Store' },
-  
+
+  // Student photo for marketing materials (poster/flyer)
+  studentPhoto: { type: String }, // URL to Cloudinary image
+
   // Onboarding progress tracking
   onboardingProgress: {
     joinedCampaign: { type: Boolean, default: false },
@@ -129,9 +132,9 @@ UserSchema.path('role').validate(function (value) {
     return !!this.parentInfo;
   }
   if (value === 'school_manager') {
-    return !!this.schoolManagerInfo && 
-           !!this.schoolManagerInfo.titreOuFonction && 
-           !!this.schoolManagerInfo.organisme;
+    return !!this.schoolManagerInfo &&
+      !!this.schoolManagerInfo.titreOuFonction &&
+      !!this.schoolManagerInfo.organisme;
   }
   return false;
 }, 'Invalid role requirements');
