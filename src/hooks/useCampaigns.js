@@ -14,6 +14,7 @@ export const useCampaigns = (userId) => {
 
       const response = await fetch('/api/campaigns', {
         cache: 'no-store',
+        credentials: 'include', // Ensure cookies are sent with the request
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',

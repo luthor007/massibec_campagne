@@ -5,11 +5,8 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { getServerSession } from 'next-auth/next';
 import { motion } from 'framer-motion';
+import dynamic from 'next/dynamic';
 import Layout from '../../components/Layout';
-import PDFGenerator from '../../components/SalesTools/PDFGenerator';
-import QRCodeGenerator from '../../components/SalesTools/QRCodeGenerator';
-import ClientManager from '../../components/SalesTools/ClientManager';
-import EmailCampaign from '../../components/SalesTools/EmailCampaign';
 import CampaignSelector from '../../components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '../../components/Dashboard/JoinCampaignModal';
 import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip';
@@ -33,23 +30,133 @@ import {
   Gift,
   Eye,
   CheckCircle,
+  Check,
   Lightbulb,
-  ArrowLeft
+  ArrowLeft,
+  MessageSquare,
+  Hash,
+  Sparkles,
+  Zap,
+  BookOpen,
+  Award,
+  Share2
 } from 'lucide-react';
+import { getFullStoreUrl } from '../../utils/storeUrlHelpers';
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const defaultSalesStats = { total: 0, thisMonth: 0, growth: 0 };
+
+const normalizeId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value?._id) return value._id.toString?.() || value._id;
+  if (value.toString) return value.toString();
+  return null;
+};
+
+const SalesToolPlaceholder = ({ title, description }) => (
+  <Card className="min-h-[220px]">
+    <CardHeader>
+      <CardTitle>{title}</CardTitle>
+      {description && <CardDescription>{description}</CardDescription>}
+    </CardHeader>
+    <CardContent>
+      <Skeleton className="w-full h-32" />
+    </CardContent>
+  </Card>
+);
+
+const PDFGenerator = dynamic(() => import('../../components/SalesTools/PDFGenerator'), {
+  ssr: false,
+  loading: () => (
+    <SalesToolPlaceholder
+      title="Outil PDF"
+      description="Chargement de l'éditeur d'affiches"
+    />
+  )
+});
+
+const QRCodeGenerator = dynamic(() => import('../../components/SalesTools/QRCodeGenerator'), {
+  ssr: false,
+  loading: () => (
+    <SalesToolPlaceholder
+      title="QR Code Boutique"
+      description="Préparation du générateur"
+    />
+  )
+});
+
+const ClientManager = dynamic(() => import('../../components/SalesTools/ClientManager'), {
+  ssr: false,
+  loading: () => (
+    <SalesToolPlaceholder
+      title="Gestion des clients"
+      description="Chargement de votre base de clients"
+    />
+  )
+});
+
+const EmailCampaign = dynamic(() => import('../../components/SalesTools/EmailCampaign'), {
+  ssr: false,
+  loading: () => (
+    <SalesToolPlaceholder
+      title="Campagne email"
+      description="Initialisation de l'éditeur"
+    />
+  )
+});
+
+// Component for weekly plan item with checkbox
+function WeeklyPlanItem({ day, action, icon }) {
+  const storageKey = `weekly-plan-${day}-${new Date().toISOString().split('T')[0]}`;
+  const [completed, setCompleted] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(storageKey) === 'true';
+    }
+    return false;
+  });
+
+  return (
+    <div className="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow">
+      <div className="w-12 text-2xl mr-3">{icon}</div>
+      <div className="w-24 font-semibold text-orange-600">{day}</div>
+      <div className="flex-1 text-sm">{action}</div>
+      <input
+        type="checkbox"
+        checked={completed}
+        onChange={(e) => {
+          setCompleted(e.target.checked);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(storageKey, e.target.checked.toString());
+          }
+          if (e.target.checked) {
+            toast.success(`Bravo ! ${action} est complété !`);
+          }
+        }}
+        className="w-5 h-5 text-orange-600 rounded cursor-pointer"
+      />
+    </div>
+  );
+}
 
 export default function VendrePage({
   initialCampaignContext,
-  initialStoreInfo
+  initialStoreInfo,
+  initialClients = [],
+  initialSalesStats = defaultSalesStats
 }) {
   const { data: session } = useSession();
   const router = useRouter();
 
   // State declarations - must come before handlers that use them
   const [storeInfo, setStoreInfo] = useState(initialStoreInfo || null);
-  const [clients, setClients] = useState([]);
+  const [clients, setClients] = useState(initialClients);
   const [selectedClients, setSelectedClients] = useState([]);
-  const [salesStats, setSalesStats] = useState({ total: 0, thisMonth: 0, growth: 0 });
+  const [salesStats, setSalesStats] = useState(initialSalesStats || defaultSalesStats);
   const [loading, setLoading] = useState(!initialStoreInfo);
+  const [copiedTemplate, setCopiedTemplate] = useState(null);
 
   // Campaign-related state - initialize from SSR props
   const [campaignContext, setCampaignContext] = useState(initialCampaignContext || null);
@@ -113,6 +220,13 @@ export default function VendrePage({
   const handleCloseJoinCampaignModal = useCallback(() => {
     setShowJoinCampaignModal(false);
   }, []);
+
+  const normalizedInitialStoreId = normalizeId(initialStoreInfo?.storeId || initialStoreInfo?._id);
+  const normalizedStoreId = useMemo(() => normalizeId(storeInfo?.storeId || storeInfo?._id), [storeInfo]);
+  const clientsStoreIdRef = useRef(initialClients?.length ? normalizedInitialStoreId : null);
+  const statsStoreIdRef = useRef(initialSalesStats ? normalizedInitialStoreId : null);
+  const hasClientDataRef = useRef(initialClients?.length > 0);
+  const hasStatsDataRef = useRef(initialSalesStats && typeof initialSalesStats.total === 'number');
 
   // Memoize campaign selector props
   const campaignSelectorProps = useMemo(() => ({
@@ -187,13 +301,6 @@ export default function VendrePage({
     fetchCampaignContext();
   }, [session, initialCampaignContext]);
 
-  useEffect(() => {
-    if (storeInfo?.storeId) {
-      fetchClients();
-      fetchSalesStats();
-    }
-  }, [storeInfo]);
-
   const fetchStoreInfo = async () => {
     if (!session?.user || !campaignContext?.activeCampaignId) {
       return;
@@ -246,99 +353,218 @@ export default function VendrePage({
     }
   };
 
-  const fetchClients = async () => {
-    const resolvedStoreId = storeInfo?.storeId || storeInfo?._id;
-    const storeIdParam = typeof resolvedStoreId === 'string'
-      ? resolvedStoreId
-      : resolvedStoreId?.toString?.();
-
-    if (!storeIdParam) {
-      console.warn('fetchClients: Missing storeId, skipping fetch');
+  const fetchClients = useCallback(async (force = false) => {
+    if (!normalizedStoreId) {
+      console.warn('[vendre] fetchClients: Missing storeId, skipping fetch.');
       return;
     }
 
+    const storeChanged = normalizedStoreId !== clientsStoreIdRef.current;
+    if (!force && !storeChanged && hasClientDataRef.current) {
+      return;
+    }
+
+    clientsStoreIdRef.current = normalizedStoreId;
+
     try {
-      const response = await fetch(`/api/clients?storeId=${storeIdParam}`);
+      const url = `/api/clients?storeId=${normalizedStoreId}&allCampaigns=true&autoSync=true`;
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         setClients(data);
+        hasClientDataRef.current = true;
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('[vendre] Failed to fetch clients:', response.status, errorData);
       }
     } catch (error) {
-      console.error('Error fetching clients:', error);
+      console.error('[vendre] Error fetching clients:', error);
     }
-  };
+  }, [normalizedStoreId]);
 
-  const fetchSalesStats = async () => {
-    const resolvedStoreId = storeInfo?.storeId || storeInfo?._id;
-    const storeIdParam = typeof resolvedStoreId === 'string'
-      ? resolvedStoreId
-      : resolvedStoreId?.toString?.();
-
-    if (!storeIdParam) {
+  const fetchSalesStats = useCallback(async (force = false) => {
+    if (!normalizedStoreId) {
       console.warn('fetchSalesStats: Missing storeId, skipping fetch');
       return;
     }
 
+    const storeChanged = normalizedStoreId !== statsStoreIdRef.current;
+    if (!force && !storeChanged && hasStatsDataRef.current) {
+      return;
+    }
+
+    statsStoreIdRef.current = normalizedStoreId;
+
     try {
-      const response = await fetch(`/api/sales-stats?storeId=${storeIdParam}`);
+      const response = await fetch(`/api/sales-stats?storeId=${normalizedStoreId}`);
       if (response.ok) {
         const data = await response.json();
         setSalesStats(data);
+        hasStatsDataRef.current = true;
       }
     } catch (error) {
       console.error('Error fetching sales stats:', error);
     }
+  }, [normalizedStoreId]);
+
+  useEffect(() => {
+    if (!normalizedStoreId) {
+      return;
+    }
+
+    if (normalizedStoreId !== clientsStoreIdRef.current) {
+      hasClientDataRef.current = false;
+    }
+
+    if (!hasClientDataRef.current) {
+      fetchClients(true);
+    }
+
+    if (normalizedStoreId !== statsStoreIdRef.current) {
+      hasStatsDataRef.current = false;
+    }
+
+    if (!hasStatsDataRef.current) {
+      fetchSalesStats(true);
+    }
+  }, [normalizedStoreId, fetchClients, fetchSalesStats]);
+
+  const copyToClipboard = (text, templateId) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedTemplate(templateId);
+      toast.success('Copié dans le presse-papiers !');
+      setTimeout(() => setCopiedTemplate(null), 2000);
+    }).catch((err) => {
+      console.error('Erreur lors de la copie:', err);
+      toast.error('Erreur lors de la copie');
+    });
   };
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copié dans le presse-papiers !');
+  // Get store URL for personalization
+  // Helper to add source parameter
+  const getStoreUrlWithSource = (source) => {
+    if (!storeInfo) return '';
+    const baseUrl = getFullStoreUrl(storeInfo);
+    if (!baseUrl) return '';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}source=${source}`;
   };
 
-  const socialTemplates = {
-    facebook: [
-      {
-        text: "🍰 Nouvelle campagne de financement ! Commandez vos délicieuses tartes Massibec et soutenez notre organisation. Livraison gratuite ! #Massibec #Financement",
-        tip: "Partagez sur votre mur et dans les groupes locaux"
-      },
-      {
-        text: "🎯 Objectif: 1000 tartes vendues ! Aidez-nous à atteindre notre but en commandant vos tartes préférées. Chaque commande compte ! #Objectif #Tartes",
-        tip: "Créez un événement Facebook pour votre campagne"
-      },
-      {
-        text: "❤️ Merci à tous ceux qui ont déjà commandé ! Il nous reste encore quelques jours pour atteindre notre objectif. Commandez maintenant et soutenez notre organisation ! #Merci #Soutien",
-        tip: "Taguez les personnes qui ont commandé pour les remercier"
-      }
-    ],
-    instagram: [
-      {
-        text: "✨ Nouvelle collection de tartes Massibec disponible ! Swipe pour voir nos délicieux produits 👆 Commandez maintenant et soutenez notre organisation 🏫 #Massibec #Tartes",
-        tip: "Créez un carrousel avec photos des produits"
-      },
-      {
-        text: "📸 Behind the scenes de notre campagne de financement ! Regardez comment nous préparons vos commandes avec amour ❤️ Commandez maintenant ! #BehindTheScenes #Massibec",
-        tip: "Partagez en Story avec un sticker de lien"
-      },
-      {
-        text: "🎉 CONCOURS ! Partagez cette publication en story et taguez 3 amis pour gagner une tarte gratuite ! Tirage dans 48h 🍰 #Concours #Massibec #Giveaway",
-        tip: "Organisez un concours pour augmenter la visibilité"
-      }
-    ],
-    tiktok: [
-      {
-        text: "POV: Tu découvres les meilleures tartes de ta vie 🥧✨ Commandez maintenant et soutenez notre organisation ! Lien en bio #Massibec #Tartes #Financement",
-        tip: "Filmez une vidéo de dégustation authentique"
-      },
-      {
-        text: "Cette organisation vend des tartes et c'est génial ! 🎓🍰 Voici pourquoi vous devriez commander 👇 #Tartes #Massibec #Financement",
-        tip: "Créez une vidéo avec musique tendance"
-      },
-      {
-        text: "Jour 1 de ma campagne de financement vs Jour 30 😱 Regardez notre progression ! #Transformation #Financement",
-        tip: "Montrez votre évolution et vos résultats"
-      }
-    ]
-  };
+  const storeUrl = storeInfo ? getFullStoreUrl(storeInfo) : '';
+  const storeName = storeInfo?.name || 'Ma Boutique';
+  const schoolName = storeInfo?.schoolName || 'notre école';
+
+  // Generate personalized social templates with store info
+  const socialTemplates = useMemo(() => {
+    const storeLink = storeUrl || 'lien-boutique';
+    const hashtags = `#Jappuie #Financement #${storeName.replace(/\s+/g, '')} #ProduitsQuebec`;
+
+    return {
+      facebook: [
+        {
+          text: `🍰 Nouvelle campagne de financement ! Commandez vos produits de fournisseurs 100% québécois via Jappuie.ca et soutenez ${schoolName}. Chaque commande compte ! ${storeLink} ${hashtags}`,
+          tip: "Partagez sur votre mur et dans les groupes locaux",
+          hashtags: ["#Jappuie", "#Financement", "#ProduitsQuebec", "#École"]
+        },
+        {
+          text: `🎯 Objectif: 1000 tartes vendues ! Aidez-nous à atteindre notre but en commandant vos tartes préférées sur ${storeName}. ${storeLink} ${hashtags}`,
+          tip: "Créez un événement Facebook pour votre campagne",
+          hashtags: ["#Objectif", "#ProduitsQuebec", "#Jappuie", "#Financement"]
+        },
+        {
+          text: `❤️ Merci à tous ceux qui ont déjà commandé ! Il nous reste encore quelques jours pour atteindre notre objectif. Commandez maintenant sur ${storeName} ! ${storeLink} ${hashtags}`,
+          tip: "Taguez les personnes qui ont commandé pour les remercier",
+          hashtags: ["#Merci", "#Soutien", "#Jappuie"]
+        },
+        {
+          text: `📢 Dernière chance ! La campagne se termine bientôt. Commandez vos produits Jappuie.ca maintenant et soutenez ${schoolName}. ${storeLink} ${hashtags}`,
+          tip: "Créez un sentiment d'urgence pour booster les ventes",
+          hashtags: ["#DernièreChance", "#Jappuie", "#Tartes"]
+        },
+        {
+          text: `🎉 Félicitations ! Nous avons atteint ${Math.max(10, Math.floor(salesStats.total * 0.5))} commandes ! Continuons ensemble vers notre objectif. Commandez sur ${storeName} : ${storeLink} ${hashtags}`,
+          tip: "Célébrez les succès pour motiver davantage",
+          hashtags: ["#Succès", "#Objectif", "#Jappuie"]
+        }
+      ],
+      instagram: [
+        {
+          text: `✨ Nouvelle collection de produits Jappuie.ca disponible ! Swipe pour voir nos délicieux produits 👆 Commandez maintenant et soutenez ${schoolName} 🏫 ${storeLink} ${hashtags}`,
+          tip: "Créez un carrousel avec photos des produits",
+          hashtags: ["#Jappuie", "#Tartes", "#Food", "#Delicious"]
+        },
+        {
+          text: `📸 Behind the scenes de notre campagne de financement ! Regardez comment nous préparons vos commandes avec amour ❤️ Commandez maintenant : ${storeLink} ${hashtags}`,
+          tip: "Partagez en Story avec un sticker de lien",
+          hashtags: ["#BehindTheScenes", "#Jappuie", "#BTS"]
+        },
+        {
+          text: `🎉 CONCOURS ! Partagez cette publication en story et taguez 3 amis pour gagner une tarte gratuite ! Tirage dans 48h 🍰 ${storeLink} ${hashtags}`,
+          tip: "Organisez un concours pour augmenter la visibilité",
+          hashtags: ["#Concours", "#Giveaway", "#Jappuie"]
+        },
+        {
+          text: `💙 Chaque commande soutient directement ${schoolName} ! Commandez vos produits Jappuie.ca préférés maintenant : ${storeLink} ${hashtags}`,
+          tip: "Utilisez des visuels colorés et attrayants",
+          hashtags: ["#Soutien", "#École", "#Jappuie"]
+        },
+        {
+          text: `🔥 Nouveau produit disponible ! Découvrez notre dernière création et commandez-la maintenant sur ${storeName} : ${storeLink} ${hashtags}`,
+          tip: "Créez de l'excitation autour des nouveaux produits",
+          hashtags: ["#Nouveau", "#Jappuie", "#Tartes"]
+        }
+      ],
+      tiktok: [
+        {
+          text: `POV: Tu découvres les meilleures tartes de ta vie 🥧✨ Commandez maintenant et soutenez ${schoolName} ! Lien en bio ${hashtags}`,
+          tip: "Filmez une vidéo de dégustation authentique",
+          hashtags: ["#Jappuie", "#Tartes", "#POV", "#Food"]
+        },
+        {
+          text: `Cette école vend des tartes et c'est génial ! 🎓🍰 Voici pourquoi vous devriez commander 👇 Lien en bio ${hashtags}`,
+          tip: "Créez une vidéo avec musique tendance",
+          hashtags: ["#Tartes", "#Jappuie", "#École", "#Financement"]
+        },
+        {
+          text: `Jour 1 de ma campagne vs Jour 30 😱 Regardez notre progression ! ${salesStats.total} commandes déjà ! Lien en bio ${hashtags}`,
+          tip: "Montrez votre évolution et vos résultats",
+          hashtags: ["#Transformation", "#Financement", "#Progression"]
+        },
+        {
+          text: `Meilleur moment pour commander des tartes ? MAINTENANT ! 🍰✨ Lien en bio ${hashtags}`,
+          tip: "Utilisez des transitions et effets visuels",
+          hashtags: ["#Jappuie", "#Tartes", "#Now"]
+        },
+        {
+          text: `Quand tu réalises que chaque tarte aide ton école 💡🍰 Commandez maintenant ! Lien en bio ${hashtags}`,
+          tip: "Créez du contenu engageant et émotionnel",
+          hashtags: ["#Réalisation", "#École", "#Jappuie"]
+        }
+      ],
+      whatsapp: [
+        {
+          text: `🍰 Bonjour ! Notre campagne de financement Jappuie.ca est en cours. Commandez vos produits préférés et soutenez ${schoolName} ! ${storeLink}`,
+          tip: "Envoyez à vos contacts proches et famille",
+          hashtags: []
+        },
+        {
+          text: `🎯 Nous avons besoin de votre soutien ! Commandez sur ${storeName} : ${storeLink} Chaque commande compte !`,
+          tip: "Personnalisez le message avec le nom du destinataire",
+          hashtags: []
+        },
+        {
+          text: `❤️ Merci pour votre commande ! N'hésitez pas à partager le lien avec vos amis : ${storeLink}`,
+          tip: "Envoyez après chaque commande pour multiplier les ventes",
+          hashtags: []
+        },
+        {
+          text: `📢 Dernière chance ! La campagne se termine bientôt. Commandez maintenant : ${storeLink}`,
+          tip: "Créez un sentiment d'urgence",
+          hashtags: []
+        }
+      ]
+    };
+  }, [storeUrl, storeName, schoolName, salesStats.total]);
 
   if (loading) {
     return (
@@ -510,9 +736,10 @@ export default function VendrePage({
                 <EmailCampaign
                   selectedClients={selectedClients}
                   storeId={storeInfo?.storeId}
+                  studentName={session?.user?.name}
                   onSuccess={() => {
                     setSelectedClients([]);
-                    fetchClients();
+                    fetchClients(true);
                   }}
                 />
 
@@ -553,94 +780,203 @@ export default function VendrePage({
                     ? (storeInfo?.storeId || storeInfo?._id)
                     : (storeInfo?.storeId || storeInfo?._id)?.toString?.()
                 }
-                onRefresh={fetchClients}
+                campaignId={
+                  storeInfo?.campaignId || campaignContext?.activeCampaignId
+                    ? (typeof (storeInfo?.campaignId || campaignContext?.activeCampaignId) === 'string'
+                      ? (storeInfo?.campaignId || campaignContext?.activeCampaignId)
+                      : (storeInfo?.campaignId || campaignContext?.activeCampaignId)?.toString?.())
+                    : null
+                }
+                onRefresh={() => fetchClients(true)}
+                selectedClients={selectedClients}
+                onSelectionChange={setSelectedClients}
               />
             </TabsContent>
 
             {/* Social Media Tab */}
             <TabsContent value="social" className="space-y-4 sm:space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+              {/* Info Banner */}
+              <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+                <CardContent className="pt-6">
+                  <div className="flex items-start space-x-3">
+                    <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-900 mb-1">
+                        Templates personnalisés avec votre boutique
+                      </p>
+                      <p className="text-xs text-blue-700">
+                        Tous les messages incluent automatiquement le nom de votre boutique ({storeName}) et le lien vers votre page ({storeUrl || 'lien-boutique'})
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                 {/* Facebook */}
-                <Card>
+                <Card className="hover:shadow-lg transition-shadow">
                   <CardHeader className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-                    <CardTitle className="flex items-center">
+                    <CardTitle className="flex items-center text-base sm:text-lg">
                       <Facebook className="h-5 w-5 mr-2" />
                       Facebook
                     </CardTitle>
-                    <CardDescription className="text-blue-100">
+                    <CardDescription className="text-blue-100 text-xs sm:text-sm">
                       Posts pour votre mur et groupes
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3 pt-4">
+                  <CardContent className="space-y-3 pt-4 max-h-[600px] overflow-y-auto">
                     {socialTemplates.facebook.map((template, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm mb-2">{template.text}</p>
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                        <p className="text-sm mb-2 whitespace-pre-wrap break-words">{template.text}</p>
+                        {template.hashtags && template.hashtags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {template.hashtags.map((tag, tagIndex) => (
+                              <Badge key={tagIndex} variant="secondary" className="text-xs">
+                                <Hash className="h-3 w-3 mr-1" />
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-start space-x-2 mb-2">
                           <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-gray-600">{template.tip}</p>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(template.text)}
-                          className="w-full"
-                        >
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copier
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(template.text, `facebook-${index}`)}
+                            className={`flex-1 transition-all duration-200 ${copiedTemplate === `facebook-${index}`
+                              ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                              : ''
+                              }`}
+                          >
+                            {copiedTemplate === `facebook-${index}` ? (
+                              <>
+                                <Check className="h-3 w-3 mr-1" />
+                                Copié!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3 mr-1" />
+                                Copier
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const urlWithSource = getStoreUrlWithSource('facebook');
+                              const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(urlWithSource || storeUrl)}&quote=${encodeURIComponent(template.text)}`;
+                              window.open(url, '_blank');
+                            }}
+                            className="px-2"
+                            title="Partager sur Facebook"
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
                 </Card>
 
                 {/* Instagram */}
-                <Card>
+                <Card className="hover:shadow-lg transition-shadow">
                   <CardHeader className="bg-gradient-to-r from-pink-500 to-purple-600 text-white">
-                    <CardTitle className="flex items-center">
+                    <CardTitle className="flex items-center text-base sm:text-lg">
                       <Instagram className="h-5 w-5 mr-2" />
                       Instagram
                     </CardTitle>
-                    <CardDescription className="text-pink-100">
+                    <CardDescription className="text-pink-100 text-xs sm:text-sm">
                       Stories et posts attractifs
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3 pt-4">
+                  <CardContent className="space-y-3 pt-4 max-h-[600px] overflow-y-auto">
                     {socialTemplates.instagram.map((template, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm mb-2">{template.text}</p>
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-pink-300 transition-colors">
+                        <p className="text-sm mb-2 whitespace-pre-wrap break-words">{template.text}</p>
+                        {template.hashtags && template.hashtags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {template.hashtags.map((tag, tagIndex) => (
+                              <Badge key={tagIndex} variant="secondary" className="text-xs">
+                                <Hash className="h-3 w-3 mr-1" />
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-start space-x-2 mb-2">
                           <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-gray-600">{template.tip}</p>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyToClipboard(template.text)}
-                          className="w-full"
-                        >
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copier
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(template.text, `instagram-${index}`)}
+                            className={`flex-1 transition-all duration-200 ${copiedTemplate === `instagram-${index}`
+                              ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                              : ''
+                              }`}
+                          >
+                            {copiedTemplate === `instagram-${index}` ? (
+                              <>
+                                <Check className="h-3 w-3 mr-1" />
+                                Copié!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3 mr-1" />
+                                Copier
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const url = `https://www.instagram.com/create/story/?text=${encodeURIComponent(template.text)}`;
+                              window.open(url, '_blank');
+                            }}
+                            className="px-2"
+                            title="Créer une Story"
+                          >
+                            <Share2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
                 </Card>
 
                 {/* TikTok */}
-                <Card>
+                <Card className="hover:shadow-lg transition-shadow">
                   <CardHeader className="bg-gradient-to-r from-gray-800 to-black text-white">
-                    <CardTitle className="flex items-center">
+                    <CardTitle className="flex items-center text-base sm:text-lg">
                       <Music className="h-5 w-5 mr-2" />
                       TikTok
                     </CardTitle>
-                    <CardDescription className="text-gray-300">
+                    <CardDescription className="text-gray-300 text-xs sm:text-sm">
                       Contenu viral pour jeunes
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3 pt-4">
+                  <CardContent className="space-y-3 pt-4 max-h-[600px] overflow-y-auto">
                     {socialTemplates.tiktok.map((template, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm mb-2">{template.text}</p>
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-gray-400 transition-colors">
+                        <p className="text-sm mb-2 whitespace-pre-wrap break-words">{template.text}</p>
+                        {template.hashtags && template.hashtags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {template.hashtags.map((tag, tagIndex) => (
+                              <Badge key={tagIndex} variant="secondary" className="text-xs">
+                                <Hash className="h-3 w-3 mr-1" />
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                         <div className="flex items-start space-x-2 mb-2">
                           <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
                           <p className="text-xs text-gray-600">{template.tip}</p>
@@ -648,12 +984,83 @@ export default function VendrePage({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => copyToClipboard(template.text)}
-                          className="w-full"
+                          onClick={() => copyToClipboard(template.text, `tiktok-${index}`)}
+                          className={`w-full transition-all duration-200 ${copiedTemplate === `tiktok-${index}`
+                            ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                            : ''
+                            }`}
                         >
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copier
+                          {copiedTemplate === `tiktok-${index}` ? (
+                            <>
+                              <Check className="h-3 w-3 mr-1" />
+                              Copié!
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3 mr-1" />
+                              Copier
+                            </>
+                          )}
                         </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* WhatsApp */}
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+                    <CardTitle className="flex items-center text-base sm:text-lg">
+                      <MessageSquare className="h-5 w-5 mr-2" />
+                      WhatsApp / SMS
+                    </CardTitle>
+                    <CardDescription className="text-green-100 text-xs sm:text-sm">
+                      Messages personnels
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-4 max-h-[600px] overflow-y-auto">
+                    {socialTemplates.whatsapp.map((template, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-green-300 transition-colors">
+                        <p className="text-sm mb-2 whitespace-pre-wrap break-words">{template.text}</p>
+                        <div className="flex items-start space-x-2 mb-2">
+                          <Lightbulb className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+                          <p className="text-xs text-gray-600">{template.tip}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => copyToClipboard(template.text, `whatsapp-${index}`)}
+                            className={`flex-1 transition-all duration-200 ${copiedTemplate === `whatsapp-${index}`
+                              ? 'border-green-500 text-green-600 bg-green-50 hover:bg-green-100'
+                              : ''
+                              }`}
+                          >
+                            {copiedTemplate === `whatsapp-${index}` ? (
+                              <>
+                                <Check className="h-3 w-3 mr-1" />
+                                Copié!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-3 w-3 mr-1" />
+                                Copier
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const url = `https://wa.me/?text=${encodeURIComponent(template.text)}`;
+                              window.open(url, '_blank');
+                            }}
+                            className="px-2"
+                            title="Ouvrir WhatsApp"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
@@ -663,68 +1070,246 @@ export default function VendrePage({
 
             {/* Tips Tab */}
             <TabsContent value="tips" className="space-y-4 sm:space-y-6">
+              {/* Stats-based tips */}
+              {salesStats.total > 0 && (
+                <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-green-700">
+                      <Zap className="h-5 w-5 mr-2" />
+                      Conseils Personnalisés Basés sur Vos Statistiques
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {salesStats.total < 10 && (
+                        <div className="p-4 bg-white rounded-lg border border-green-200">
+                          <p className="font-semibold text-green-700 mb-2">🚀 Démarrage</p>
+                          <p className="text-sm text-gray-700">
+                            Vous avez {salesStats.total} commande{salesStats.total > 1 ? 's' : ''}. Concentrez-vous sur vos proches (famille, amis) pour créer un effet boule de neige !
+                          </p>
+                        </div>
+                      )}
+                      {salesStats.total >= 10 && salesStats.total < 50 && (
+                        <div className="p-4 bg-white rounded-lg border border-green-200">
+                          <p className="font-semibold text-green-700 mb-2">📈 Croissance</p>
+                          <p className="text-sm text-gray-700">
+                            Excellent début avec {salesStats.total} commandes ! Utilisez les témoignages de vos premiers clients pour convaincre de nouveaux clients.
+                          </p>
+                        </div>
+                      )}
+                      {salesStats.thisMonth > 0 && (
+                        <div className="p-4 bg-white rounded-lg border border-green-200">
+                          <p className="font-semibold text-green-700 mb-2">📅 Ce Mois</p>
+                          <p className="text-sm text-gray-700">
+                            {salesStats.thisMonth} commande{salesStats.thisMonth > 1 ? 's' : ''} ce mois-ci. Maintenez le rythme avec des publications régulières !
+                          </p>
+                        </div>
+                      )}
+                      {clients.length > 0 && (
+                        <div className="p-4 bg-white rounded-lg border border-green-200">
+                          <p className="font-semibold text-green-700 mb-2">👥 Base de Clients</p>
+                          <p className="text-sm text-gray-700">
+                            Vous avez {clients.length} client{clients.length > 1 ? 's' : ''} dans votre base. Envoyez-leur des emails de relance pour augmenter les ventes répétées !
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <Card className="border-l-4 border-l-blue-500">
+                <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <CardTitle className="flex items-center text-blue-600">
                       <Target className="h-5 w-5 mr-2" />
                       Maximiser Vos Ventes
                     </CardTitle>
+                    <CardDescription>Stratégies éprouvées pour augmenter vos commandes</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-3">
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Publiez sur les réseaux sociaux tous les jours</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Publiez quotidiennement</span>
+                          <p className="text-xs text-gray-600 mt-1">Les réseaux sociaux récompensent la régularité. Publiez au moins une fois par jour sur Facebook et Instagram.</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Envoyez des emails de relance chaque semaine</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Emails de relance hebdomadaires</span>
+                          <p className="text-xs text-gray-600 mt-1">Envoyez un email chaque semaine à votre liste de clients. Les rappels doux augmentent les conversions de 20-30%.</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Affichez vos PDF dans des lieux publics</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Affichez vos PDF partout</span>
+                          <p className="text-xs text-gray-600 mt-1">Imprimez et affichez dans les commerces locaux, écoles, centres communautaires. Le marketing physique fonctionne !</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Partagez votre QR code partout</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">QR code stratégique</span>
+                          <p className="text-xs text-gray-600 mt-1">Partagez votre QR code sur tous vos posts, emails et documents. Facilitez l'accès à votre boutique !</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Organisez des concours sur les réseaux sociaux</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-blue-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Concours et défis</span>
+                          <p className="text-xs text-gray-600 mt-1">Organisez des concours sur les réseaux sociaux. C'est un excellent moyen d'augmenter votre portée.</p>
+                        </div>
                       </li>
                     </ul>
                   </CardContent>
                 </Card>
 
-                <Card className="border-l-4 border-l-purple-500">
+                <Card className="border-l-4 border-l-purple-500 hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <CardTitle className="flex items-center text-purple-600">
                       <Gift className="h-5 w-5 mr-2" />
                       Idées Créatives
                     </CardTitle>
+                    <CardDescription>Contenu engageant pour attirer l'attention</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-3">
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Créez un défi TikTok avec vos produits</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-purple-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Défi TikTok viral</span>
+                          <p className="text-xs text-gray-600 mt-1">Créez un défi autour de vos produits (ex: "Montre-moi ta tarte préférée"). Les défis génèrent beaucoup d'engagement.</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Offrez une tarte gratuite pour 5 commandes</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-purple-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Offres spéciales</span>
+                          <p className="text-xs text-gray-600 mt-1">"Commande 5 tartes, reçois-en 1 gratuite" ou "10% de rabais pour les 10 premiers commandes". Créez de l'urgence !</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Filmez des témoignages de clients satisfaits</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-purple-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Témoignages vidéo</span>
+                          <p className="text-xs text-gray-600 mt-1">Filmez des clients satisfaits qui parlent de vos produits. La preuve sociale est très efficace.</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Créez un compte à rebours pour la fin de campagne</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-purple-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Compte à rebours</span>
+                          <p className="text-xs text-gray-600 mt-1">Créez un sentiment d'urgence avec un compte à rebours pour la fin de campagne. "Plus que X jours !"</p>
+                        </div>
                       </li>
-                      <li className="flex items-start">
-                        <CheckCircle className="h-5 w-5 text-purple-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="text-sm">Partagez votre progression vers l'objectif</span>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-purple-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-purple-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Progression visuelle</span>
+                          <p className="text-xs text-gray-600 mt-1">Partagez votre progression vers l'objectif avec des graphiques visuels. "Nous sommes à 60% de notre objectif !"</p>
+                        </div>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-l-4 border-l-orange-500 hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-orange-600">
+                      <BookOpen className="h-5 w-5 mr-2" />
+                      Relations Clients
+                    </CardTitle>
+                    <CardDescription>Construire une base de clients fidèles</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      <li className="flex items-start p-2 rounded-lg hover:bg-orange-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-orange-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Remerciez chaque client</span>
+                          <p className="text-xs text-gray-600 mt-1">Envoyez un message de remerciement après chaque commande. Les clients appréciés reviennent plus souvent.</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-orange-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-orange-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Demandez des avis</span>
+                          <p className="text-xs text-gray-600 mt-1">Demandez à vos clients satisfaits de partager leur expérience. Les avis positifs attirent de nouveaux clients.</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-orange-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-orange-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Programme de parrainage</span>
+                          <p className="text-xs text-gray-600 mt-1">Offrez une récompense aux clients qui parrainent de nouveaux acheteurs. "Parraine un ami, reçois une tarte gratuite !"</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-orange-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-orange-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Suivi personnalisé</span>
+                          <p className="text-xs text-gray-600 mt-1">Personnalisez vos messages avec le nom du client. Les messages personnalisés ont un taux d'ouverture plus élevé.</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-orange-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-orange-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Rappels de commande</span>
+                          <p className="text-xs text-gray-600 mt-1">Rappelez aux clients qui ont consulté mais n'ont pas commandé. Parfois ils ont juste besoin d'un petit rappel.</p>
+                        </div>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-l-4 border-l-indigo-500 hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-indigo-600">
+                      <Award className="h-5 w-5 mr-2" />
+                      Techniques Avancées
+                    </CardTitle>
+                    <CardDescription>Stratégies pour les vendeurs expérimentés</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      <li className="flex items-start p-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-indigo-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Partenariats locaux</span>
+                          <p className="text-xs text-gray-600 mt-1">Collaborez avec d'autres commerces locaux pour échanger des clients. "Achetez chez X, obtenez 10% chez nous"</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-indigo-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Influenceurs micro</span>
+                          <p className="text-xs text-gray-600 mt-1">Contactez des micro-influenceurs locaux (500-5000 followers) pour promouvoir votre campagne. Souvent plus abordable et efficace.</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-indigo-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Événements en direct</span>
+                          <p className="text-xs text-gray-600 mt-1">Organisez des lives sur Instagram/Facebook pour présenter vos produits en temps réel. Les lives génèrent beaucoup d'engagement.</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-indigo-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Contenu éducatif</span>
+                          <p className="text-xs text-gray-600 mt-1">Créez du contenu qui éduque (recettes, histoire des produits). Les gens aiment apprendre avant d'acheter.</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start p-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                        <CheckCircle className="h-5 w-5 text-indigo-500 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-sm font-medium">Analysez vos meilleurs moments</span>
+                          <p className="text-xs text-gray-600 mt-1">Identifiez à quels moments vous recevez le plus de commandes et concentrez vos efforts sur ces périodes.</p>
+                        </div>
                       </li>
                     </ul>
                   </CardContent>
@@ -734,25 +1319,28 @@ export default function VendrePage({
               <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 border-2 border-yellow-200">
                 <CardHeader>
                   <CardTitle className="flex items-center text-orange-600">
-                    <TrendingUp className="h-5 w-5 mr-2" />
+                    <Calendar className="h-5 w-5 mr-2" />
                     Plan d'Action Hebdomadaire
                   </CardTitle>
+                  <CardDescription>Suivez ce plan pour maximiser vos ventes chaque semaine</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {[
-                      { day: 'Lundi', action: 'Envoyez des emails à vos clients' },
-                      { day: 'Mardi', action: 'Publiez sur Facebook et Instagram' },
-                      { day: 'Mercredi', action: 'Créez une vidéo TikTok' },
-                      { day: 'Jeudi', action: 'Partagez votre QR code en story' },
-                      { day: 'Vendredi', action: 'Relancez les clients qui n\'ont pas commandé' },
-                      { day: 'Samedi', action: 'Organisez un concours sur les réseaux' },
-                      { day: 'Dimanche', action: 'Planifiez la semaine suivante' }
+                      { day: 'Lundi', action: 'Envoyez des emails de relance à vos clients', icon: '📧' },
+                      { day: 'Mardi', action: 'Publiez sur Facebook et Instagram avec un nouveau template', icon: '📱' },
+                      { day: 'Mercredi', action: 'Créez et publiez une vidéo TikTok', icon: '🎬' },
+                      { day: 'Jeudi', action: 'Partagez votre QR code en story Instagram', icon: '📸' },
+                      { day: 'Vendredi', action: 'Relancez les clients qui n\'ont pas encore commandé', icon: '🔄' },
+                      { day: 'Samedi', action: 'Organisez un concours ou un défi sur les réseaux', icon: '🎉' },
+                      { day: 'Dimanche', action: 'Analysez vos résultats et planifiez la semaine suivante', icon: '📊' }
                     ].map((item, index) => (
-                      <div key={index} className="flex items-center p-3 bg-white rounded-lg shadow-sm">
-                        <div className="w-24 font-semibold text-orange-600">{item.day}</div>
-                        <div className="flex-1 text-sm">{item.action}</div>
-                      </div>
+                      <WeeklyPlanItem
+                        key={index}
+                        day={item.day}
+                        action={item.action}
+                        icon={item.icon}
+                      />
                     ))}
                   </div>
                 </CardContent>
@@ -824,7 +1412,9 @@ export async function getServerSideProps(context) {
         initialCampaignContext: { campaigns: [], activeCampaignId: null, mode: 'none' },
         initialStoreInfo: null,
         initialSchoolData: null,
-        initialCampaignData: null
+        initialCampaignData: null,
+        initialClients: [],
+        initialSalesStats: defaultSalesStats
       },
     };
   }

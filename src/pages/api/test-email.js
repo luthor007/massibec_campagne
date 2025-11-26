@@ -15,31 +15,31 @@ export default async function handler(req, res) {
 
     console.log(`📧 Test d'envoi d'email à: ${email}`);
     console.log(`📧 Provider configuré: ${process.env.EMAIL_PROVIDER || 'gmail'}`);
-    console.log(`📧 Email expéditeur: commande@massibec.com`);
+    console.log(`📧 Email expéditeur: commande@jappuie.ca`);
 
     // Envoyer un email de test
     await sendVerificationEmail({
       to: email,
-      subject: '🧪 Test Email - Campagne Massibec',
+      subject: '🧪 Test Email - Jappuie.ca',
       firstName: 'Test',
       verificationUrl: `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/email-verified`
     });
 
     console.log(`✅ Email de test envoyé avec succès à ${email}`);
 
-    return res.status(200).json({ 
+    return res.status(200).json({
       success: true,
       message: `Email de test envoyé avec succès à ${email}`,
       provider: process.env.EMAIL_PROVIDER || 'gmail',
-      from: 'commande@massibec.com'
+      from: 'commande@jappuie.ca'
     });
 
   } catch (error) {
     console.error('❌ Erreur lors de l\'envoi de l\'email de test:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'envoi de l\'email',
-      error: error.message 
+      error: error.message
     });
   }
 }

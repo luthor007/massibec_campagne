@@ -5,7 +5,7 @@ import Layout from '../../components/Layout';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BarChart, Settings, ShoppingBag, Store, TrendingUp, AlertTriangle, CheckCircle, Info, ArrowLeft, School, Loader2 } from 'lucide-react';
+import { ArrowRight, BarChart, Settings, ShoppingBag, Store, TrendingUp, AlertTriangle, CheckCircle, Info, ArrowLeft, School, Loader2, Copy, Share2, Check, DollarSign, Clock } from 'lucide-react';
 import CampaignSelector from '@/components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '@/components/Dashboard/JoinCampaignModal';
 import OnboardingTooltip from '@/components/Dashboard/OnboardingTooltip';
@@ -13,16 +13,19 @@ import useOnboarding from '@/hooks/useOnboarding';
 import { getUserCampaignContext } from '@/utils/campaignHelpers';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion, AnimatePresence } from 'framer-motion';
-import { getStoreUrl } from '@/utils/storeUrlHelpers';
+import { getStoreUrl, getFullStoreUrl } from '@/utils/storeUrlHelpers';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../api/auth/[...nextauth]';
-import { getDashboardSSRData } from '../../lib/dashboardSSR';
+import { getDashboardSSRData, getOrdersSSR } from '../../lib/dashboardSSR';
+import { prefetchSalesTools } from '@/utils/salesToolsPrefetcher';
 
 export default function Dashboard({
   initialCampaignContext,
   initialStoreInfo,
   initialSchoolData,
-  initialCampaignData
+  initialCampaignData,
+  initialStudentProfit = 0,
+  initialSchoolProfit = 0
 }) {
   const { data: session } = useSession();
   const router = useRouter();
@@ -125,6 +128,32 @@ export default function Dashboard({
     return getStoreUrl({ storeId, slug: storeSlug });
   }, [storeId, storeSlug]);
 
+  // State for full store URL (client-side only to avoid hydration issues)
+  const [fullStoreUrl, setFullStoreUrl] = useState(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Mark component as mounted (client-side only)
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Calculate full store URL on client-side only
+  useEffect(() => {
+    if (storeId && isMounted) {
+      const url = getFullStoreUrl({ storeId, slug: storeSlug });
+      setFullStoreUrl(url);
+    }
+  }, [storeId, storeSlug, isMounted]);
+
+  // State for copy/share functionality
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // State for profit and campaign metrics (initialized from SSR props)
+  const [studentProfit, setStudentProfit] = useState(initialStudentProfit);
+  const [schoolProfit, setSchoolProfit] = useState(initialSchoolProfit);
+  const [daysRemaining, setDaysRemaining] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+
   // Memoize onboarding handlers to prevent unnecessary re-renders
   const handleOnboardingNext = useCallback(async () => {
     if (currentStep) {
@@ -146,6 +175,11 @@ export default function Dashboard({
 
   const handleOnboardingClose = useCallback(() => {
     setShowOnboardingTooltip(false);
+  }, []);
+
+  // Warm up heavy sales tools so the vendre page loads instantly
+  useEffect(() => {
+    prefetchSalesTools();
   }, []);
 
   // Memoize campaign handlers
@@ -189,6 +223,44 @@ export default function Dashboard({
     }
     router.push('/dashboard-manager');
   }, [router]);
+
+  // Copy link handler
+  const handleCopyLink = useCallback(async () => {
+    const urlToCopy = fullStoreUrl || (isMounted && storeUrl ? `${window.location.origin}${storeUrl}` : '');
+    if (!urlToCopy) return;
+
+    try {
+      await navigator.clipboard.writeText(urlToCopy);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Erreur lors de la copie:', err);
+    }
+  }, [fullStoreUrl, storeUrl, isMounted]);
+
+  // Share link handler (uses native share on mobile)
+  const handleShareLink = useCallback(async () => {
+    const urlToShare = fullStoreUrl || (isMounted && storeUrl ? `${window.location.origin}${storeUrl}` : '');
+    if (!urlToShare) return;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Ma boutique Jappuie.ca',
+          text: 'Découvrez ma boutique de financement scolaire!',
+          url: urlToShare
+        });
+      } catch (error) {
+        // User cancelled or error occurred - silently fail
+        if (error.name !== 'AbortError') {
+          console.log('Error sharing:', error);
+        }
+      }
+    } else {
+      // Fallback to copy if share is not available
+      handleCopyLink();
+    }
+  }, [fullStoreUrl, storeUrl, isMounted, handleCopyLink]);
 
   // Memoize modal close handler
   const handleCloseJoinCampaignModal = useCallback(() => {
@@ -267,10 +339,28 @@ export default function Dashboard({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const viewMode = localStorage.getItem('viewMode');
-      const isPreview = viewMode === 'student_preview' && session?.user?.role === 'school_manager';
+      const isPreview = viewMode === 'student_preview' && (session?.user?.role === 'school_manager' || session?.user?.role === 'supplier' || session?.user?.role === 'fournisseur');
       setIsPreviewMode(isPreview);
     }
   }, [session]);
+
+  // Calculate days remaining from campaign end date
+  useEffect(() => {
+    if (initialCampaignData?.endDate) {
+      const endDate = new Date(initialCampaignData.endDate);
+      const now = new Date();
+      const diffTime = endDate - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setDaysRemaining(Math.max(0, diffDays));
+    } else if (campaignData?.endDate) {
+      const endDate = new Date(campaignData.endDate);
+      const now = new Date();
+      const diffTime = endDate - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setDaysRemaining(Math.max(0, diffDays));
+    }
+  }, [initialCampaignData, campaignData]);
+
 
   // Show onboarding tooltip when current step is available
   useEffect(() => {
@@ -314,7 +404,7 @@ export default function Dashboard({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const viewMode = localStorage.getItem('viewMode');
-      const isPreview = viewMode === 'student_preview' && session?.user?.role === 'school_manager';
+      const isPreview = viewMode === 'student_preview' && (session?.user?.role === 'school_manager' || session?.user?.role === 'supplier' || session?.user?.role === 'fournisseur');
       setIsPreviewMode(isPreview);
     }
   }, [session]);
@@ -366,6 +456,131 @@ export default function Dashboard({
             </div>
           </motion.div>
         </div>
+
+        {/* Boutique Link Share Section */}
+        {storeExists && storeUrl && (
+          <Card className="mb-6 border-2 border-primary/20 bg-gradient-to-r from-blue-50 to-purple-50">
+            <CardHeader>
+              <CardTitle className="flex items-center text-lg sm:text-xl">
+                <Store className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-primary" />
+                Lien de votre boutique
+              </CardTitle>
+              <CardDescription>
+                Partagez ce lien avec vos clients pour qu&apos;ils puissent commander vos produits
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                <div className="flex-1 bg-white border border-gray-300 rounded-lg px-4 py-3 flex items-center min-w-0">
+                  <code className="text-sm sm:text-base text-gray-800 truncate flex-1">
+                    {isMounted && fullStoreUrl ? fullStoreUrl : storeUrl || 'Chargement...'}
+                  </code>
+                </div>
+                <div className="flex gap-2 sm:flex-shrink-0">
+                  <Button
+                    onClick={handleCopyLink}
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    disabled={linkCopied}
+                  >
+                    {linkCopied ? (
+                      <>
+                        <Check className="h-4 w-4 mr-2 text-green-600" />
+                        <span className="hidden sm:inline">Copié!</span>
+                        <span className="sm:hidden">Copié!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-2" />
+                        <span className="hidden sm:inline">Copier</span>
+                        <span className="sm:hidden">Copier</span>
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleShareLink}
+                    variant="default"
+                    className="flex-1 sm:flex-none bg-primary hover:bg-primary/90"
+                  >
+                    <Share2 className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Partager</span>
+                    <span className="sm:hidden">Partager</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Metrics Section */}
+              <div className={`grid gap-3 pt-3 border-t border-gray-200 ${daysRemaining !== null
+                ? 'grid-cols-1 sm:grid-cols-3'
+                : 'grid-cols-1 sm:grid-cols-2'
+                }`}>
+                {/* Student Profit */}
+                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200">
+                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-600">Vos profits</div>
+                    <div className="text-sm sm:text-base font-bold text-gray-900">
+                      {metricsLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin inline" />
+                      ) : (
+                        `${(studentProfit || 0).toFixed(2)}$`
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* School Profit */}
+                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200">
+                  <School className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-600">Profits école</div>
+                    <div className="text-sm sm:text-base font-bold text-gray-900">
+                      {metricsLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin inline" />
+                      ) : (
+                        `${(schoolProfit || 0).toFixed(2)}$`
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Days Remaining */}
+                {daysRemaining !== null && (
+                  <div className={`flex items-center gap-2 bg-white rounded-lg px-3 py-2 border ${daysRemaining <= 7
+                    ? 'border-red-300 bg-red-50'
+                    : daysRemaining <= 14
+                      ? 'border-yellow-300 bg-yellow-50'
+                      : 'border-gray-200'
+                    }`}>
+                    <Clock className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${daysRemaining <= 7
+                      ? 'text-red-600'
+                      : daysRemaining <= 14
+                        ? 'text-yellow-600'
+                        : 'text-gray-600'
+                      }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-gray-600">Jours restants</div>
+                      <div className={`text-sm sm:text-base font-bold ${daysRemaining <= 7
+                        ? 'text-red-700'
+                        : daysRemaining <= 14
+                          ? 'text-yellow-700'
+                          : 'text-gray-900'
+                        }`}>
+                        {daysRemaining === 0 ? (
+                          <span className="text-red-600">Terminé</span>
+                        ) : daysRemaining === 1 ? (
+                          <span className="text-red-600">Dernier jour!</span>
+                        ) : (
+                          `${daysRemaining} jours`
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Distribution Information 
         {schoolData && campaignData && campaignData.deliveryDate && (
@@ -419,16 +634,16 @@ export default function Dashboard({
               ease: "easeInOut"
             }}
           >
-            <Card className={currentStep?.key === 'personalizedStore' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}>
-              <CardHeader>
+            <Card className={`flex flex-col h-full ${currentStep?.key === 'personalizedStore' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="flex items-center">
                   <Settings className="h-5 w-5 mr-2 text-primary" />
                   Personnaliser ma boutique
                 </CardTitle>
-                <CardDescription>Modifiez l&apos;apparence et les détails de votre boutique en ligne.</CardDescription>
+                <CardDescription className="min-h-[3rem]">Modifiez l&apos;apparence et les détails de votre boutique en ligne.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link href="/dashboard/personnalisation" passHref>
+              <CardContent className="flex-grow flex items-end w-full">
+                <Link href="/dashboard/personnalisation" passHref className="w-full block">
                   <Button
                     className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-all"
                     onClick={(e) => handleNavigation('/dashboard/personnalisation', e)}
@@ -462,16 +677,16 @@ export default function Dashboard({
               ease: "easeInOut"
             }}
           >
-            <Card className={currentStep?.key === 'viewedOrders' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}>
-              <CardHeader>
+            <Card className={`flex flex-col h-full ${currentStep?.key === 'viewedOrders' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="flex items-center">
                   <ShoppingBag className="h-5 w-5 mr-2 text-primary" />
                   Mes commandes
                 </CardTitle>
-                <CardDescription>Consultez et gérez les commandes de vos clients.</CardDescription>
+                <CardDescription className="min-h-[3rem]">Consultez et gérez les commandes de vos clients.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link href="/dashboard/commandes" passHref>
+              <CardContent className="flex-grow flex items-end w-full">
+                <Link href="/dashboard/commandes" passHref className="w-full block">
                   <Button
                     className="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-all"
                     onClick={(e) => handleNavigation('/dashboard/commandes', e)}
@@ -505,16 +720,16 @@ export default function Dashboard({
               ease: "easeInOut"
             }}
           >
-            <Card className={currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}>
-              <CardHeader>
+            <Card className={`flex flex-col h-full ${currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="flex items-center">
                   <BarChart className="h-5 w-5 mr-2 text-primary" />
                   Statistiques
                 </CardTitle>
-                <CardDescription>Suivez les performances de votre campagne.</CardDescription>
+                <CardDescription className="min-h-[3rem]">Suivez les performances de votre campagne.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link href="/dashboard/statistiques" passHref>
+              <CardContent className="flex-grow flex items-end w-full">
+                <Link href="/dashboard/statistiques" passHref className="w-full block">
                   <Button
                     className="w-full bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-all"
                     onClick={(e) => handleNavigation('/dashboard/statistiques', e)}
@@ -549,17 +764,17 @@ export default function Dashboard({
               ease: "easeInOut"
             }}
           >
-            <Card className={currentStep?.key === 'visitedStore' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}>
-              <CardHeader>
+            <Card className={`flex flex-col h-full ${currentStep?.key === 'visitedStore' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="flex items-center">
                   <Store className="h-5 w-5 mr-2 text-primary" />
                   Voir ma boutique
                 </CardTitle>
-                <CardDescription>Accédez à votre boutique en ligne pour la voir comme vos clients.</CardDescription>
+                <CardDescription className="min-h-[3rem]">Accédez à votre boutique en ligne pour la voir comme vos clients.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-grow flex items-end w-full">
                 {storeUrl ? (
-                  <Link href={storeUrl} passHref>
+                  <Link href={storeUrl} passHref className="w-full block">
                     <Button className="w-full bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
                       Voir la boutique
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -586,16 +801,16 @@ export default function Dashboard({
               ease: "easeInOut"
             }}
           >
-            <Card className={currentStep?.key === 'viewedTools' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}>
-              <CardHeader>
+            <Card className={`flex flex-col h-full ${currentStep?.key === 'viewedTools' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="flex items-center">
                   <TrendingUp className="h-5 w-5 mr-2 text-primary" />
                   Outils de Vente
                 </CardTitle>
-                <CardDescription>Boostez vos ventes avec nos outils marketing prêts à utiliser.</CardDescription>
+                <CardDescription className="min-h-[3rem]">Boostez vos ventes avec nos outils marketing prêts à utiliser.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link href="/dashboard/vendre" passHref>
+              <CardContent className="flex-grow flex items-end w-full">
+                <Link href="/dashboard/vendre" passHref className="w-full block">
                   <Button
                     className="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-all"
                     onClick={(e) => handleNavigation('/dashboard/vendre', e)}
@@ -619,16 +834,16 @@ export default function Dashboard({
           </motion.div>
 
           {/* Card for Campaign Details */}
-          <Card>
-            <CardHeader>
+          <Card className="flex flex-col h-full">
+            <CardHeader className="flex-shrink-0">
               <CardTitle className="flex items-center">
                 <Info className="h-5 w-5 mr-2 text-primary" />
                 Détail de la campagne
               </CardTitle>
-              <CardDescription>Consultez les détails de votre campagne et les profits par produit.</CardDescription>
+              <CardDescription className="min-h-[3rem]">Consultez les détails de votre campagne et les profits par produit.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Link href="/detail" passHref>
+            <CardContent className="flex-grow flex items-end w-full">
+              <Link href="/detail" passHref className="w-full block">
                 <Button
                   className="w-full bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-all"
                   onClick={handleDetailNavigation}
@@ -706,8 +921,74 @@ export async function getServerSideProps(context) {
       };
     }
 
+    // Calculate profits from orders
+    let initialStudentProfit = 0;
+    let initialSchoolProfit = 0;
+
+    if (dashboardData.initialCampaignContext?.activeCampaignId) {
+      try {
+        const orders = await getOrdersSSR(session, dashboardData.initialCampaignContext.activeCampaignId);
+        const campaignData = dashboardData.initialCampaignData;
+
+        orders.forEach(order => {
+          // Skip test orders
+          if (order.isTest) return;
+
+          // Add student donations to student profit
+          const studentDonation = order.studentDonation || order.tip || 0;
+          initialStudentProfit += studentDonation;
+
+          // Add school donations to school profit
+          const schoolDonation = order.schoolDonation || 0;
+          initialSchoolProfit += schoolDonation;
+
+          // Calculate product profits
+          if (order.products && Array.isArray(order.products)) {
+            order.products.forEach(product => {
+              const quantity = product.quantity || 0;
+              const price = product.productPrice || product.price || 0;
+              const cost = product.productCost || product.cost || 0;
+              const rawProfit = (price - cost) * quantity;
+
+              let studentCash = 0;
+              let studentAccount = 0;
+              let schoolProject = 0;
+
+              if (campaignData?.profitSplitType === 'absolute' && campaignData?.profitSplits) {
+                const productId = product.product?.toString() || product.productId;
+                const profitSplit = campaignData.profitSplits.find(ps =>
+                  ps.productId?.toString() === productId
+                );
+
+                if (profitSplit) {
+                  studentCash = (profitSplit.studentCash || 0) * quantity;
+                  studentAccount = (profitSplit.studentSchoolAccount || 0) * quantity;
+                  schoolProject = (profitSplit.schoolProject || 0) * quantity;
+                } else {
+                  studentCash = rawProfit * 0.5;
+                  studentAccount = rawProfit * 0.5;
+                }
+              } else {
+                studentCash = rawProfit * 0.5;
+                studentAccount = rawProfit * 0.5;
+              }
+
+              initialStudentProfit += studentCash + studentAccount;
+              initialSchoolProfit += schoolProject;
+            });
+          }
+        });
+      } catch (orderError) {
+        console.error('Error fetching orders for profit calculation:', orderError);
+      }
+    }
+
     return {
-      props: dashboardData,
+      props: {
+        ...dashboardData,
+        initialStudentProfit: Math.round(initialStudentProfit * 100) / 100,
+        initialSchoolProfit: Math.round(initialSchoolProfit * 100) / 100,
+      },
     };
   } catch (error) {
     console.error('Error in getServerSideProps:', error);
@@ -716,7 +997,9 @@ export async function getServerSideProps(context) {
         initialCampaignContext: { campaigns: [], activeCampaignId: null, mode: 'none' },
         initialStoreInfo: null,
         initialSchoolData: null,
-        initialCampaignData: null
+        initialCampaignData: null,
+        initialStudentProfit: 0,
+        initialSchoolProfit: 0,
       },
     };
   }

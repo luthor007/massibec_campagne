@@ -34,3 +34,43 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python (exclude cache and compiled files, but keep source files)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+# Explicitly include scraper source files (needed for deployment)
+!scripts/scraper/
+!scripts/scraper/**/*.py
+!scripts/requirements-scraper.txt
+
+# firecrawl (git submodule - keep .gitmodules but ignore contents)
+# Note: firecrawl is a git submodule, so it's tracked separately
+# The submodule itself should be in .gitmodules, but we can ignore its contents in context
+
+# specstory (test/cache files)
+.specstory/
+
+# assets (scraped images, can be regenerated)
+/assets/scraped-images/
+
+# large data files
+*.csv
+scraped_data.json
+converted_orders.csv
+fichier_commande_*.csv
+
+# cursor
+.cursor/
+
+# fly.io
+.fly/

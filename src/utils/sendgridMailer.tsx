@@ -61,14 +61,14 @@ export const sendVerificationEmail = async ({ to, cc, subject, firstName, verifi
         <p>Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :</p>
         <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
         <p>Ce lien expire dans 24 heures.</p>
-        <p>Cordialement,<br>L'équipe Massibec</p>
+        <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: 'Campagne Massibec'
+        email: 'team@jappuie.ca',
+        name: 'Jappuie.ca'
       },
       to,
       subject,
@@ -102,14 +102,14 @@ export const sendSchoolConfirmationEmail = async ({ to, cc, subject, schoolName,
         <p>Bonjour ${managerName},</p>
         <p>Votre inscription pour l'école <strong>${schoolName}</strong> a été confirmée avec succès !</p>
         <p>Vous pouvez maintenant accéder à votre tableau de bord pour créer votre première campagne.</p>
-        <p>Cordialement,<br>L'équipe Massibec</p>
+        <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: 'Campagne Massibec'
+        email: 'team@jappuie.ca',
+        name: 'Jappuie'
       },
       to,
       subject,
@@ -144,14 +144,14 @@ export const sendStudentConfirmationEmail = async ({ to, cc, subject, studentNam
         <p>Bonjour ${studentName},</p>
         <p>Votre inscription pour l'école <strong>${schoolName}</strong> a été confirmée avec succès !</p>
         <p>Vous pouvez maintenant commencer à vendre des produits.</p>
-        <p>Cordialement,<br>L'équipe Massibec</p>
+        <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: `Campagne ${schoolName}-Massibec`
+        email: 'team@jappuie.ca',
+        name: `Jappuie - ${schoolName}`
       },
       to,
       subject,
@@ -194,13 +194,13 @@ export const sendOrderConfirmationEmail = async ({ to, cc, subject, orderData, s
         </ul>
         <p><strong>Total : $${orderData.totalAmount}</strong></p>
         <p><strong>Date de livraison : ${orderData.deliveryDate}</strong></p>
-        <p>Cordialement,<br>L'équipe Massibec</p>
+        <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
+        email: 'team@jappuie.ca',
         name: `${orderData.studentName} - Campagne ${orderData.schoolName}`
       },
       to,
@@ -224,8 +224,8 @@ export const sendOrderConfirmationEmail = async ({ to, cc, subject, orderData, s
   }
 };
 
-// Send Massibec confirmation email
-export const sendMassibecConfirmationEmail = async ({ to, cc, subject, orderData }: {
+// Send Jappuie.ca confirmation email
+export const sendJappuieConfirmationEmail = async ({ to, cc, subject, orderData }: {
   to: string;
   cc?: string;
   subject: string;
@@ -248,14 +248,14 @@ export const sendMassibecConfirmationEmail = async ({ to, cc, subject, orderData
         <p><strong>École : ${orderData.schoolName}</strong></p>
         <p><strong>Étudiant : ${orderData.studentName} (${orderData.studentEmail})</strong></p>
         <p><strong>La distribution se fera à l'école le ${orderData.deliveryDate}.</strong></p>
-        <p>Cordialement,<br>Système Massibec</p>
+        <p>Cordialement,<br>Équipe Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: 'Campagne Massibec'
+        email: 'team@jappuie.ca',
+        name: 'Jappuie.ca'
       },
       to,
       subject,
@@ -267,7 +267,7 @@ export const sendMassibecConfirmationEmail = async ({ to, cc, subject, orderData
     }
 
     await sgMail.send(msg);
-    console.log(`Email de confirmation Massibec envoyé à ${to} via SendGrid`);
+    console.log(`Email de confirmation Jappuie.ca envoyé à ${to} via SendGrid`);
   } catch (error) {
     console.error('Erreur SendGrid:', error);
     throw error;
@@ -294,14 +294,14 @@ export const sendPasswordResetEmail = async ({ to, cc, subject, resetLink }: {
         <p style="word-break: break-all; color: #666;">${resetLink}</p>
         <p>Ce lien expire dans 1 heure.</p>
         <p>Si vous n'avez pas demandé cette réinitialisation, ignorez cet e-mail.</p>
-        <p>Cordialement,<br>L'équipe Massibec</p>
+        <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: 'Campagne Massibec'
+        email: 'team@jappuie.ca',
+        name: 'Jappuie.ca'
       },
       to,
       subject,
@@ -334,14 +334,14 @@ export const sendDeletionEmail = async ({ to, cc, subject, firstName }: {
         <p>Bonjour ${firstName},</p>
         <p>Votre compte a été supprimé avec succès.</p>
         <p>Si vous souhaitez créer un nouveau compte à l'avenir, vous pouvez vous réinscrire à tout moment.</p>
-        <p>Cordialement,<br>L'équipe Massibec</p>
+        <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
       </div>
     `;
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: 'Campagne Massibec'
+        email: 'team@jappuie.ca',
+        name: 'Jappuie'
       },
       to,
       subject,
@@ -412,14 +412,14 @@ export const sendStudentOrderEmail = async (params: LegacyStudentOrderParams | N
           </ul>
           <p><strong>Total : $${legacyParams.orderData.totalAmount}</strong></p>
           <p><strong>Date de livraison : ${legacyParams.orderData.deliveryDate}</strong></p>
-          <p>Cordialement,<br>L'équipe Massibec</p>
+          <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
         </div>
       `;
 
       const msg: any = {
         from: {
-          email: 'commande@massibec.com',
-          name: 'Campagne Massibec'
+          email: 'team@jappuie.ca',
+          name: 'Jappuie.ca'
         },
         to: legacyParams.to,
         subject: legacyParams.subject,
@@ -460,8 +460,8 @@ export const sendStudentOrderEmail = async (params: LegacyStudentOrderParams | N
 
       const msg: any = {
         from: {
-          email: 'commande@massibec.com',
-          name: 'Campagne Massibec'
+          email: 'team@jappuie.ca',
+          name: 'Jappuie.ca'
         },
         to: p.email,
         subject: p.subject || `Confirmation de votre commande - Commande #${p.orderId}`,
@@ -517,14 +517,14 @@ export const sendSaleNotificationEmail = async (
           <h3>Détails de la vente :</h3>
           <p><strong>Montant : $${saleData.amount || 'N/A'}</strong></p>
           <p><strong>Date : ${saleData.date || 'N/A'}</strong></p>
-          <p>Cordialement,<br>Système Massibec</p>
+          <p>Cordialement,<br>L'équipe de Jappuie.ca</p>
         </div>
       `;
 
       const msg: any = {
         from: {
-          email: 'commande@massibec.com',
-          name: 'Campagne Massibec'
+          email: 'team@jappuie.ca',
+          name: 'Jappuie.ca'
         },
         to,
         subject,
@@ -594,8 +594,8 @@ export const sendSaleNotificationEmail = async (
 
       const msg: any = {
         from: {
-          email: 'commande@massibec.com',
-          name: 'Campagne Massibec'
+          email: 'team@jappuie.ca',
+          name: 'Jappuie.ca'
         },
         to,
         subject: subject || `Nouvelle Vente Reçue - Commande #${orderId}`,
@@ -725,8 +725,8 @@ export const sendEmail = async (params: SendEmailParams) => {
 
     const msg: any = {
       from: {
-        email: 'commande@massibec.com',
-        name: 'Campagne Massibec'
+        email: 'team@jappuie.ca',
+        name: 'Jappuie.ca'
       },
       to: params.to,
       subject: params.subject,
@@ -739,8 +739,15 @@ export const sendEmail = async (params: SendEmailParams) => {
 
     await sgMail.send(msg);
     console.log(`Email générique envoyé à ${params.to} via SendGrid`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erreur SendGrid:', error);
+    // Log detailed error information for debugging
+    if (error.response?.body?.errors) {
+      console.error('Détails de l\'erreur SendGrid:', JSON.stringify(error.response.body.errors, null, 2));
+    }
+    if (error.response?.body) {
+      console.error('Réponse complète SendGrid:', JSON.stringify(error.response.body, null, 2));
+    }
     throw error;
   }
 };

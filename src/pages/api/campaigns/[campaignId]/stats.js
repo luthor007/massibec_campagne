@@ -2,6 +2,7 @@ import dbConnect from '../../../../lib/mongodb';
 import Campaign from '../../../../models/Campaign';
 import Order from '../../../../models/Order';
 import User from '../../../../models/User';
+import SchoolManager from '../../../../models/SchoolManager';
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
@@ -30,14 +31,28 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    // Check if user is school manager for this school
-    const user = await User.findById(token.sub);
-    if (!user || user.role !== 'school_manager') {
+    // Check if user is school manager or supplier
+    const user = await User.findById(token.sub).lean();
+    if (!user) {
       return res.status(401).json({ message: 'Non autorisé' });
     }
 
-    // Verify user belongs to this school
-    if (user.schoolManagerInfo?.organisme?.toString() !== campaign.school.toString()) {
+    // Allow school_manager or supplier (suppliers can access campaigns for their auto-created school)
+    if (user.role !== 'school_manager' && user.role !== 'supplier') {
+      return res.status(401).json({ message: 'Non autorisé' });
+    }
+
+    // Verify user has access to this school via SchoolManager or legacy schoolManagerInfo
+    const schoolManagerRecord = await SchoolManager.findOne({
+      user: token.sub,
+      school: campaign.school,
+      status: 'active'
+    }).lean();
+
+    // Also check legacy schoolManagerInfo for backward compatibility
+    const hasLegacyAccess = user.schoolManagerInfo?.organisme?.toString() === campaign.school.toString();
+
+    if (!schoolManagerRecord && !hasLegacyAccess) {
       return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
     }
 
@@ -48,7 +63,7 @@ export default async function handler(req, res) {
 
     // Calculate statistics
     const totalRaised = orders.reduce((sum, order) => sum + order.totalAmount, 0);
-    
+
     // Get unique participants
     const participantIds = [...new Set(orders.map(order => order.user.toString()))];
     const participantCount = participantIds.length;
@@ -92,8 +107,8 @@ export default async function handler(req, res) {
     );
 
     // Calculate goal progress
-    const goalProgress = campaign.financialGoal > 0 
-      ? Math.round((totalRaised / campaign.financialGoal) * 100) 
+    const goalProgress = campaign.financialGoal > 0
+      ? Math.round((totalRaised / campaign.financialGoal) * 100)
       : 0;
 
     const stats = {

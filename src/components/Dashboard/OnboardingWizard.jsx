@@ -6,10 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Building, 
-  User, 
-  CheckCircle, 
+import {
+  Building,
+  User,
+  CheckCircle,
   ArrowRight,
   Target,
   X,
@@ -28,7 +28,7 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
   const [formData, setFormData] = useState({
     // Organization Type (required)
     organizationType: school?.organizationType || 'school',
-    
+
     // School Info - don't pre-fill placeholders
     organisme: (school?.name && !school.name.includes('à compléter') && !school.name.includes('À compléter')) ? school.name : '',
     adresse: (school?.address && !school.address.includes('à compléter') && !school.address.includes('À compléter')) ? school.address : '',
@@ -39,17 +39,15 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
     numberOfStudents: school?.numberOfStudents || '',
     deliveryInstructions: (school?.deliveryInstructions && !school.deliveryInstructions.includes('à compléter') && !school.deliveryInstructions.includes('À compléter')) ? school.deliveryInstructions : '',
     distributionLocation: (school?.distributionLocation && !school.distributionLocation.includes('à compléter') && !school.distributionLocation.includes('À compléter')) ? school.distributionLocation : '',
-    
+
     // Manager Info - don't pre-fill placeholders
     titreOuFonction: (user?.schoolManagerInfo?.titreOuFonction && !user.schoolManagerInfo.titreOuFonction.includes('à compléter') && !user.schoolManagerInfo.titreOuFonction.includes('À compléter')) ? user.schoolManagerInfo.titreOuFonction : '',
     telephone: (user?.schoolManagerInfo?.telephone && !user.schoolManagerInfo.telephone.includes('à compléter') && !user.schoolManagerInfo.telephone.includes('À compléter')) ? user.schoolManagerInfo.telephone : '',
-    cellulaire: (user?.schoolManagerInfo?.cellulaire && !user.schoolManagerInfo.cellulaire.includes('à compléter') && !user.schoolManagerInfo.cellulaire.includes('À compléter')) ? user.schoolManagerInfo.cellulaire : '',
-    momentPourJoindre: user?.schoolManagerInfo?.momentPourJoindre || ''
   });
 
   const steps = [
     { id: 1, title: 'Informations de l\'École', icon: Building, fields: ['organisme', 'adresse', 'ville', 'codePostal', 'emailEcole', 'telephoneEcole'] },
-    { id: 2, title: 'Vos Coordonnées', icon: User, fields: ['titreOuFonction', 'telephone', 'cellulaire', 'momentPourJoindre'] }
+    { id: 2, title: 'Vos Coordonnées', icon: User, fields: ['titreOuFonction', 'telephone'] }
   ];
 
   const handleChange = (field, value) => {
@@ -60,7 +58,7 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
     // Calculate percentage based on steps completed, not individual fields
     // Each step is worth 50% (1/2 steps)
     let percentage = 0;
-    
+
     // Step 1 is 50% if completed
     if (isStepComplete(1)) {
       percentage += 50;
@@ -70,17 +68,17 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
       const step1Completed = step1RequiredFields.filter(field => formData[field] && formData[field] !== '').length;
       percentage += Math.round((step1Completed / step1RequiredFields.length) * 50);
     }
-    
+
     // Step 2 is 50% if completed
     if (isStepComplete(2)) {
       percentage += 50;
     } else if (currentStep === 2) {
       // If on step 2 but not complete, calculate progress within step 2
-      const step2RequiredFields = ['titreOuFonction', 'telephone', 'momentPourJoindre'];
+      const step2RequiredFields = ['titreOuFonction', 'telephone'];
       const step2Completed = step2RequiredFields.filter(field => formData[field] && formData[field] !== '').length;
       percentage += Math.round((step2Completed / step2RequiredFields.length) * 50);
     }
-    
+
     return percentage;
   };
 
@@ -89,8 +87,8 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
       // Étape 1: Organization type and basic info (required)
       return formData.organizationType && formData.organisme && formData.adresse && formData.ville && formData.codePostal;
     } else if (stepNumber === 2) {
-      // Étape 2: Coordonnées (titre, téléphone et moment requis, cellulaire optionnel)
-      return formData.titreOuFonction && formData.telephone && formData.momentPourJoindre;
+      // Étape 2: Coordonnées (titre et téléphone requis)
+      return formData.titreOuFonction && formData.telephone;
     }
     return false;
   };
@@ -103,15 +101,15 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
         toast.error('Veuillez sélectionner un fichier image');
         return;
       }
-      
+
       // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Le fichier ne doit pas dépasser 5MB');
         return;
       }
-      
+
       setLogoFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -150,7 +148,7 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
     try {
       // Prepare form data with logo if provided
       const submitData = { ...formData };
-      
+
       // Convert logo file to base64 if provided
       if (logoFile) {
         const reader = new FileReader();
@@ -161,7 +159,7 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
         });
         submitData.logoFile = base64Logo;
       }
-      
+
       const response = await fetch('/api/complete-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -232,12 +230,11 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
               </div>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
-              <div 
-                className={`h-3 rounded-full transition-all duration-500 ease-out ${
-                  isStepComplete(currentStep) 
-                    ? 'bg-gradient-to-r from-green-500 to-green-600' 
-                    : 'bg-gradient-to-r from-blue-500 to-blue-600'
-                }`}
+              <div
+                className={`h-3 rounded-full transition-all duration-500 ease-out ${isStepComplete(currentStep)
+                  ? 'bg-gradient-to-r from-green-500 to-green-600'
+                  : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                  }`}
                 style={{ width: `${(currentStep / steps.length) * 100}%` }}
               ></div>
             </div>
@@ -269,11 +266,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                     value={formData.organizationType}
                     onValueChange={(value) => handleChange('organizationType', value)}
                   >
-                    <SelectTrigger className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                      formData.organizationType 
-                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                    }`}>
+                    <SelectTrigger className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.organizationType
+                      ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                      : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                      }`}>
                       <SelectValue placeholder="Sélectionnez un type d'organisation" />
                     </SelectTrigger>
                     <SelectContent>
@@ -297,11 +293,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.organisme}
                       onChange={(e) => handleChange('organisme', e.target.value)}
                       placeholder={`Ex: ${formData.organizationType === 'school' ? 'École primaire Saint-Joseph' : 'Équipe de soccer les Étoiles'}`}
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.organisme 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.organisme
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
 
@@ -315,11 +310,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.adresse}
                       onChange={(e) => handleChange('adresse', e.target.value)}
                       placeholder="Ex: 123 rue de l'École"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.adresse 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.adresse
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
 
@@ -333,11 +327,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.ville}
                       onChange={(e) => handleChange('ville', e.target.value)}
                       placeholder="Ex: Montréal"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.ville 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.ville
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
 
@@ -351,11 +344,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.codePostal}
                       onChange={(e) => handleChange('codePostal', e.target.value)}
                       placeholder="Ex: H1A 1A1"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.codePostal 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.codePostal
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
                 </div>
@@ -373,11 +365,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.emailEcole}
                       onChange={(e) => handleChange('emailEcole', e.target.value)}
                       placeholder="Ex: contact@ecole.com"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.emailEcole 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.emailEcole
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
 
@@ -391,11 +382,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.telephoneEcole}
                       onChange={(e) => handleChange('telephoneEcole', e.target.value)}
                       placeholder="Ex: (514) 123-4567"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.telephoneEcole 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.telephoneEcole
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
                 </div>
@@ -414,11 +404,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.numberOfStudents}
                       onChange={(e) => handleChange('numberOfStudents', e.target.value)}
                       placeholder={`Ex: 250 ${terminology.participants}`}
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.numberOfStudents 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.numberOfStudents
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                        }`}
                     />
                   </div>
 
@@ -531,11 +520,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.titreOuFonction}
                       onChange={(e) => handleChange('titreOuFonction', e.target.value)}
                       placeholder="Ex: Directeur, Enseignant"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.titreOuFonction 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-green-500 focus:ring-green-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.titreOuFonction
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-green-500 focus:ring-green-200'
+                        }`}
                     />
                   </div>
 
@@ -549,56 +537,13 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                       value={formData.telephone}
                       onChange={(e) => handleChange('telephone', e.target.value)}
                       placeholder="Ex: (514) 123-4567"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.telephone 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-green-500 focus:ring-green-200'
-                      }`}
+                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${formData.telephone
+                        ? 'border-green-300 focus:border-green-500 focus:ring-green-200'
+                        : 'border-gray-200 focus:border-green-500 focus:ring-green-200'
+                        }`}
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="cellulaire" className={`text-sm font-semibold mb-2 block flex items-center ${formData.cellulaire ? 'text-green-700' : 'text-gray-700'}`}>
-                      Cellulaire (optionnel)
-                      {formData.cellulaire && <CheckCircle className="h-4 w-4 text-green-500 ml-2" />}
-                    </Label>
-                    <Input
-                      id="cellulaire"
-                      value={formData.cellulaire}
-                      onChange={(e) => handleChange('cellulaire', e.target.value)}
-                      placeholder="Ex: (514) 123-4567"
-                      className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.cellulaire 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-green-500 focus:ring-green-200'
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="momentPourJoindre" className={`text-sm font-semibold mb-2 block flex items-center ${formData.momentPourJoindre ? 'text-green-700' : 'text-gray-700'}`}>
-                      Meilleur moment pour vous joindre *
-                      {formData.momentPourJoindre && <CheckCircle className="h-4 w-4 text-green-500 ml-2" />}
-                    </Label>
-                    <Select
-                      value={formData.momentPourJoindre}
-                      onValueChange={(value) => handleChange('momentPourJoindre', value)}
-                    >
-                      <SelectTrigger className={`h-12 border-2 rounded-xl focus:ring-2 transition-all duration-200 ${
-                        formData.momentPourJoindre 
-                          ? 'border-green-300 focus:border-green-500 focus:ring-green-200' 
-                          : 'border-gray-200 focus:border-green-500 focus:ring-green-200'
-                      }`}>
-                        <SelectValue placeholder="Sélectionnez un moment" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="matin">Matin (9h-12h)</SelectItem>
-                        <SelectItem value="apres-midi">Après-midi (13h-17h)</SelectItem>
-                        <SelectItem value="soir">Soir (17h-20h)</SelectItem>
-                        <SelectItem value="tout-moment">Tout moment</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </div>
             )}
@@ -624,11 +569,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                 <Button
                   onClick={handleNext}
                   disabled={!isStepComplete(currentStep)}
-                  className={`h-12 px-8 text-white rounded-xl shadow-lg transition-all duration-200 font-semibold flex items-center space-x-2 ${
-                    isStepComplete(currentStep)
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 hover:shadow-xl'
-                      : 'bg-gray-400 cursor-not-allowed'
-                  }`}
+                  className={`h-12 px-8 text-white rounded-xl shadow-lg transition-all duration-200 font-semibold flex items-center space-x-2 ${isStepComplete(currentStep)
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 hover:shadow-xl'
+                    : 'bg-gray-400 cursor-not-allowed'
+                    }`}
                 >
                   <span>Suivant</span>
                   <ArrowRight className="h-4 w-4" />
@@ -637,11 +581,10 @@ const OnboardingWizard = ({ isOpen, onClose, user, school, onComplete }) => {
                 <Button
                   onClick={handleComplete}
                   disabled={isSaving || !isStepComplete(currentStep)}
-                  className={`h-12 px-8 text-white rounded-xl shadow-lg transition-all duration-200 font-semibold flex items-center space-x-2 ${
-                    isStepComplete(currentStep) && !isSaving
-                      ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 hover:shadow-xl'
-                      : 'bg-gray-400 cursor-not-allowed'
-                  }`}
+                  className={`h-12 px-8 text-white rounded-xl shadow-lg transition-all duration-200 font-semibold flex items-center space-x-2 ${isStepComplete(currentStep) && !isSaving
+                    ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 hover:shadow-xl'
+                    : 'bg-gray-400 cursor-not-allowed'
+                    }`}
                 >
                   {isSaving ? 'Finalisation...' : 'Terminer'}
                   <CheckCircle className="h-4 w-4" />

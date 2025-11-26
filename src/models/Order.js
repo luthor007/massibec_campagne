@@ -19,7 +19,7 @@ const OrderSchema = new mongoose.Schema({
   customerName: { type: String, required: true },
   customerEmail: { type: String, required: true },
   phoneNumber: { type: String, required: true },
-  status: { type: String, enum: ['En attente', 'Payé', 'Commander', 'Complété'], default: 'En attente' },
+  status: { type: String, enum: ['En attente', 'Payé', 'Commandé', 'Complété'], default: 'En attente' },
   createdAt: { type: Date, default: Date.now },
   orderId: { type: String },
   studentDonation: { type: Number, default: 0 },
@@ -49,6 +49,43 @@ OrderSchema.pre('save', function (next) {
     // Fallback simple ID if TS nanoid pre-save isn't in effect
     this.orderId = Math.random().toString(36).slice(2, 12);
   }
+  next();
+});
+
+// Pre-save hook to sanitize string fields to ensure valid UTF-8
+OrderSchema.pre('save', function (next) {
+  const stringFields = [
+    'school', 'status', 'orderId',
+    'customerName', 'customerEmail', 'phoneNumber',
+    'distributionNotes', 'deliveryOption', 'customDeliveryOption', 'customerDeliveryAddress'
+  ];
+
+  // Sanitize top-level string fields
+  for (const field of stringFields) {
+    if (this[field] && typeof this[field] === 'string') {
+      try {
+        this[field] = Buffer.from(this[field], 'utf8').toString('utf8');
+      } catch (e) {
+        console.error(`Error encoding Order.${field}:`, e);
+        this[field] = '';
+      }
+    }
+  }
+
+  // Sanitize products array
+  if (this.products && Array.isArray(this.products)) {
+    for (const product of this.products) {
+      if (product.productName && typeof product.productName === 'string') {
+        try {
+          product.productName = Buffer.from(product.productName, 'utf8').toString('utf8');
+        } catch (e) {
+          console.error(`Error encoding Order.products.productName:`, e);
+          product.productName = '';
+        }
+      }
+    }
+  }
+
   next();
 });
 

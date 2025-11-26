@@ -1,93 +1,131 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { 
-  X, 
-  CheckCircle, 
-  AlertCircle, 
-  School, 
-  Calendar, 
-  Target,
-  Loader2 
+import {
+  School,
+  Calendar,
+  Loader2,
+  Search,
+  ArrowLeft,
+  CheckCircle,
+  Users
 } from 'lucide-react';
 
+/**
+ * Modal simplifié pour rejoindre une campagne
+ * Flow: Liste des campagnes → (Si groupes) Sélection du groupe → Confirmation
+ */
 const JoinCampaignModal = ({ isOpen, onClose, onSuccess }) => {
-  const [campaignCode, setCampaignCode] = useState('');
-  const [objectifPersonnel, setObjectifPersonnel] = useState('');
-  const [campaignPreview, setCampaignPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState('list'); // 'list' | 'group' | 'joining'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [availableCampaigns, setAvailableCampaigns] = useState([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(null);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
-  const [validationError, setValidationError] = useState('');
+  const [userCampaignIds, setUserCampaignIds] = useState([]); // Pour vérifier les doublons
 
-  const validateCampaignCode = async (code) => {
-    if (!code) {
-      setCampaignPreview(null);
-      setValidationError('');
-      return;
-    }
-
-    // Basic format validation
-    const formatPattern = /^\d{6}-C\d+$/;
-    if (!formatPattern.test(code)) {
-      setValidationError('Format invalide. Utilisez le format: XXXXXX-CX');
-      setCampaignPreview(null);
-      return;
-    }
-
-    setLoading(true);
-    setValidationError('');
-
+  // Fetch user's current campaigns to check for duplicates
+  const fetchUserCampaigns = async () => {
     try {
-      const response = await fetch(`/api/campaigns/lookup?code=${encodeURIComponent(code)}`);
-      
+      const response = await fetch('/api/users/campaigns');
       if (response.ok) {
         const data = await response.json();
-        setCampaignPreview(data.campaign);
-        setError('');
-      } else {
-        const errorData = await response.json();
-        setValidationError(errorData.message || 'Code de campagne non trouvé');
-        setCampaignPreview(null);
+        const ids = (data.campaigns || []).map(c => c._id?.toString() || c.campaignId?.toString());
+        setUserCampaignIds(ids);
       }
     } catch (error) {
-      console.error('Error validating campaign code:', error);
-      setValidationError('Erreur lors de la validation du code');
-      setCampaignPreview(null);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching user campaigns:', error);
     }
   };
 
-  const handleCampaignCodeChange = (e) => {
-    const code = e.target.value.toUpperCase();
-    setCampaignCode(code);
-    validateCampaignCode(code);
+  // Fetch available campaigns
+  const fetchAvailableCampaigns = async (search = '') => {
+    setLoadingCampaigns(true);
+    try {
+      const url = search
+        ? `/api/campaigns/available?search=${encodeURIComponent(search)}`
+        : '/api/campaigns/available';
+
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableCampaigns(data.campaigns || []);
+      } else {
+        setAvailableCampaigns([]);
+      }
+    } catch (error) {
+      console.error('Error fetching available campaigns:', error);
+      setAvailableCampaigns([]);
+    } finally {
+      setLoadingCampaigns(false);
+    }
   };
 
-  const handleJoinCampaign = async () => {
-    if (!campaignCode || !objectifPersonnel || !campaignPreview) {
-      setError('Veuillez remplir tous les champs');
+  // Load campaigns when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchAvailableCampaigns();
+      fetchUserCampaigns();
+      setStep('list');
+      setSelectedCampaign(null);
+      setSelectedGroup(null);
+      setError('');
+    }
+  }, [isOpen]);
+
+  // Check if user already has this campaign
+  const isAlreadyJoined = (campaignId) => {
+    return userCampaignIds.includes(campaignId?.toString());
+  };
+
+  // Debounced search
+  useEffect(() => {
+    if (isOpen && step === 'list') {
+      const timeoutId = setTimeout(() => {
+        fetchAvailableCampaigns(searchTerm);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [searchTerm, isOpen, step]);
+
+  // Handle campaign selection
+  const handleSelectCampaign = (campaign) => {
+    // Vérifier si déjà rejoint
+    if (isAlreadyJoined(campaign._id)) {
+      setError('Vous avez déjà rejoint cette campagne !');
       return;
     }
 
+    setSelectedCampaign(campaign);
+    setError('');
+
+    // Si la campagne a des groupes, afficher l'écran de sélection
+    if (campaign.groups?.enabled && campaign.groups?.list?.length > 0) {
+      setStep('group');
+    } else {
+      // Sinon, rejoindre directement
+      joinCampaign(campaign, null);
+    }
+  };
+
+  // Handle group selection and join
+  const handleSelectGroup = (group) => {
+    setSelectedGroup(group);
+    joinCampaign(selectedCampaign, group.name);
+  };
+
+  // Join campaign
+  const joinCampaign = async (campaign, groupId) => {
     setJoining(true);
+    setStep('joining');
     setError('');
 
     try {
@@ -95,8 +133,8 @@ const JoinCampaignModal = ({ isOpen, onClose, onSuccess }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          campaignCode,
-          objectifPersonnel: parseInt(objectifPersonnel)
+          campaignCode: campaign.campaignCode,
+          groupId: groupId
         })
       });
 
@@ -106,206 +144,203 @@ const JoinCampaignModal = ({ isOpen, onClose, onSuccess }) => {
         handleClose();
       } else {
         const errorData = await response.json();
-        setError(errorData.message || 'Erreur lors de l\'adhésion à la campagne');
+        setError(errorData.message || 'Erreur lors de l\'adhésion');
+        setStep('list');
       }
     } catch (error) {
       console.error('Error joining campaign:', error);
       setError('Erreur lors de l\'adhésion à la campagne');
+      setStep('list');
     } finally {
       setJoining(false);
     }
   };
 
   const handleClose = () => {
-    setCampaignCode('');
-    setObjectifPersonnel('');
-    setCampaignPreview(null);
+    setStep('list');
+    setSearchTerm('');
+    setSelectedCampaign(null);
+    setSelectedGroup(null);
     setError('');
-    setValidationError('');
     onClose();
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString('fr-CA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
     });
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      'active': { color: 'bg-green-100 text-green-800', text: 'Active' },
-      'approved': { color: 'bg-blue-100 text-blue-800', text: 'Approuvée' },
-      'pending_approval': { color: 'bg-orange-100 text-orange-800', text: 'EN TEST' },
-      'pending_school_approval': { color: 'bg-orange-100 text-orange-800', text: 'EN TEST' },
-      'rejected': { color: 'bg-red-100 text-red-800', text: 'Rejetée' },
-      'completed': { color: 'bg-gray-100 text-gray-800', text: 'Terminée' }
-    };
-    
-    const config = statusConfig[status] || statusConfig['pending_approval'];
-    return <Badge className={config.color}>{config.text}</Badge>;
-  };
+  // Écran de chargement pendant la jonction
+  if (step === 'joining') {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-md">
+          <div className="py-12 text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto mb-4" />
+            <p className="text-lg font-medium text-gray-700">Connexion à la campagne...</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
+  // Écran de sélection du groupe
+  if (step === 'group' && selectedCampaign) {
+    return (
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <button
+              onClick={() => setStep('list')}
+              className="absolute left-4 top-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-gray-500" />
+            </button>
+            <DialogTitle className="text-center pt-2">
+              Choisissez votre groupe
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            {/* Info campagne */}
+            <div className="text-center mb-4 pb-4 border-b">
+              <p className="font-semibold text-gray-900">{selectedCampaign.school?.name}</p>
+              <p className="text-sm text-gray-500">Campagne #{selectedCampaign.campaignNumber}</p>
+            </div>
+
+            {/* Liste des groupes - scrollable */}
+            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+              {selectedCampaign.groups.list.map((group) => (
+                <button
+                  key={group.name || group}
+                  onClick={() => handleSelectGroup(group)}
+                  className="w-full p-3 text-left bg-gray-50 hover:bg-blue-50 border-2 border-gray-200 hover:border-blue-400 rounded-xl transition-all duration-200 flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition-colors flex-shrink-0">
+                      <Users className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <span className="font-medium text-gray-800">{group.name || group}</span>
+                  </div>
+                  <CheckCircle className="h-5 w-5 text-gray-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Écran principal - liste des campagnes
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
+          <DialogTitle className="flex items-center gap-2">
             <School className="h-5 w-5" />
-            <span>Rejoindre une campagne</span>
+            Rejoindre une campagne
           </DialogTitle>
-          <DialogDescription>
-            Entrez le code de campagne fourni par votre école pour rejoindre une campagne de financement.
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Campaign Code Input */}
-          <div className="space-y-2">
-            <Label htmlFor="campaignCode">Code de campagne</Label>
-            <div className="relative">
-              <Input
-                id="campaignCode"
-                value={campaignCode}
-                onChange={handleCampaignCodeChange}
-                placeholder="Ex: 123456-C1"
-                className={`pr-10 ${validationError ? 'border-red-300' : ''}`}
-              />
-              {loading && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                </div>
-              )}
-              {!loading && campaignCode && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  {validationError ? (
-                    <AlertCircle className="h-4 w-4 text-red-500" />
-                  ) : campaignPreview ? (
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                  ) : null}
-                </div>
-              )}
+        <div className="space-y-4">
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Rechercher par nom d'école..."
+              className="pl-10"
+              autoFocus
+            />
+          </div>
+
+          {/* Message d'erreur */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              {error}
             </div>
-            {validationError && (
-              <p className="text-sm text-red-600">{validationError}</p>
+          )}
+
+          {/* Liste des campagnes */}
+          <div className="max-h-80 overflow-y-auto border border-gray-200 rounded-xl">
+            {loadingCampaigns ? (
+              <div className="p-8 text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Chargement...</p>
+              </div>
+            ) : availableCampaigns.length === 0 ? (
+              <div className="p-8 text-center">
+                <School className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-500">
+                  {searchTerm ? 'Aucune campagne trouvée' : 'Aucune campagne disponible'}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {availableCampaigns.map((campaign) => {
+                  const alreadyJoined = isAlreadyJoined(campaign._id);
+                  return (
+                    <button
+                      key={campaign._id}
+                      onClick={() => handleSelectCampaign(campaign)}
+                      disabled={alreadyJoined}
+                      className={`w-full p-4 text-left transition-colors duration-150 flex items-center justify-between ${alreadyJoined
+                          ? 'bg-gray-50 cursor-not-allowed opacity-60'
+                          : 'hover:bg-blue-50'
+                        }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-gray-900 truncate">
+                            {campaign.school?.name || 'École'}
+                          </h4>
+                          {alreadyJoined && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                              Déjà rejoint
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}
+                          </span>
+                        </div>
+                        {campaign.groups?.enabled && campaign.groups?.list?.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1 text-xs text-blue-600">
+                            <Users className="h-3 w-3" />
+                            <span>{campaign.groups.list.length} groupes</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-3 flex-shrink-0">
+                        {alreadyJoined ? (
+                          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-4 w-4 text-blue-600" />
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          {/* Campaign Preview */}
-          {campaignPreview && (
-            <>
-              {(campaignPreview.status === 'pending_approval' || campaignPreview.status === 'pending_school_approval') && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-start space-x-3">
-                    <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-orange-900 mb-1">Mode Test</h4>
-                      <p className="text-sm text-orange-800">
-                        Cette campagne est en attente d'approbation. Vous pouvez la rejoindre en mode test. 
-                        Les commandes et données seront marquées comme "TEST" et ne seront pas définitives jusqu'à l'approbation de la campagne.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          {campaignPreview && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-gray-900 flex items-center space-x-2">
-                  <School className="h-4 w-4" />
-                  <span>{campaignPreview.school?.name}</span>
-                </h3>
-                {getStatusBadge(campaignPreview.status)}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600">Campagne:</span>
-                  <span className="ml-2 font-medium">#{campaignPreview.campaignNumber}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Code:</span>
-                  <span className="ml-2 font-mono font-medium">{campaignPreview.campaignCode}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Début:</span>
-                  <span className="ml-2">{formatDate(campaignPreview.startDate)}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Fin:</span>
-                  <span className="ml-2">{formatDate(campaignPreview.endDate)}</span>
-                </div>
-              </div>
-              
-              {campaignPreview.school?.address && (
-                <div className="mt-2 text-sm text-gray-600">
-                  <span className="text-gray-600">Adresse:</span>
-                  <span className="ml-2">{campaignPreview.school.address}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Personal Objective */}
-          {campaignPreview && (
-            <div className="space-y-2">
-              <Label htmlFor="objectifPersonnel" className="flex items-center space-x-2">
-                <Target className="h-4 w-4" />
-                <span>Objectif personnel de vente</span>
-              </Label>
-              <Select value={objectifPersonnel} onValueChange={setObjectifPersonnel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionnez votre objectif" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10 produits</SelectItem>
-                  <SelectItem value="15">15 produits</SelectItem>
-                  <SelectItem value="20">20 produits</SelectItem>
-                  <SelectItem value="25">25 produits</SelectItem>
-                  <SelectItem value="30">30 produits</SelectItem>
-                  <SelectItem value="35">35 produits</SelectItem>
-                  <SelectItem value="40">40 produits</SelectItem>
-                  <SelectItem value="45">45 produits</SelectItem>
-                  <SelectItem value="50">50 produits</SelectItem>
-                  <SelectItem value="60">60 produits</SelectItem>
-                  <SelectItem value="70">70 produits</SelectItem>
-                  <SelectItem value="80">80 produits</SelectItem>
-                  <SelectItem value="90">90 produits</SelectItem>
-                  <SelectItem value="100">100 produits</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3">
+          {/* Bouton annuler */}
+          <div className="flex justify-end pt-2">
             <Button variant="outline" onClick={handleClose}>
               Annuler
-            </Button>
-            <Button 
-              onClick={handleJoinCampaign}
-              disabled={!campaignPreview || !objectifPersonnel || joining}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {joining ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Rejoindre...
-                </>
-              ) : (
-                'Rejoindre la campagne'
-              )}
             </Button>
           </div>
         </div>

@@ -144,7 +144,7 @@ const CampaignSelector = ({ onCampaignSwitch, onJoinCampaign, initialCampaigns =
   ) || campaigns[0];
 
   return (
-    <div className="flex items-center space-x-2 w-full sm:w-auto">
+    <div className="flex items-center gap-2 w-full sm:w-auto">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -242,6 +242,16 @@ const CampaignSelector = ({ onCampaignSwitch, onJoinCampaign, initialCampaigns =
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {/* Bouton + visible pour ajouter une campagne */}
+      <Button
+        onClick={onJoinCampaign}
+        size="icon"
+        className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all duration-200 flex-shrink-0"
+        title="Rejoindre une nouvelle campagne"
+      >
+        <Plus className="h-5 w-5" />
+      </Button>
     </div>
   );
 };

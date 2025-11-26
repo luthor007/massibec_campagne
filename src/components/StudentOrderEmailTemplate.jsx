@@ -53,7 +53,7 @@ const StudentOrderEmailTemplate = ({
       <p>Bonjour {studentName},</p>
 
       <p>
-        Merci d'avoir passé votre commande avec <strong>Massibec</strong>. Voici les détails de votre commande :
+        Merci d'avoir passé votre commande. Voici les détails de votre commande :
       </p>
 
       <h3>Détails de la commande :</h3>
@@ -71,9 +71,9 @@ const StudentOrderEmailTemplate = ({
             <tr key={index}>
               <td style={{ border: '1px solid #ddd', padding: '8px' }}>{product.productName}</td>
               <td style={{ border: '1px solid #ddd', padding: '8px' }}>{product.quantity}</td>
-              <td style={{ border: '1px solid #ddd', padding: '8px' }}>{(product.price - (((product.price - product.cost) * studentPercentage)/100)).toFixed(3) }$</td>
+              <td style={{ border: '1px solid #ddd', padding: '8px' }}>{(product.price - (((product.price - product.cost) * studentPercentage) / 100)).toFixed(3)}$</td>
               <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                {((product.price - (((product.price - product.cost) * studentPercentage)/100)) * product.quantity).toFixed(3)}$
+                {((product.price - (((product.price - product.cost) * studentPercentage) / 100)) * product.quantity).toFixed(3)}$
               </td>
             </tr>
           ))}
@@ -132,18 +132,18 @@ const StudentOrderEmailTemplate = ({
 
       <div style={{ backgroundColor: '#FEF3C7', borderLeft: '4px solid #F59E0B', padding: '12px', marginTop: '20px', marginBottom: '20px' }}>
         <p style={{ margin: 0, fontSize: '14px', color: '#92400E' }}>
-          <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page. 
-          Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement. 
-          Si vous avez déjà effectué le paiement, ne tenez pas compte de ce courriel. 
+          <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page.
+          Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement.
+          Si vous avez déjà effectué le paiement, ne tenez pas compte de ce courriel.
           Il se peut qu'il soit dans vos indésirables.
         </p>
       </div>
 
       <p>
-        Si vous avez des questions, n'hésitez pas à nous contacter à l'adresse suivante : <a href="mailto:facturation@massibec.com">facturation@massibec.com</a>.
+        Si vous avez des questions, n'hésitez pas à nous contacter à l'adresse suivante : <a href="mailto:campagne@jappuie.ca">campagne@jappuie.ca</a>.
       </p>
 
-      <p>Cordialement,<br />L'équipe Massibec</p>
+      <p>Cordialement,<br />L'équipe Jappuie</p>
     </div>
   );
 };

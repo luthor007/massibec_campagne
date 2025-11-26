@@ -2,10 +2,10 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Calendar, 
-  DollarSign, 
-  Users, 
+import {
+  Calendar,
+  DollarSign,
+  Users,
   Target,
   Clock,
   CheckCircle,
@@ -33,10 +33,10 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
       rejected: { color: 'bg-red-100 text-red-800', icon: XCircle, label: 'Rejetée' },
       locked: { color: 'bg-gray-100 text-gray-800', icon: Lock, label: 'Verrouillée' }
     };
-    
+
     const config = statusConfig[status] || statusConfig.pending;
     const Icon = config.icon;
-    
+
     return (
       <Badge className={`${config.color} border-0`}>
         <Icon className="w-3 h-3 mr-1" />
@@ -81,7 +81,7 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
   const upcoming = isUpcoming();
 
   return (
-    <Card 
+    <Card
       className={`hover:shadow-lg transition-shadow duration-200 cursor-pointer ${isSelected ? 'border-2 border-blue-500 shadow-lg' : ''}`}
       onClick={() => onViewDetails(campaign)}
     >
@@ -101,7 +101,7 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
               )}
             </div>
           </div>
-          
+
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
@@ -111,10 +111,11 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
                 onViewDetails(campaign);
               }}
               className="p-2"
+              title="Voir les détails complets"
             >
               <Eye className="w-4 h-4" />
             </Button>
-            
+
             {!campaign.locked && (
               <Button
                 variant="ghost"
@@ -128,7 +129,7 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
                 <Edit className="w-4 h-4" />
               </Button>
             )}
-            
+
             {campaign.locked ? (
               <Button
                 variant="ghost"
@@ -154,7 +155,7 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
                 <Lock className="w-4 h-4" />
               </Button>
             )}
-            
+
             {/* Bouton de suppression pour toutes les campagnes */}
             {onDelete && (
               <Button
@@ -173,7 +174,7 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {/* École */}
         <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -227,19 +228,18 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
             </div>
             <span className="font-medium">{campaign.objectifFinancier?.toLocaleString('fr-CA')} $</span>
           </div>
-          
+
           <div className="space-y-1">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Progression:</span>
               <span className="font-medium">{progressPercentage.toFixed(1)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  progressPercentage >= 100 ? 'bg-green-500' : 
-                  progressPercentage >= 75 ? 'bg-blue-500' : 
-                  progressPercentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                }`}
+              <div
+                className={`h-2 rounded-full transition-all duration-300 ${progressPercentage >= 100 ? 'bg-green-500' :
+                  progressPercentage >= 75 ? 'bg-blue-500' :
+                    progressPercentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                  }`}
                 style={{ width: `${Math.min(progressPercentage, 100)}%` }}
               ></div>
             </div>
@@ -284,6 +284,7 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
                 onReject(campaign);
               }}
               className="flex-1"
+              title="Refuser la campagne"
             >
               <XCircle className="w-4 h-4 mr-1" />
               Rejeter
@@ -315,14 +316,14 @@ const CampaignCard = ({ campaign, onViewDetails, onEdit, onApprove, onReject, on
             <span>Cette campagne a expiré et devrait être fermée</span>
           </div>
         )}
-        
+
         {daysRemaining <= 7 && daysRemaining > 0 && campaign.status === 'active' && (
           <div className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
             <Clock className="w-4 h-4" />
             <span>Cette campagne se termine bientôt</span>
           </div>
         )}
-        
+
         {progressPercentage >= 100 && campaign.status === 'active' && (
           <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
             <TrendingUp className="w-4 h-4" />

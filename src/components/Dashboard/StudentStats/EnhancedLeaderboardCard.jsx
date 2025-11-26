@@ -1,10 +1,14 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trophy, Star, Target, ArrowUp, ArrowDown, Check, Crown, Medal } from 'lucide-react'
+import { Button } from "@/components/ui/button"
+import { Trophy, Star, Target, ArrowUp, ArrowDown, Check, Crown, Medal, ChevronDown, ChevronUp, Users } from 'lucide-react'
 
-function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, totalStudentEarning, userId }) {
+function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, totalStudentEarning, userId, groups, userGroup, userGroupRank }) {
+  const [showAll, setShowAll] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState({})
+  const INITIAL_DISPLAY_COUNT = 10
   // Calculate average products sold
   const avgProductsSold = topPerformers && topPerformers.length > 0
     ? Math.round(topPerformers.reduce((sum, p) => sum + (p.totalProductsSold || 0), 0) / topPerformers.length)
@@ -68,15 +72,15 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
             </motion.div>
             Classement
           </span>
-          {rank && (
+          {userGroupRank && (
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 200 }}
             >
-              <Badge className={`${getRankBadgeStyle(rank)} text-base px-3 py-1`}>
-                {getRankIcon(rank)}
-                <span className="ml-2 font-bold">{getRankText(rank)}</span>
+              <Badge className={`${getRankBadgeStyle(userGroupRank)} text-base px-3 py-1`}>
+                {getRankIcon(userGroupRank)}
+                <span className="ml-2 font-bold">{getRankText(userGroupRank)}</span>
               </Badge>
             </motion.div>
           )}
@@ -84,56 +88,6 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
       </CardHeader>
 
       <CardContent className="p-5 bg-white">
-        {/* Current Position - Prominent Display */}
-        {rank && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-5 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200"
-          >
-            <div className="flex items-center justify-between relative z-10">
-              <div className="flex items-center space-x-3">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${getRankBadgeStyle(rank)}`}>
-                  {rank <= 3 ? getRankIcon(rank) : rank}
-                </div>
-                <div>
-                  <p className="font-semibold text-base text-gray-900">Votre Position</p>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    <span className="font-medium">{totalProductsSold}</span> produits vendus
-                  </p>
-                  <Badge variant="outline" className="mt-1.5 text-xs">
-                    {getRankLabel(rank)}
-                  </Badge>
-                </div>
-              </div>
-              {productsToNextRank !== null && productsToNextRank > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="text-right"
-                >
-                  <p className="text-xs text-gray-500 mb-1.5 font-medium">Pour monter au classement</p>
-                  <Badge variant="outline" className="text-sm px-3 py-1 bg-white border-indigo-300">
-                    <Target className="mr-1.5 h-3.5 w-3.5 text-indigo-600" />
-                    <span className="font-semibold text-indigo-700">{productsToNextRank} produit{productsToNextRank > 1 ? 's' : ''}</span>
-                  </Badge>
-                </motion.div>
-              )}
-            </div>
-            {productsToNextRank === 0 && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="mt-3 p-2.5 bg-green-50 border border-green-300 rounded-lg"
-              >
-                <div className="flex items-center text-green-800">
-                  <Check className="h-4 w-4 mr-2" />
-                  <span className="text-sm font-medium">Vous êtes à égalité avec la position suivante!</span>
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
 
         {/* Performers Above - Motivation to Catch Up */}
         {performersAbove.length > 0 && (
@@ -179,12 +133,166 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
           </motion.div>
         )}
 
+        {/* Groups Leaderboard (if groups enabled) */}
+        {groups && groups.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm text-gray-700 flex items-center">
+                <Users className="mr-2 h-4 w-4 text-indigo-600" />
+                Classement par Groupe
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {groups.map((group, groupIndex) => {
+                const isExpanded = expandedGroups[group.name] || false;
+                const isUserGroup = userGroup === group.name;
+
+                return (
+                  <motion.div
+                    key={group.name}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: groupIndex * 0.05 }}
+                    className={`border rounded-lg overflow-hidden transition-all ${isUserGroup
+                      ? 'border-indigo-300 bg-indigo-50/50'
+                      : 'border-gray-200 bg-white'
+                      }`}
+                  >
+                    {/* Group Header - Clickable to expand/collapse */}
+                    <button
+                      onClick={() => setExpandedGroups(prev => ({
+                        ...prev,
+                        [group.name]: !prev[group.name]
+                      }))}
+                      className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center space-x-4 flex-1">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${getRankBadgeStyle(group.rank)}`}>
+                          {group.rank <= 3 ? getRankIcon(group.rank) : group.rank}
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-base text-gray-900">{group.name}</h4>
+                            {isUserGroup && (
+                              <Badge className="bg-indigo-600 text-white text-xs px-1.5 py-0.5">Votre groupe</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-xs text-gray-600">
+                            <span>{group.totalProductsSold || 0} produits vendus</span>
+                            <span>•</span>
+                            <span>${(group.totalSales || 0).toFixed(2)}</span>
+                            <span>•</span>
+                            <span>{group.participants || 0} participant{group.participants !== 1 ? 's' : ''}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        {group.participants > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            {group.participants} membre{group.participants > 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                        {isExpanded ? (
+                          <ChevronUp className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-gray-400" />
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Expanded Group Content - Individual Rankings */}
+                    {isExpanded && group.students && group.students.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="border-t border-gray-200 bg-gray-50"
+                      >
+                        <div className="p-3">
+                          <h5 className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wide">
+                            Classement individuel - {group.name}
+                          </h5>
+                          <div className="space-y-2">
+                            {group.students.map((student, studentIndex) => {
+                              const isCurrentUser = student._id === userId || student.userId === userId;
+                              return (
+                                <motion.div
+                                  key={student._id || studentIndex}
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: studentIndex * 0.03 }}
+                                  className={`flex items-center justify-between p-2 rounded-lg transition-all ${isCurrentUser
+                                    ? 'bg-indigo-100 border border-indigo-300'
+                                    : 'bg-white border border-gray-200'
+                                    }`}
+                                >
+                                  <div className="flex items-center space-x-2 flex-1">
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${getRankBadgeStyle(student.rank)}`}>
+                                      {student.rank <= 3 ? getRankIcon(student.rank) : student.rank}
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className={`font-medium text-xs ${isCurrentUser ? 'text-indigo-900' : 'text-gray-900'} flex items-center gap-2`}>
+                                        <span>{student.name || 'Vendeur'}</span>
+                                        {isCurrentUser && (
+                                          <Badge className="bg-indigo-600 text-white text-xs px-1 py-0">Vous</Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        {student.totalProductsSold || 0} produits • ${(student.totalSales || 0).toFixed(2)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {/* Empty group message */}
+                    {isExpanded && (!group.students || group.students.length === 0) && (
+                      <div className="border-t border-gray-200 bg-gray-50 p-4">
+                        <p className="text-sm text-gray-500 text-center">Aucun participant dans ce groupe</p>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Top Performers List */}
         <div>
-          <h3 className="font-semibold mb-3 text-sm text-gray-700">Meilleurs Vendeurs</h3>
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm text-gray-700">
+              {groups && groups.length > 0 ? 'Classement Général' : 'Meilleurs Vendeurs'}
+            </h3>
+            {topPerformers && topPerformers.length > INITIAL_DISPLAY_COUNT && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAll(!showAll)}
+                className="text-xs h-7 px-2 text-indigo-600 hover:text-indigo-700"
+              >
+                {showAll ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" />
+                    Voir moins
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" />
+                    Voir tout ({topPerformers.length})
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+          <div className={`space-y-2 ${showAll ? 'max-h-[600px]' : 'max-h-80'} overflow-y-auto pr-2`}>
             {topPerformers && topPerformers.length > 0 ? (
-              topPerformers.slice(0, 10).map((performer, index) => {
+              (showAll ? topPerformers : topPerformers.slice(0, INITIAL_DISPLAY_COUNT)).map((performer, index) => {
                 const isCurrentUser = performer._id === userId || performer.userId === userId;
                 return (
                   <motion.div
@@ -199,7 +307,7 @@ function EnhancedLeaderboardCard({ rank, topPerformers, totalProductsSold, total
                   >
                     <div className="flex items-center space-x-3 flex-1">
                       <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${getRankBadgeStyle(performer.rank)}`}>
-                        {performer.rank ? (
+                        {performer.rank != null && performer.rank !== undefined ? (
                           <>
                             {performer.rank <= 3 ? getRankIcon(performer.rank) : performer.rank}
                           </>

@@ -1,11 +1,11 @@
 // src/pages/api/test-sendgrid-emails.js
 // Endpoint de test pour tous les types d'emails SendGrid
 
-import { 
+import {
   sendSchoolConfirmationEmail,
   sendStudentConfirmationEmail,
   sendOrderConfirmationEmail,
-  sendMassibecConfirmationEmail,
+  sendJappuieConfirmationEmail,
   sendVerificationEmail,
   sendPasswordResetEmail
 } from '../../utils/sendgridMailer';
@@ -19,8 +19,8 @@ export default async function handler(req, res) {
     const { testType } = req.body;
 
     if (!testType) {
-      return res.status(400).json({ 
-        error: 'Paramètre testType requis. Valeurs possibles: school, student, order, massibec, verification, password' 
+      return res.status(400).json({
+        error: 'Paramètre testType requis. Valeurs possibles: school, student, order, massibec, verification, password'
       });
     }
 
@@ -61,14 +61,22 @@ export default async function handler(req, res) {
         break;
 
       case 'massibec':
-        result = await sendMassibecConfirmationEmail({
-          sellerEmail: 'seller@example.com',
-          sellerName: 'Vendeur Test',
-          orderId: 'TEST-001',
-          orderAmount: 25.50,
-          schoolName: 'École Test',
-          deliveryDate: '2025-01-15',
-          schoolAddress: '123 Rue Test, Montréal, QC'
+        result = await sendJappuieConfirmationEmail({
+          to: 'seller@example.com',
+          subject: 'Nouvelle commande #TEST-001 - École Test',
+          orderData: {
+            orderNumber: 'TEST-001',
+            customerName: 'Vendeur Test',
+            customerEmail: 'seller@example.com',
+            totalAmount: 25.50,
+            products: [
+              { name: 'Produit Test', quantity: 1, price: 25.50 }
+            ],
+            deliveryDate: '2025-01-15',
+            schoolName: 'École Test',
+            studentName: 'Vendeur Test',
+            studentEmail: 'seller@example.com'
+          }
         });
         break;
 
@@ -90,14 +98,14 @@ export default async function handler(req, res) {
         break;
 
       default:
-        return res.status(400).json({ 
-          error: 'Type de test invalide. Valeurs possibles: school, student, order, massibec, verification, password' 
+        return res.status(400).json({
+          error: 'Type de test invalide. Valeurs possibles: school, student, order, massibec, verification, password'
         });
     }
 
     console.log(`✅ Test email ${testType} envoyé avec succès`);
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       message: `Test email ${testType} envoyé avec succès`,
       testType,
       result: result
@@ -105,9 +113,9 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('❌ Erreur lors du test email:', error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       error: 'Erreur lors du test email',
-      details: error.message 
+      details: error.message
     });
   }
 }

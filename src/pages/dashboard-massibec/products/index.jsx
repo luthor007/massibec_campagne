@@ -73,7 +73,33 @@ const ProductsPage = () => {
     productId: '',
     isDefault: false,
     ingredientsImage: '',
-    nutritionImage: ''
+    nutritionImage: '',
+    attributes: {
+      freezable: false,
+      glutenFree: false,
+      vegetarian: false,
+      vegan: false,
+      nutFree: false,
+      halal: false,
+      kosher: false,
+      organic: false,
+      quebecProduct: false,
+      allergens: ''
+    }
+  });
+  const [showAttributesModal, setShowAttributesModal] = useState(false);
+  const [editingAttributesProduct, setEditingAttributesProduct] = useState(null);
+  const [attributesFormData, setAttributesFormData] = useState({
+    freezable: false,
+    glutenFree: false,
+    vegetarian: false,
+    vegan: false,
+    nutFree: false,
+    halal: false,
+    kosher: false,
+    organic: false,
+    quebecProduct: false,
+    allergens: ''
   });
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [editingRowId, setEditingRowId] = useState(null);
@@ -91,8 +117,14 @@ const ProductsPage = () => {
       return;
     }
 
-    // Vérifier si l'utilisateur a le rôle fournisseur
-    if (session.user.role !== 'fournisseur') {
+    // Vérifier si l'utilisateur a le rôle supplier (ou fournisseur pour compatibilité)
+    if (session.user.role === 'supplier' || session.user.role === 'fournisseur') {
+      // Redirect suppliers to the new dashboard-supplier pages
+      router.push('/dashboard-supplier/products');
+      return;
+    }
+
+    if (session.user.role !== 'supplier' && session.user.role !== 'fournisseur') {
       router.push('/dashboard');
       return;
     }
@@ -181,7 +213,19 @@ const ProductsPage = () => {
           productId: '',
           isDefault: false,
           ingredientsImage: '',
-          nutritionImage: ''
+          nutritionImage: '',
+          attributes: {
+            freezable: false,
+            glutenFree: false,
+            vegetarian: false,
+            vegan: false,
+            nutFree: false,
+            halal: false,
+            kosher: false,
+            organic: false,
+            quebecProduct: false,
+            allergens: ''
+          }
         });
         fetchProducts();
       } else {
@@ -205,7 +249,19 @@ const ProductsPage = () => {
       productId: product.productId || '',
       isDefault: product.isDefault === true,
       ingredientsImage: product.ingredientsImage || '',
-      nutritionImage: product.nutritionImage || ''
+      nutritionImage: product.nutritionImage || '',
+      attributes: product.attributes || {
+        freezable: product.freezable !== undefined ? product.freezable : false,
+        glutenFree: false,
+        vegetarian: false,
+        vegan: false,
+        nutFree: false,
+        halal: false,
+        kosher: false,
+        organic: false,
+        quebecProduct: false,
+        allergens: ''
+      }
     });
     setShowForm(true);
   };
@@ -444,7 +500,7 @@ const ProductsPage = () => {
   }
 
   // Don't render if not authenticated or wrong role
-  if (!session || session.user.role !== 'fournisseur') {
+  if (!session || (session.user.role !== 'supplier' && session.user.role !== 'fournisseur')) {
     return null;
   }
 
@@ -453,8 +509,8 @@ const ProductsPage = () => {
       {/* Notification */}
       {notification.show && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${notification.type === 'success'
-            ? 'bg-green-100 text-green-800 border border-green-200'
-            : 'bg-red-100 text-red-800 border border-red-200'
+          ? 'bg-green-100 text-green-800 border border-green-200'
+          : 'bg-red-100 text-red-800 border border-red-200'
           }`}>
           {notification.message}
         </div>
@@ -624,15 +680,32 @@ const ProductsPage = () => {
                   />
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="isDefault"
-                    checked={formData.isDefault}
-                    onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                    className="rounded"
-                  />
-                  <Label htmlFor="isDefault">Produit par défaut</Label>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="isDefault"
+                      checked={formData.isDefault}
+                      onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
+                      className="rounded"
+                    />
+                    <Label htmlFor="isDefault">Produit par défaut</Label>
+                  </div>
+
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingAttributesProduct(editingProduct || { id: 'new', name: formData.name || 'Nouveau produit' });
+                        setShowAttributesModal(true);
+                      }}
+                      className="w-full"
+                    >
+                      <Package className="h-4 w-4 mr-2" />
+                      Gérer les attributs du produit
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Product Preview */}
@@ -745,8 +818,8 @@ const ProductsPage = () => {
                         <TableRow
                           key={product.id || product._id || product.productId || `product-${index}`}
                           className={`hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 ${hasCompleteInfo ? 'bg-green-50/30 border-l-4 border-l-green-400' :
-                              hasPartialInfo ? 'bg-yellow-50/30 border-l-4 border-l-yellow-400' :
-                                'bg-gray-50/20 border-l-4 border-l-gray-300'
+                            hasPartialInfo ? 'bg-yellow-50/30 border-l-4 border-l-yellow-400' :
+                              'bg-gray-50/20 border-l-4 border-l-gray-300'
                             }`}
                         >
                           <TableCell className="w-[80px]">
@@ -949,8 +1022,8 @@ const ProductsPage = () => {
                                 <Badge
                                   variant={hasIngredients ? 'default' : 'outline'}
                                   className={`text-xs ${hasIngredients
-                                      ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
-                                      : 'bg-gray-50 text-gray-500 border-gray-300'
+                                    ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                    : 'bg-gray-50 text-gray-500 border-gray-300'
                                     }`}
                                 >
                                   Ingrédients
@@ -959,29 +1032,67 @@ const ProductsPage = () => {
                                 <Badge
                                   variant={hasNutrition ? 'default' : 'outline'}
                                   className={`text-xs ${hasNutrition
-                                      ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
-                                      : 'bg-gray-50 text-gray-500 border-gray-300'
+                                    ? 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                    : 'bg-gray-50 text-gray-500 border-gray-300'
                                     }`}
                                 >
                                   Valeur nutritive
                                   {hasNutrition && <CheckCircle className="w-3 h-3 ml-1" />}
                                 </Badge>
                               </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-2 text-xs"
-                                onClick={() =>
-                                  openInfoDialog(
-                                    editingRowId === (product.id || product._id)
+                              <div className="flex flex-col gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() =>
+                                    openInfoDialog(
+                                      editingRowId === (product.id || product._id)
+                                        ? { ...product, ...editingData, id: product.id || product._id }
+                                        : product
+                                    )
+                                  }
+                                >
+                                  <Info className="w-3 h-3 mr-1" />
+                                  Infos
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 px-2 text-xs"
+                                  onClick={() => {
+                                    const productToEdit = editingRowId === (product.id || product._id)
                                       ? { ...product, ...editingData, id: product.id || product._id }
-                                      : product
-                                  )
-                                }
-                              >
-                                <Info className="w-3 h-3 mr-1" />
-                                Gérer
-                              </Button>
+                                      : product;
+                                    setEditingAttributesProduct(productToEdit);
+                                    // Load attributes from product into separate state
+                                    // Ensure we use the product's attributes if they exist
+                                    const productAttributes = productToEdit.attributes || {};
+                                    const attributesToLoad = {
+                                      freezable: productAttributes.freezable !== undefined ? productAttributes.freezable : (productToEdit.freezable !== undefined ? productToEdit.freezable : false),
+                                      glutenFree: productAttributes.glutenFree !== undefined ? productAttributes.glutenFree : false,
+                                      vegetarian: productAttributes.vegetarian !== undefined ? productAttributes.vegetarian : false,
+                                      vegan: productAttributes.vegan !== undefined ? productAttributes.vegan : false,
+                                      nutFree: productAttributes.nutFree !== undefined ? productAttributes.nutFree : false,
+                                      halal: productAttributes.halal !== undefined ? productAttributes.halal : false,
+                                      kosher: productAttributes.kosher !== undefined ? productAttributes.kosher : false,
+                                      organic: productAttributes.organic !== undefined ? productAttributes.organic : false,
+                                      quebecProduct: productAttributes.quebecProduct !== undefined ? productAttributes.quebecProduct : false,
+                                      allergens: productAttributes.allergens !== undefined ? productAttributes.allergens : ''
+                                    };
+                                    console.log('[Attributes Modal] Loading attributes:', {
+                                      productId: productToEdit.id || productToEdit._id,
+                                      productAttributes,
+                                      attributesToLoad
+                                    });
+                                    setAttributesFormData(attributesToLoad);
+                                    setShowAttributesModal(true);
+                                  }}
+                                >
+                                  <Package className="w-3 h-3 mr-1" />
+                                  Attributs
+                                </Button>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="w-[130px]">
@@ -1135,6 +1246,257 @@ const ProductsPage = () => {
                 disabled={savingProductInfo || !infoDialogProduct}
               >
                 {savingProductInfo ? 'Enregistrement...' : 'Enregistrer'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal de gestion des attributs */}
+        <Dialog open={showAttributesModal} onOpenChange={(open) => {
+          setShowAttributesModal(open);
+          if (!open) {
+            setEditingAttributesProduct(null);
+            // Reset attributes form data when closing
+            setAttributesFormData({
+              freezable: false,
+              glutenFree: false,
+              vegetarian: false,
+              vegan: false,
+              nutFree: false,
+              halal: false,
+              kosher: false,
+              organic: false,
+              quebecProduct: false,
+              allergens: ''
+            });
+          }
+        }}>
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingAttributesProduct ? `Attributs - ${editingAttributesProduct.name}` : 'Gérer les attributs du produit'}
+              </DialogTitle>
+              <DialogDescription>
+                Définissez les caractéristiques et attributs de ce produit pour aider les clients à faire leur choix.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 mt-4">
+              {/* Conservation */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Conservation</h3>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.freezable}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        freezable: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">❄️ Congelable</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Régimes alimentaires */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Régimes alimentaires</h3>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.glutenFree}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        glutenFree: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🌾 Sans gluten</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.vegetarian}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        vegetarian: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🥬 Végétarien</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.vegan}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        vegan: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🌱 Végétalien/Vegan</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.nutFree}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        nutFree: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🥜 Sans noix</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Certifications */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Certifications</h3>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.halal}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        halal: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🕌 Halal</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.kosher}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        kosher: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">✡️ Kasher</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.organic}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        organic: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🌿 Bio/Organique</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Origine */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Origine</h3>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={attributesFormData.quebecProduct}
+                      onChange={(e) => setAttributesFormData({
+                        ...attributesFormData,
+                        quebecProduct: e.target.checked
+                      })}
+                      className="rounded"
+                    />
+                    <span className="text-sm">🍁 Produit du Québec</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Allergènes */}
+              <div>
+                <Label htmlFor="allergens" className="text-sm font-semibold text-gray-700 mb-2 block">
+                  Allergènes (optionnel)
+                </Label>
+                <Textarea
+                  id="allergens"
+                  value={attributesFormData.allergens || ''}
+                  onChange={(e) => setAttributesFormData({
+                    ...attributesFormData,
+                    allergens: e.target.value
+                  })}
+                  placeholder="Ex: Contient du blé, des œufs, du lait"
+                  rows={3}
+                  className="mt-1"
+                  maxLength={500}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Liste les allergènes présents dans ce produit (séparés par des virgules)
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAttributesModal(false);
+                  setEditingAttributesProduct(null);
+                  // Reset attributes form data when canceling
+                  setAttributesFormData({
+                    freezable: false,
+                    glutenFree: false,
+                    vegetarian: false,
+                    vegan: false,
+                    nutFree: false,
+                    halal: false,
+                    kosher: false,
+                    organic: false,
+                    quebecProduct: false,
+                    allergens: ''
+                  });
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!editingAttributesProduct) return;
+
+                  try {
+                    const productId = editingAttributesProduct.id || editingAttributesProduct._id;
+                    const response = await fetch(`/api/products/${productId}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        attributes: attributesFormData
+                      }),
+                    });
+
+                    if (response.ok) {
+                      showNotification('Attributs mis à jour avec succès!', 'success');
+                      setShowAttributesModal(false);
+                      setEditingAttributesProduct(null);
+                      fetchProducts();
+                    } else {
+                      const error = await response.json();
+                      showNotification(`Erreur: ${error.message}`, 'error');
+                    }
+                  } catch (error) {
+                    console.error('Error updating attributes:', error);
+                    showNotification('Erreur lors de la mise à jour des attributs', 'error');
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Enregistrer
               </Button>
             </DialogFooter>
           </DialogContent>

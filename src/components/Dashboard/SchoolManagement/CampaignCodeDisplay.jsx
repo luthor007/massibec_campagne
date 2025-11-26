@@ -53,11 +53,10 @@ const CampaignCodeDisplay = ({ campaign, school }) => {
                   onClick={copyCampaignCode}
                   variant="ghost"
                   size="sm"
-                  className={`h-9 w-9 p-0 transition-all duration-200 ${
-                    copied 
-                      ? 'text-green-600 hover:text-green-700 hover:bg-green-50' 
+                  className={`h-9 w-9 p-0 transition-all duration-200 ${copied
+                      ? 'text-green-600 hover:text-green-700 hover:bg-green-50'
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   {copied ? (
                     <CheckCircle className="h-4 w-4" />
@@ -86,26 +85,22 @@ const CampaignCodeDisplay = ({ campaign, school }) => {
           </Button>
         </div>
       </div>
-      
+
       {showInstructions && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="flex items-start space-x-2 mb-3">
             <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <p className="text-xs text-gray-600 break-words">
-                <strong>Instructions pour les {terminology.participants} :</strong> Les {terminology.participants} doivent utiliser ce code de campagne lors de leur inscription 
+                <strong>Instructions pour les {terminology.participants} :</strong> Les {terminology.participants} doivent utiliser ce code de campagne lors de leur inscription
                 ou dans leur tableau de bord pour rejoindre cette campagne spécifique. Partagez ce code avec les parents et les {terminology.participants}.
               </p>
             </div>
           </div>
           <div className="text-xs text-gray-500 break-words pl-6">
-            <strong>Campagne :</strong> #{campaign.campaignNumber} • 
-            <strong> {terminology.organizationLabel} :</strong> {school?.name} • 
-            <strong> Statut :</strong> {campaign.status === 'active' ? 'Active' :
-                                     campaign.status === 'approved' ? 'Approuvée' :
-                                     campaign.status === 'pending_approval' ? 'En attente' :
-                                     campaign.status === 'rejected' ? 'Rejetée' :
-                                     campaign.status === 'completed' ? 'Terminée' : campaign.status}
+            <strong>Campagne :</strong> #{campaign.campaignNumber} •
+            <strong> {terminology.organizationLabel} :</strong> {school?.name} •
+            <strong> Mode :</strong> {campaign?.mode === 'production' ? 'Production' : 'Test'}
           </div>
         </div>
       )}

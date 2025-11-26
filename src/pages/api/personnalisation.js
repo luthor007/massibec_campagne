@@ -1,9 +1,28 @@
 import dbConnect from '../../lib/mongodb';
 import Store from '../../models/Store';
 import User from '../../models/User';
+import FunnelEvent from '../../models/FunnelEvent';
 import { getToken } from 'next-auth/jwt';  // Import getToken
 import { generateSlug } from '../../utils/slugHelpers';
 import mongoose from 'mongoose';
+import crypto from 'crypto';
+
+// Helper function to track funnel events server-side
+async function trackFunnelEventServer(eventType, userType, userId, metadata = {}) {
+  try {
+    const sessionId = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+    const funnelEvent = new FunnelEvent({
+      eventType,
+      userType,
+      userId: userId || null,
+      sessionId,
+      metadata
+    });
+    await funnelEvent.save();
+  } catch (error) {
+    console.error('Error tracking funnel event server-side:', error);
+  }
+}
 
 // List of reserved routes that users cannot use as slugs
 const RESERVED_ROUTES = [
@@ -305,6 +324,33 @@ export default async function handler(req, res) {
         await store.save();
 
         console.log('[personnalisation POST] Store saved successfully. Store ID:', store._id, 'campaignId:', store.campaignId?.toString() || store.campaignId, 'slug:', store.slug);
+
+        // Check if this is the first store for this user
+        const existingStores = await Store.find({ user: userId });
+        const isFirstStore = existingStores.length === 1;
+        const isStoreUpdate = !isFirstStore;
+
+        // Track store creation if it's the first store
+        if (isFirstStore && user) {
+          const userType = user.role === 'student' ? 'student' : 'school';
+          await trackFunnelEventServer('store_created', userType, userId.toString(), {
+            storeId: store._id.toString(),
+            campaignId: normalizedCampaignId?.toString() || null,
+            slug: store.slug
+          });
+        }
+
+        // Track store personalization (when store is updated/customized)
+        if (isStoreUpdate && user) {
+          const userType = user.role === 'student' ? 'student' : 'school';
+          await trackFunnelEventServer('store_personalized', userType, userId.toString(), {
+            storeId: store._id.toString(),
+            campaignId: normalizedCampaignId?.toString() || null,
+            slug: store.slug,
+            hasName: !!name,
+            hasDescription: !!description
+          });
+        }
 
         // Return slug URL if available, otherwise fallback to ID
         const storeUrl = store.slug ? `/${store.slug}` : `/boutique/${store._id}`;

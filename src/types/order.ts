@@ -19,7 +19,7 @@ export interface IOrder {
   totalAmount: number;
   customerName: string;
   customerEmail: string;
-  status: 'En attente' | 'Payer' | 'Commander' | 'Complété';
+  status: 'En attente' | 'Payer' | 'Commandé' | 'Complété';
   createdAt: Date;
   orderId: string;
 }

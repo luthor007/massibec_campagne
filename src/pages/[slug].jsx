@@ -6,6 +6,7 @@ import User from '../models/User'
 import Campaign from '../models/Campaign'
 import School from '../models/School'
 import Product from '../models/Product'
+import Supplier from '../models/Supplier'
 import mongoose from 'mongoose'
 import sanitizeHtml from 'sanitize-html'
 
@@ -86,6 +87,10 @@ export async function getServerSideProps(context) {
         let schoolName = null
         let schoolIdToUse = null
 
+        // Check if store is closed (delivery date + 2 weeks)
+        let isStoreClosed = false
+        let latestActiveStore = null
+
         if (campaignIdToUse) {
             const campaign = await Campaign.findById(campaignIdToUse).populate('school').lean()
             if (campaign) {
@@ -109,6 +114,46 @@ export async function getServerSideProps(context) {
                     schoolIdToUse = campaign.school._id.toString()
                     schoolName = campaign.school.name
                 }
+
+                // Check if store is closed (delivery date + 2 weeks)
+                if (campaign.deliveryDate) {
+                    const deliveryDate = new Date(campaign.deliveryDate)
+                    const twoWeeksAfterDelivery = new Date(deliveryDate)
+                    twoWeeksAfterDelivery.setDate(twoWeeksAfterDelivery.getDate() + 14)
+                    const now = new Date()
+
+                    if (now > twoWeeksAfterDelivery) {
+                        isStoreClosed = true
+
+                        // Find the latest active store for this user
+                        // Get all stores for this user, sorted by creation date
+                        const userStores = await Store.find({ user: store.user })
+                            .populate('campaignId')
+                            .sort({ createdAt: -1 })
+                            .lean()
+
+                        // Find the first store that is not closed
+                        for (const userStore of userStores) {
+                            if (!userStore.campaignId) continue
+
+                            const storeCampaign = await Campaign.findById(userStore.campaignId).lean()
+                            if (!storeCampaign || !storeCampaign.deliveryDate) continue
+
+                            const storeDeliveryDate = new Date(storeCampaign.deliveryDate)
+                            const storeTwoWeeksAfter = new Date(storeDeliveryDate)
+                            storeTwoWeeksAfter.setDate(storeTwoWeeksAfter.getDate() + 14)
+
+                            // If this store is not closed and has a slug, use it
+                            if (now <= storeTwoWeeksAfter && userStore.slug) {
+                                latestActiveStore = {
+                                    slug: userStore.slug,
+                                    name: userStore.name
+                                }
+                                break
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -124,18 +169,41 @@ export async function getServerSideProps(context) {
         }
 
         // Get owner phone
-        const ownerPhone = owner.role === 'school_manager'
-            ? (owner.schoolManagerInfo?.telephone || owner.schoolManagerInfo?.cellulaire || '')
-            : (owner.parentInfo?.telephone || '')
+        let ownerPhone = '';
+        if (owner.role === 'school_manager') {
+            ownerPhone = owner.schoolManagerInfo?.telephone || owner.schoolManagerInfo?.cellulaire || '';
+        } else if (owner.role === 'supplier') {
+            // For suppliers, check supplierManagerInfo first, then fetch from Supplier model
+            ownerPhone = owner.supplierManagerInfo?.telephone || owner.supplierManagerInfo?.cellulaire || '';
+
+            // If not found in user info, fetch from Supplier model
+            if (!ownerPhone && owner.supplierManagerInfo?.organisme) {
+                const supplier = await Supplier.findById(owner.supplierManagerInfo.organisme).lean();
+                if (supplier && supplier.phone) {
+                    ownerPhone = supplier.phone;
+                }
+            }
+        } else {
+            // For students
+            ownerPhone = owner.parentInfo?.telephone || '';
+        }
 
         // Fetch products with custom pricing
         let products = []
         if (campaignIdToUse) {
             const activeCampaign = await Campaign.findById(campaignIdToUse)
                 .populate('customPrices.productId', '_id')
+                .populate('supplier', '_id')
                 .lean()
 
-            const productDocs = await Product.find({})
+            // Build query to filter products by campaign's supplier
+            const productQuery = {};
+            if (activeCampaign?.supplier) {
+                const supplierId = activeCampaign.supplier._id || activeCampaign.supplier;
+                productQuery.supplier = supplierId;
+            }
+
+            const productDocs = await Product.find(productQuery)
                 .sort({ order: 1, createdAt: -1 })
                 .limit(100)
                 .lean()
@@ -168,10 +236,28 @@ export async function getServerSideProps(context) {
                         })
 
                         if (customPrice && customPrice.price !== undefined && customPrice.price !== null) {
-                            finalPrice = customPrice.price
-                            hasCustomPrice = true
+                            const customPriceValue = Number(customPrice.price)
+                            if (!isNaN(customPriceValue) && customPriceValue >= 0) {
+                                finalPrice = customPriceValue
+                                hasCustomPrice = true
+                            }
                         }
                     }
+
+                    // Get attributes from product, ensuring all fields are present
+                    const productAttributes = product.attributes || {};
+                    const sanitizedAttributes = {
+                        freezable: productAttributes.freezable !== undefined ? Boolean(productAttributes.freezable) : (product.freezable !== undefined ? Boolean(product.freezable) : false),
+                        glutenFree: productAttributes.glutenFree !== undefined ? Boolean(productAttributes.glutenFree) : false,
+                        vegetarian: productAttributes.vegetarian !== undefined ? Boolean(productAttributes.vegetarian) : false,
+                        vegan: productAttributes.vegan !== undefined ? Boolean(productAttributes.vegan) : false,
+                        nutFree: productAttributes.nutFree !== undefined ? Boolean(productAttributes.nutFree) : false,
+                        halal: productAttributes.halal !== undefined ? Boolean(productAttributes.halal) : false,
+                        kosher: productAttributes.kosher !== undefined ? Boolean(productAttributes.kosher) : false,
+                        organic: productAttributes.organic !== undefined ? Boolean(productAttributes.organic) : false,
+                        quebecProduct: productAttributes.quebecProduct !== undefined ? Boolean(productAttributes.quebecProduct) : false,
+                        allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+                    };
 
                     const productData = {
                         id: product._id.toString(),
@@ -186,7 +272,9 @@ export async function getServerSideProps(context) {
                         isDefault: Boolean(product.isDefault),
                         productId: String(product.productId || ''),
                         order: Number(product.order) || 0,
-                        hasCustomPrice: hasCustomPrice
+                        hasCustomPrice: hasCustomPrice,
+                        attributes: sanitizedAttributes,
+                        freezable: product.freezable !== undefined ? Boolean(product.freezable) : false // Keep for backward compatibility, ensure never undefined
                     }
 
                     // Debug: Log products with ingredient/nutrition images
@@ -201,7 +289,26 @@ export async function getServerSideProps(context) {
                 })
         } else {
             // Fetch products without custom pricing
-            const productDocs = await Product.find({})
+            // Still try to filter by supplier if we can determine it from the store
+            const productQuery = {};
+
+            // Try to get supplier from store's campaign if available
+            if (rawStore.campaignId && mongoose.Types.ObjectId.isValid(rawStore.campaignId)) {
+                try {
+                    const fallbackCampaign = await Campaign.findById(rawStore.campaignId)
+                        .populate('supplier', '_id')
+                        .lean();
+
+                    if (fallbackCampaign?.supplier) {
+                        const supplierId = fallbackCampaign.supplier._id || fallbackCampaign.supplier;
+                        productQuery.supplier = supplierId;
+                    }
+                } catch (error) {
+                    console.error('Error fetching campaign for supplier filter:', error);
+                }
+            }
+
+            const productDocs = await Product.find(productQuery)
                 .sort({ order: 1, createdAt: -1 })
                 .limit(100)
                 .lean()
@@ -209,6 +316,21 @@ export async function getServerSideProps(context) {
             products = productDocs
                 .filter(product => product && product._id && product.name)
                 .map(product => {
+                    // Get attributes from product, ensuring all fields are present
+                    const productAttributes = product.attributes || {};
+                    const sanitizedAttributes = {
+                        freezable: productAttributes.freezable !== undefined ? Boolean(productAttributes.freezable) : (product.freezable !== undefined ? Boolean(product.freezable) : false),
+                        glutenFree: productAttributes.glutenFree !== undefined ? Boolean(productAttributes.glutenFree) : false,
+                        vegetarian: productAttributes.vegetarian !== undefined ? Boolean(productAttributes.vegetarian) : false,
+                        vegan: productAttributes.vegan !== undefined ? Boolean(productAttributes.vegan) : false,
+                        nutFree: productAttributes.nutFree !== undefined ? Boolean(productAttributes.nutFree) : false,
+                        halal: productAttributes.halal !== undefined ? Boolean(productAttributes.halal) : false,
+                        kosher: productAttributes.kosher !== undefined ? Boolean(productAttributes.kosher) : false,
+                        organic: productAttributes.organic !== undefined ? Boolean(productAttributes.organic) : false,
+                        quebecProduct: productAttributes.quebecProduct !== undefined ? Boolean(productAttributes.quebecProduct) : false,
+                        allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+                    };
+
                     const productData = {
                         id: product._id.toString(),
                         name: sanitizeHtml(String(product.name || '')),
@@ -222,7 +344,9 @@ export async function getServerSideProps(context) {
                         isDefault: Boolean(product.isDefault),
                         productId: String(product.productId || ''),
                         order: Number(product.order) || 0,
-                        hasCustomPrice: false
+                        hasCustomPrice: false,
+                        attributes: sanitizedAttributes,
+                        freezable: product.freezable !== undefined ? Boolean(product.freezable) : false // Keep for backward compatibility, ensure never undefined
                     }
 
                     // Debug: Log products with ingredient/nutrition images
@@ -300,9 +424,37 @@ export async function getServerSideProps(context) {
                     slug: store.slug || null,
                     campaign: campaignData,
                     schoolName: schoolName,
-                    deliveryOptions: normalizedDeliveryOptions
+                    deliveryOptions: normalizedDeliveryOptions,
+                    isStoreClosed: isStoreClosed,
+                    latestActiveStore: latestActiveStore
                 },
-                initialProducts: products
+                initialProducts: products.map(p => {
+                    // Ensure attributes are always included and properly serialized
+                    // Remove undefined values from the product object to avoid serialization errors
+                    const cleanProduct = Object.fromEntries(
+                        Object.entries(p).filter(([_, value]) => value !== undefined)
+                    );
+
+                    const existingAttributes = cleanProduct.attributes && typeof cleanProduct.attributes === 'object' ? cleanProduct.attributes : {};
+                    const productFreezable = cleanProduct.freezable !== undefined ? Boolean(cleanProduct.freezable) : false;
+
+                    return {
+                        ...cleanProduct,
+                        attributes: {
+                            freezable: existingAttributes.freezable !== undefined ? Boolean(existingAttributes.freezable) : productFreezable,
+                            glutenFree: existingAttributes.glutenFree !== undefined ? Boolean(existingAttributes.glutenFree) : false,
+                            vegetarian: existingAttributes.vegetarian !== undefined ? Boolean(existingAttributes.vegetarian) : false,
+                            vegan: existingAttributes.vegan !== undefined ? Boolean(existingAttributes.vegan) : false,
+                            nutFree: existingAttributes.nutFree !== undefined ? Boolean(existingAttributes.nutFree) : false,
+                            halal: existingAttributes.halal !== undefined ? Boolean(existingAttributes.halal) : false,
+                            kosher: existingAttributes.kosher !== undefined ? Boolean(existingAttributes.kosher) : false,
+                            organic: existingAttributes.organic !== undefined ? Boolean(existingAttributes.organic) : false,
+                            quebecProduct: existingAttributes.quebecProduct !== undefined ? Boolean(existingAttributes.quebecProduct) : false,
+                            allergens: existingAttributes.allergens !== undefined ? String(existingAttributes.allergens) : ''
+                        },
+                        freezable: productFreezable // Ensure freezable is always a boolean, never undefined
+                    };
+                })
             }
         }
     } catch (error) {

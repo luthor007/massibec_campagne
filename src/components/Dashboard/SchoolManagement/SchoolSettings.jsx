@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Settings, Save, MapPin, Phone, Mail, Building, AlertCircle, User, CreditCard, Upload, Image, X } from 'lucide-react';
+import { Settings, Save, MapPin, Phone, Mail, Building, AlertCircle, User, CreditCard, Upload, Image, X, CheckCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import PersonalSettings from './PersonalSettings';
 
@@ -22,12 +22,14 @@ const SchoolSettings = ({ school, onUpdate }) => {
     deliveryInstructions: '',
     distributionLocation: ''
   });
-  
+
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
+  const [chequeSpecimen, setChequeSpecimen] = useState(null);
+  const [uploadingCheque, setUploadingCheque] = useState(false);
 
   useEffect(() => {
     if (school) {
@@ -45,12 +47,12 @@ const SchoolSettings = ({ school, onUpdate }) => {
         deliveryInstructions: school.deliveryInstructions || '',
         distributionLocation: school.distributionLocation || ''
       });
-      
+
       // Update logo preview from school data
       // Use school data as source of truth for persisted logos
       console.log('Current logoPreview state:', logoPreview);
       console.log('School logoUrl from API:', school.logoUrl);
-      
+
       if (school.logoUrl) {
         console.log('Setting logo preview from school data:', school.logoUrl);
         setLogoPreview(school.logoUrl);
@@ -60,6 +62,13 @@ const SchoolSettings = ({ school, onUpdate }) => {
         setLogoPreview('');
       }
       // If logoPreview starts with 'data:', it's a file selection, keep it
+
+      // Set cheque specimen from school data
+      if (school.paymentInfo?.chequeSpecimen) {
+        setChequeSpecimen(school.paymentInfo.chequeSpecimen);
+      } else {
+        setChequeSpecimen(null);
+      }
     }
   }, [school]);
 
@@ -78,22 +87,22 @@ const SchoolSettings = ({ school, onUpdate }) => {
         toast.error('Veuillez sélectionner un fichier image');
         return;
       }
-      
+
       // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Le fichier ne doit pas dépasser 5MB');
         return;
       }
-      
+
       setLogoFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
         setLogoPreview(e.target.result);
       };
       reader.readAsDataURL(file);
-      
+
       // Auto-upload the logo immediately
       handleUploadLogoInternal(file);
     }
@@ -142,37 +151,37 @@ const SchoolSettings = ({ school, onUpdate }) => {
       const formData = new FormData();
       formData.append('logo', file);
       formData.append('schoolId', school.id);
-      
+
       console.log('Sending logo upload request to /api/schools/upload-logo');
 
       const response = await fetch('/api/schools/upload-logo', {
         method: 'POST',
         body: formData
       });
-      
+
       console.log('Logo upload response status:', response.status);
 
       if (response.ok) {
         const result = await response.json();
         console.log('Logo upload response:', result);
-        
+
         toast.success('Logo uploadé avec succès');
-        
+
         // Clear logo file
         setLogoFile(null);
-        
+
         // Update logo preview with the new logo URL
         if (result.logoUrl) {
           console.log('Setting logo preview to:', result.logoUrl);
           setLogoPreview(result.logoUrl);
         }
-        
+
         // Also update from the school object if provided
         if (result.school?.logoUrl) {
           console.log('Setting logo from school object:', result.school.logoUrl);
           setLogoPreview(result.school.logoUrl);
         }
-        
+
         // Refresh school data from parent after a short delay to ensure DB has updated
         setTimeout(() => {
           onUpdate && onUpdate();
@@ -193,6 +202,87 @@ const SchoolSettings = ({ school, onUpdate }) => {
   // Public function for manual upload button (if needed)
   const handleUploadLogo = () => {
     handleUploadLogoInternal();
+  };
+
+  const handleChequeFileChange = async (file) => {
+    if (!file || !school?.id) return;
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      toast.error('Seuls les fichiers image sont autorisés');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Le fichier ne doit pas dépasser 5MB');
+      return;
+    }
+
+    // Upload immediately
+    setUploadingCheque(true);
+    try {
+      const formData = new FormData();
+      formData.append('chequeSpecimen', file);
+
+      const response = await fetch(`/api/schools/${school.id}/upload-cheque-specimen`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[School Settings] Cheque uploaded successfully:', data.chequeSpecimenUrl);
+
+        // Update state immediately
+        setChequeSpecimen(data.chequeSpecimenUrl);
+        toast.success('Spécimen de chèque uploadé avec succès');
+
+        // Wait a moment for the database to be updated
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        // Refresh school data
+        onUpdate && onUpdate();
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Erreur lors de l\'upload');
+      }
+    } catch (error) {
+      console.error('Error uploading cheque:', error);
+      toast.error('Erreur lors de l\'upload');
+    } finally {
+      setUploadingCheque(false);
+    }
+  };
+
+  const handleChequeFileInputChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleChequeFileChange(file);
+    }
+    // Reset input to allow selecting the same file again
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.add('border-blue-500', 'bg-blue-50');
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('border-blue-500', 'bg-blue-50');
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('border-blue-500', 'bg-blue-50');
+
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleChequeFileChange(file);
+    }
   };
 
   const handleSaveSchool = async () => {
@@ -217,20 +307,20 @@ const SchoolSettings = ({ school, onUpdate }) => {
       if (response.ok) {
         const result = await response.json();
         console.log('Save response:', result);
-        
+
         // Update local state with the saved data to reflect the changes
         if (result.school) {
           setSchoolFormData(prev => ({
             ...prev,
             ...result.school
           }));
-          
+
           // Update logo preview if it exists
           if (result.school.logoUrl) {
             setLogoPreview(result.school.logoUrl);
           }
         }
-        
+
         toast.success('Paramètres de l\'école sauvegardés avec succès');
         onUpdate && onUpdate();
       } else {
@@ -293,7 +383,7 @@ const SchoolSettings = ({ school, onUpdate }) => {
               <Image className="h-5 w-5 mr-2" />
               Logo de l'école
             </h3>
-            
+
             <div className="flex items-start space-x-6">
               {/* Logo Preview */}
               <div className="flex-shrink-0">
@@ -345,7 +435,7 @@ const SchoolSettings = ({ school, onUpdate }) => {
                       Formats acceptés: JPG, PNG, GIF. Taille max: 5MB
                     </p>
                   </div>
-                  
+
                   {logoFile && (
                     <div className="flex space-x-2">
                       <Button
@@ -387,7 +477,7 @@ const SchoolSettings = ({ school, onUpdate }) => {
                 <Building className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Informations générales
               </h3>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="name">Nom de l'école *</Label>
                 <Input
@@ -440,7 +530,7 @@ const SchoolSettings = ({ school, onUpdate }) => {
                 <Phone className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Contact et paiement
               </h3>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="telephone">Téléphone de l'école</Label>
                 <Input
@@ -469,8 +559,8 @@ const SchoolSettings = ({ school, onUpdate }) => {
                   <CreditCard className="h-4 w-4 mr-2" />
                   Moyen de paiement préféré
                 </Label>
-                <Select 
-                  value={schoolFormData.preferredPaymentMethod} 
+                <Select
+                  value={schoolFormData.preferredPaymentMethod}
                   onValueChange={(value) => handleSchoolInputChange('preferredPaymentMethod', value)}
                   disabled={!canEditSchool}
                 >
@@ -483,6 +573,103 @@ const SchoolSettings = ({ school, onUpdate }) => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Cheque Specimen Upload */}
+              {canEditSchool && (
+                <div className="space-y-2">
+                  <Label htmlFor="chequeSpecimen" className="text-sm font-semibold text-gray-700 mb-2 block">
+                    Spécimen de chèque
+                  </Label>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Uploadez un spécimen de chèque pour recevoir vos paiements.
+                  </p>
+
+                  {chequeSpecimen && (
+                    <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                          <span className="text-sm text-gray-700">Spécimen de chèque uploadé</span>
+                        </div>
+                        <a
+                          href={chequeSpecimen}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          Voir le fichier
+                        </a>
+                      </div>
+                      <img
+                        src={chequeSpecimen}
+                        alt="Spécimen de chèque"
+                        className="mt-3 max-h-48 max-w-full object-contain rounded border border-gray-300 bg-white p-2"
+                      />
+                      <div className="mt-4">
+                        <Label htmlFor="cheque-replace" className="cursor-pointer">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={uploadingCheque}
+                            onClick={() => document.getElementById('cheque-replace')?.click()}
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            {uploadingCheque ? 'Upload en cours...' : 'Remplacer le spécimen'}
+                          </Button>
+                        </Label>
+                        <Input
+                          id="cheque-replace"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleChequeFileInputChange}
+                          disabled={uploadingCheque}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {!chequeSpecimen && (
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition-colors"
+                    >
+                      {uploadingCheque ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                          <p className="text-sm text-gray-600">Upload en cours...</p>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <Label htmlFor="chequeSpecimen" className="cursor-pointer">
+                            <span className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                              Cliquez pour sélectionner un fichier
+                            </span>
+                            <span className="text-sm text-gray-600 block mt-1">
+                              ou glissez-déposez le fichier ici
+                            </span>
+                            <Input
+                              id="chequeSpecimen"
+                              type="file"
+                              accept="image/*"
+                              onChange={handleChequeFileInputChange}
+                              disabled={uploadingCheque}
+                              className="hidden"
+                            />
+                          </Label>
+                          <p className="text-xs text-gray-500 mt-2">
+                            PNG, JPG, GIF jusqu'à 5MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -492,7 +679,7 @@ const SchoolSettings = ({ school, onUpdate }) => {
               <MapPin className="h-5 w-5 mr-2" />
               Instructions de livraison
             </h3>
-            
+
             <div className="space-y-2">
               <Label htmlFor="deliveryInstructions">
                 Instructions pour le livreur
@@ -529,8 +716,8 @@ const SchoolSettings = ({ school, onUpdate }) => {
 
           {canEditSchool && (
             <div className="flex justify-end">
-              <Button 
-                onClick={handleSaveSchool} 
+              <Button
+                onClick={handleSaveSchool}
                 disabled={saving}
                 className="min-w-[120px] w-full sm:w-auto"
               >

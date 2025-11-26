@@ -122,21 +122,21 @@ export default function DashboardManager() {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
 
 
-const handleCopy = (code) => {
-  if (!navigator.clipboard) {
-    console.error('Clipboard API not supported');
-    return;
-  }
+  const handleCopy = (code) => {
+    if (!navigator.clipboard) {
+      console.error('Clipboard API not supported');
+      return;
+    }
 
-  navigator.clipboard.writeText(code)
-    .then(() => {
-      toast.success('Code copié dans le presse-papiers'); // Show success message (optional)
-    })
-    .catch((error) => {
-      console.error('Error copying text: ', error);
-      toast.error('Erreur lors de la copie'); // Show error message (optional)
-    });
-};
+    navigator.clipboard.writeText(code)
+      .then(() => {
+        toast.success('Code copié dans le presse-papiers'); // Show success message (optional)
+      })
+      .catch((error) => {
+        console.error('Error copying text: ', error);
+        toast.error('Erreur lors de la copie'); // Show error message (optional)
+      });
+  };
 
   // Fetch School Info
   useEffect(() => {
@@ -167,7 +167,7 @@ const handleCopy = (code) => {
   // Fetch Participants with Orders
   useEffect(() => {
     let timeoutId;
-    
+
     const fetchParticipants = async () => {
       if (!school) return; // Ensure school info is available
 
@@ -195,19 +195,19 @@ const handleCopy = (code) => {
 
             // Aggregate sales data
             participantsData.forEach((participant) => {
-            participant.orders.forEach((order) => {
-              order.products.forEach((item) => {
-                const productName = item.productName || 'Unknown Product';
-                const productPrice = item.productPrice || 0;
+              participant.orders.forEach((order) => {
+                order.products.forEach((item) => {
+                  const productName = item.productName || 'Unknown Product';
+                  const productPrice = item.productPrice || 0;
 
-                if (!aggregatedSales[productName]) {
-                  aggregatedSales[productName] = { name: productName, price: productPrice, quantity: 0, total: 0 };
-                }
-                aggregatedSales[productName].quantity += item.quantity;
-                aggregatedSales[productName].total += item.quantity * productPrice;
+                  if (!aggregatedSales[productName]) {
+                    aggregatedSales[productName] = { name: productName, price: productPrice, quantity: 0, total: 0 };
+                  }
+                  aggregatedSales[productName].quantity += item.quantity;
+                  aggregatedSales[productName].total += item.quantity * productPrice;
+                });
               });
             });
-          });
 
             return {
               id: participant._id,
@@ -338,7 +338,7 @@ const handleCopy = (code) => {
 
   const handleUpdateCampaign = async (e) => {
     e.preventDefault();
-    
+
     const formData = new FormData(e.target);
     const updateData = {
       startDate: formData.get('startDate'),
@@ -403,7 +403,7 @@ const handleCopy = (code) => {
       },
       cancel: {
         label: "Annuler",
-        onClick: () => {},
+        onClick: () => { },
       },
     });
   };
@@ -419,16 +419,16 @@ const handleCopy = (code) => {
   // Calculate campaign progress and insights
   const campaignProgress = school ? (school.totalRaised / school.objectifFinancier) * 100 : 0;
   const daysRemaining = school?.finCampagne ? Math.ceil((new Date(school.finCampagne) - new Date()) / (1000 * 60 * 60 * 24)) : 0;
-  const isCampaignActive = school?.debutCampagne && school?.finCampagne && 
+  const isCampaignActive = school?.debutCampagne && school?.finCampagne &&
     new Date() >= new Date(school.debutCampagne) && new Date() <= new Date(school.finCampagne);
-  
+
   // Find pending campaign
   const pendingCampaign = school?.campaigns?.find(campaign => campaign.status === 'pending_approval');
-  
+
   // Filter participants based on search and status
   const filteredParticipants = participants.filter(participant => {
     const matchesSearch = participant.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || 
+    const matchesStatus = filterStatus === 'all' ||
       (filterStatus === 'goal_reached' && (participant.raised / participant.goal) >= 1) ||
       (filterStatus === 'close_to_goal' && (participant.raised / participant.goal) >= 0.75 && (participant.raised / participant.goal) < 1) ||
       (filterStatus === 'needs_help' && (participant.raised / participant.goal) < 0.75);
@@ -474,7 +474,7 @@ const handleCopy = (code) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Enhanced Header */}
-      <motion.header 
+      <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-white/80 backdrop-blur-md shadow-lg border-b border-gray-200/50 sticky top-0 z-50"
@@ -490,7 +490,7 @@ const handleCopy = (code) => {
                   <AvatarFallback className="text-xl font-bold bg-gradient-to-br from-blue-500 to-purple-600 text-white">
                     {school.name?.charAt(0)}
                   </AvatarFallback>
-              </Avatar>
+                </Avatar>
                 {isCampaignActive && (
                   <div className="absolute -top-1 -right-1 h-4 w-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
                 )}
@@ -523,17 +523,17 @@ const handleCopy = (code) => {
                 </p>
               </div>
             </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setLastUpdated(new Date())}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Actualiser
-              </Button>
+          </div>
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLastUpdated(new Date())}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualiser
+            </Button>
             <Button variant="outline" className="flex items-center" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" /> Déconnexion
             </Button>
@@ -583,28 +583,28 @@ const handleCopy = (code) => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
           <TabsList className="grid w-full grid-cols-4 rounded-xl bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200/50 p-1">
-            <TabsTrigger 
-              value="overview" 
+            <TabsTrigger
+              value="overview"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
             >
               <BarChart3 className="h-4 w-4 mr-2" />
               Vue d&apos;ensemble
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="campaigns"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
             >
               <Calendar className="h-4 w-4 mr-2" />
               Campagnes
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="participants"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
             >
               <Users className="h-4 w-4 mr-2" />
               Participants
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="sales"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
             >
@@ -655,7 +655,7 @@ const handleCopy = (code) => {
               transition={{ delay: 0.4 }}
             >
               <Card className="border-0 shadow-xl bg-gradient-to-br from-white to-blue-50/30">
-              <CardHeader>
+                <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -663,7 +663,7 @@ const handleCopy = (code) => {
                       </CardTitle>
                       <CardDescription className="text-base">
                         Progression de votre campagne de financement
-                </CardDescription>
+                      </CardDescription>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Badge className="bg-green-100 text-green-800 border-green-200">
@@ -672,40 +672,40 @@ const handleCopy = (code) => {
                       </Badge>
                     </div>
                   </div>
-              </CardHeader>
-              <CardContent className="pb-2">
+                </CardHeader>
+                <CardContent className="pb-2">
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2">
                       <div className="flex justify-between items-end mb-6">
-                  <div>
+                        <div>
                           <p className="text-sm font-medium text-gray-600 mb-2">
-                      Montant amassé
-                    </p>
+                            Montant amassé
+                          </p>
                           <h2 className="text-4xl font-bold text-gray-900">
-                      {school.totalRaised.toLocaleString()}$
-                    </h2>
+                            {school.totalRaised.toLocaleString()}$
+                          </h2>
                           <p className="text-sm text-green-600 mt-1">
                             +12% cette semaine
                           </p>
-                  </div>
-                  <div className="text-right">
+                        </div>
+                        <div className="text-right">
                           <p className="text-sm font-medium text-gray-600 mb-2">
-                      Objectif
-                    </p>
+                            Objectif
+                          </p>
                           <p className="text-3xl font-semibold text-gray-900">
-                      {school.objectifFinancier.toLocaleString()}$
-                    </p>
+                            {school.objectifFinancier.toLocaleString()}$
+                          </p>
                           <p className="text-sm text-gray-500 mt-1">
                             {((school.objectifFinancier - school.totalRaised) / 1000).toFixed(0)}k$ restants
-                    </p>
-                  </div>
+                          </p>
+                        </div>
                       </div>
                       <div className="space-y-3">
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600">Progression</span>
                           <span className="font-semibold">{campaignProgress.toFixed(1)}%</span>
-                </div>
-                <Progress
+                        </div>
+                        <Progress
                           value={campaignProgress}
                           className="h-3 bg-gray-200"
                         />
@@ -734,7 +734,7 @@ const handleCopy = (code) => {
                     </div>
                   </div>
                 </CardContent>
-            </Card>
+              </Card>
             </motion.div>
 
             {/* Enhanced Campaign Information */}
@@ -744,16 +744,16 @@ const handleCopy = (code) => {
               transition={{ delay: 0.6 }}
             >
               <Card className="border-0 shadow-xl">
-              <CardHeader>
+                <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center">
                         <Calendar className="mr-3 h-6 w-6" />
-                  Informations de Campagne
-                </CardTitle>
+                        Informations de Campagne
+                      </CardTitle>
                       <CardDescription className="text-base">
                         Dates importantes et statut de votre campagne
-                </CardDescription>
+                      </CardDescription>
                     </div>
                     <div className="flex items-center space-x-2">
                       {school.currentCampaignNumber && (
@@ -765,7 +765,7 @@ const handleCopy = (code) => {
                         const today = new Date();
                         const startDate = new Date(school.debutCampagne);
                         const endDate = new Date(school.finCampagne);
-                        
+
                         if (today < startDate) {
                           return <Badge className="bg-blue-100 text-blue-800 border-blue-200">À venir</Badge>;
                         } else if (today >= startDate && today <= endDate) {
@@ -776,17 +776,17 @@ const handleCopy = (code) => {
                       })()}
                     </div>
                   </div>
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <motion.div 
+                    <motion.div
                       className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200"
                       whileHover={{ scale: 1.02 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
                       <div className="p-3 bg-blue-500 rounded-full w-fit mx-auto mb-4">
                         <Calendar className="h-6 w-6 text-white" />
-                  </div>
+                      </div>
                       <p className="text-sm font-medium text-blue-700 mb-2">Début de Campagne</p>
                       <p className="text-xl font-bold text-blue-900 mb-2">
                         {school.debutCampagne ? new Date(school.debutCampagne).toLocaleDateString('fr-CA', {
@@ -801,15 +801,15 @@ const handleCopy = (code) => {
                         </Badge>
                       )}
                     </motion.div>
-                    
-                    <motion.div 
+
+                    <motion.div
                       className="text-center p-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200"
                       whileHover={{ scale: 1.02 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
                       <div className="p-3 bg-orange-500 rounded-full w-fit mx-auto mb-4">
                         <Clock className="h-6 w-6 text-white" />
-                  </div>
+                      </div>
                       <p className="text-sm font-medium text-orange-700 mb-2">Fin de Campagne</p>
                       <p className="text-xl font-bold text-orange-900 mb-2">
                         {school.finCampagne ? new Date(school.finCampagne).toLocaleDateString('fr-CA', {
@@ -833,18 +833,18 @@ const handleCopy = (code) => {
                               return 'Terminée';
                             }
                           })()}
-                    </Badge>
+                        </Badge>
                       )}
                     </motion.div>
-                    
-                    <motion.div 
+
+                    <motion.div
                       className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200"
                       whileHover={{ scale: 1.02 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
                       <div className="p-3 bg-green-500 rounded-full w-fit mx-auto mb-4">
                         <Gift className="h-6 w-6 text-white" />
-                  </div>
+                      </div>
                       <p className="text-sm font-medium text-green-700 mb-2">Date de Livraison</p>
                       <p className="text-xl font-bold text-green-900 mb-2">
                         {school.dateDeLivraison ? new Date(school.dateDeLivraison).toLocaleDateString('fr-CA', {
@@ -872,8 +872,8 @@ const handleCopy = (code) => {
                       )}
                     </motion.div>
                   </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             </motion.div>
 
             {/* Enhanced Top Performers */}
@@ -883,7 +883,7 @@ const handleCopy = (code) => {
               transition={{ delay: 0.8 }}
             >
               <Card className="border-0 shadow-xl">
-              <CardHeader>
+                <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center">
@@ -891,16 +891,16 @@ const handleCopy = (code) => {
                         Meilleurs Performeurs
                       </CardTitle>
                       <CardDescription className="text-base">
-                  Top 3 des élèves ayant amassé le plus de fonds
-                </CardDescription>
+                        Top 3 des élèves ayant amassé le plus de fonds
+                      </CardDescription>
                     </div>
                     <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
                       <Star className="h-3 w-3 mr-1" />
                       Classement
                     </Badge>
                   </div>
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                   {participants.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="p-4 bg-gray-100 rounded-full w-fit mx-auto mb-4">
@@ -913,13 +913,13 @@ const handleCopy = (code) => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                  {participants
-                    .sort((a, b) => b.raised - a.raised)
-                    .slice(0, 3)
+                      {participants
+                        .sort((a, b) => b.raised - a.raised)
+                        .slice(0, 3)
                         .map((participant, index) => {
                           const progress = (participant.raised / participant.goal) * 100;
                           const isGoalReached = progress >= 100;
-                          
+
                           return (
                             <motion.div
                               key={participant.id}
@@ -934,7 +934,7 @@ const handleCopy = (code) => {
                                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white font-semibold">
                                       {participant.name.charAt(0)}
                                     </AvatarFallback>
-                        </Avatar>
+                                  </Avatar>
                                   <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                                     {index + 1}
                                   </div>
@@ -951,7 +951,7 @@ const handleCopy = (code) => {
                                   </div>
                                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                                     <span className="font-medium text-green-600">
-                            {participant.raised.toLocaleString()}$ amassés
+                                      {participant.raised.toLocaleString()}$ amassés
                                     </span>
                                     <span>•</span>
                                     <span>Objectif: {participant.goal.toLocaleString()}$</span>
@@ -972,25 +972,25 @@ const handleCopy = (code) => {
                               <div className="text-right">
                                 <div className="text-2xl mb-1">
                                   {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
-                        </div>
-                        <Badge
-                                  variant="outline" 
+                                </div>
+                                <Badge
+                                  variant="outline"
                                   className={
                                     index === 0 ? "border-yellow-300 text-yellow-700" :
-                                    index === 1 ? "border-gray-300 text-gray-700" :
-                                    "border-orange-300 text-orange-700"
+                                      index === 1 ? "border-gray-300 text-gray-700" :
+                                        "border-orange-300 text-orange-700"
                                   }
                                 >
                                   {index === 0 ? 'Champion' : index === 1 ? '2ème' : '3ème'}
-                        </Badge>
-                      </div>
+                                </Badge>
+                              </div>
                             </motion.div>
                           );
                         })}
-                </div>
+                    </div>
                   )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             </motion.div>
 
             {/* Pending Campaign Alert */}
@@ -1055,7 +1055,7 @@ const handleCopy = (code) => {
                             </p>
                           </div>
                         ) : (
-                          <Button 
+                          <Button
                             onClick={() => {
                               setEditingCampaign(pendingCampaign);
                               setShowEditProfitModal(true);
@@ -1102,8 +1102,8 @@ const handleCopy = (code) => {
                         Contact
                       </Badge>
                       <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => setShowEditSchoolModal(true)}
                           className="border-blue-300 text-blue-700 hover:bg-blue-50"
@@ -1112,8 +1112,8 @@ const handleCopy = (code) => {
                           Modifier
                         </Button>
                         {process.env.NODE_ENV === 'development' && (
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => setShowDeleteAccountModal(true)}
                             className="border-red-300 text-red-700 hover:bg-red-50"
@@ -1142,7 +1142,7 @@ const handleCopy = (code) => {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
                         <div className="flex items-center space-x-3 mb-3">
                           <div className="p-2 bg-green-500 rounded-lg">
@@ -1157,7 +1157,7 @@ const handleCopy = (code) => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-6">
                       <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
                         <div className="flex items-center space-x-3 mb-3">
@@ -1172,7 +1172,7 @@ const handleCopy = (code) => {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
@@ -1186,9 +1186,9 @@ const handleCopy = (code) => {
                               </p>
                             </div>
                           </div>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => handleCopy(school.code)}
                             className="border-orange-300 text-orange-700 hover:bg-orange-50"
                           >
@@ -1235,7 +1235,7 @@ const handleCopy = (code) => {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">
@@ -1262,7 +1262,7 @@ const handleCopy = (code) => {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card className="border-0 shadow-lg hover:shadow-xl transition-all duration-300">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-600">
@@ -1290,14 +1290,14 @@ const handleCopy = (code) => {
 
           {/* Campaigns Tab */}
           <TabsContent value="campaigns" className="space-y-8">
-              <Card>
+            <Card>
               <CardHeader>
                 <CardTitle>Gestion des Campagnes</CardTitle>
                 <CardDescription>
                   Créez et gérez vos campagnes de financement
                 </CardDescription>
-    </CardHeader>
-    <CardContent>
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-6">
                   {/* Current Campaign */}
                   <div className="border rounded-lg p-4">
@@ -1311,7 +1311,7 @@ const handleCopy = (code) => {
                           const today = new Date();
                           const startDate = new Date(school.debutCampagne);
                           const endDate = new Date(school.finCampagne);
-                          
+
                           if (today < startDate) return "bg-blue-500";
                           if (today >= startDate && today <= endDate) return "bg-green-500";
                           return "bg-gray-500";
@@ -1321,7 +1321,7 @@ const handleCopy = (code) => {
                           const today = new Date();
                           const startDate = new Date(school.debutCampagne);
                           const endDate = new Date(school.finCampagne);
-                          
+
                           if (today < startDate) return "À venir";
                           if (today >= startDate && today <= endDate) return "Active";
                           return "Terminée";
@@ -1364,13 +1364,13 @@ const handleCopy = (code) => {
 
                   {/* Create New Campaign Button */}
                   <div className="flex justify-end">
-      <Button 
+                    <Button
                       onClick={() => setActiveTab('create-campaign')}
                       className="bg-blue-600 hover:bg-blue-700"
-      >
+                    >
                       <Calendar className="mr-2 h-4 w-4" />
                       Créer une nouvelle campagne
-      </Button>
+                    </Button>
                   </div>
 
                   {/* Campaign History */}
@@ -1407,7 +1407,7 @@ const handleCopy = (code) => {
                                     {new Date(campaign.startDate).toLocaleDateString('fr-CA')} - {new Date(campaign.endDate).toLocaleDateString('fr-CA')}
                                   </p>
                                   <p className="text-sm text-gray-500">
-                                    Objectif: {campaign.financialGoal?.toLocaleString()}$ | 
+                                    Objectif: {campaign.financialGoal?.toLocaleString()}$ |
                                     Répartition: {campaign.profitSplitType === 'percentage' ? 'Pourcentage' : 'Valeur absolue'}
                                   </p>
                                   {campaign.rejectionReason && (
@@ -1454,8 +1454,8 @@ const handleCopy = (code) => {
                     </div>
                   </div>
                 </div>
-    </CardContent>
-  </Card>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Create Campaign Tab */}
@@ -1479,7 +1479,7 @@ const handleCopy = (code) => {
                         name="startDate"
                         required
                       />
-            </div>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Date de fin
@@ -1491,7 +1491,7 @@ const handleCopy = (code) => {
                       />
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Date de livraison
@@ -1579,15 +1579,15 @@ const handleCopy = (code) => {
                   </div>
 
                   <div className="flex justify-end space-x-4">
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       onClick={() => setActiveTab('campaigns')}
                     >
                       Annuler
                     </Button>
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       className="bg-blue-600 hover:bg-blue-700"
                       disabled={isCreatingCampaign}
                     >
@@ -1614,7 +1614,7 @@ const handleCopy = (code) => {
                     <Input
                       placeholder="Rechercher un élève..."
                       className="w-full sm:w-64"
-                      // Implement search functionality as needed
+                    // Implement search functionality as needed
                     />
                     <Button variant="outline" size="icon">
                       <Search className="h-4 w-4" />
@@ -1636,79 +1636,79 @@ const handleCopy = (code) => {
                     </p>
                   </div>
                 ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nom</TableHead>
-                        <TableHead>Montant amassé</TableHead>
-                        <TableHead>Objectif</TableHead>
-                        <TableHead>Ventes</TableHead>
-                        <TableHead>Progression</TableHead>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nom</TableHead>
+                          <TableHead>Montant amassé</TableHead>
+                          <TableHead>Objectif</TableHead>
+                          <TableHead>Ventes</TableHead>
+                          <TableHead>Progression</TableHead>
                           <TableHead>Statut</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {participants
                           .sort((a, b) => b.raised - a.raised)
                           .map((participant) => {
                             const progress = (participant.raised / participant.goal) * 100;
                             const isGoalReached = progress >= 100;
                             const isCloseToGoal = progress >= 75;
-                            
+
                             return (
-                        <TableRow key={participant.id}>
-                          <TableCell className="font-medium">
+                              <TableRow key={participant.id}>
+                                <TableCell className="font-medium">
                                   <div className="flex items-center">
                                     <Avatar className="h-8 w-8 mr-3">
                                       <AvatarFallback className="text-xs">
                                         {participant.name.charAt(0)}
                                       </AvatarFallback>
                                     </Avatar>
-                            {participant.name}
+                                    {participant.name}
                                   </div>
-                          </TableCell>
-                          <TableCell>
+                                </TableCell>
+                                <TableCell>
                                   <span className="font-semibold">
-                            {participant.raised.toLocaleString()}$
+                                    {participant.raised.toLocaleString()}$
                                   </span>
-                          </TableCell>
-                          <TableCell>
-                            {participant.goal.toLocaleString()}$
-                          </TableCell>
-                          <TableCell>
+                                </TableCell>
+                                <TableCell>
+                                  {participant.goal.toLocaleString()}$
+                                </TableCell>
+                                <TableCell>
                                   <span className="font-medium">{participant.sales}</span>
                                   <span className="text-sm text-gray-500 ml-1">unités</span>
                                 </TableCell>
                                 <TableCell>
                                   <div className="space-y-1">
-                            <Progress
+                                    <Progress
                                       value={progress}
-                              className="w-full sm:w-32"
-                            />
+                                      className="w-full sm:w-32"
+                                    />
                                     <p className="text-xs text-gray-500">
                                       {progress.toFixed(1)}%
                                     </p>
                                   </div>
                                 </TableCell>
                                 <TableCell>
-                                  <Badge 
+                                  <Badge
                                     variant={isGoalReached ? "default" : isCloseToGoal ? "secondary" : "outline"}
                                     className={
-                                      isGoalReached ? "bg-green-500" : 
-                                      isCloseToGoal ? "bg-yellow-500" : ""
+                                      isGoalReached ? "bg-green-500" :
+                                        isCloseToGoal ? "bg-yellow-500" : ""
                                     }
                                   >
-                                    {isGoalReached ? "Objectif atteint" : 
-                                     isCloseToGoal ? "Proche de l'objectif" : "En cours"}
+                                    {isGoalReached ? "Objectif atteint" :
+                                      isCloseToGoal ? "Proche de l'objectif" : "En cours"}
                                   </Badge>
-                          </TableCell>
-                        </TableRow>
+                                </TableCell>
+                              </TableRow>
                             );
                           })}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1879,7 +1879,7 @@ const handleCopy = (code) => {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              
+
               <form className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1900,7 +1900,7 @@ const handleCopy = (code) => {
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="editAddress">Adresse</Label>
                   <Input
@@ -1909,7 +1909,7 @@ const handleCopy = (code) => {
                     className="mt-1"
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="editTelephone">Téléphone</Label>
@@ -1930,7 +1930,7 @@ const handleCopy = (code) => {
                     <p className="text-xs text-gray-500 mt-1">Le code ne peut pas être modifié</p>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-end space-x-3 pt-4">
                   <Button
                     variant="outline"
@@ -1963,7 +1963,7 @@ const handleCopy = (code) => {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              
+
               <form className="space-y-6">
                 <div>
                   <Label htmlFor="editProfitSplitType">Type de répartition</Label>
@@ -2026,7 +2026,7 @@ const handleCopy = (code) => {
                     />
                   </div>
                 </div>
-                
+
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-800">
                     <strong>Total:</strong> {(editingCampaign.profitSplit?.studentBenefit + editingCampaign.profitSplit?.organizationBenefit + editingCampaign.profitSplit?.raffleBenefit).toFixed(1)}%
@@ -2035,7 +2035,7 @@ const handleCopy = (code) => {
                     Les pourcentages doivent totaliser 100%
                   </p>
                 </div>
-                
+
                 <div className="flex justify-end space-x-3 pt-4">
                   <Button
                     variant="outline"
@@ -2185,77 +2185,77 @@ const handleCopy = (code) => {
                     <Percent className="h-5 w-5 text-blue-600" />
                     <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
                   </div>
-                  
-                  <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="editProfitSplitType">Type de répartition</Label>
-                    <Select 
-                      defaultValue={editingCampaign.profitSplitType} 
-                      name="profitSplitType"
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Sélectionnez le type de répartition" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">
-                          <div className="flex items-center space-x-2">
-                            <Percent className="h-4 w-4" />
-                            <span>Pourcentage par produit</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="absolute">
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="h-4 w-4" />
-                            <span>Valeur absolue par produit</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-4">
                     <div>
-                      <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
-                      <Input
-                        type="number"
-                        id="editStudentBenefit"
-                        name="studentBenefit"
-                        defaultValue={editingCampaign.profitSplit?.studentBenefit}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className="mt-1"
-                      />
+                      <Label htmlFor="editProfitSplitType">Type de répartition</Label>
+                      <Select
+                        defaultValue={editingCampaign.profitSplitType}
+                        name="profitSplitType"
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Sélectionnez le type de répartition" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="percentage">
+                            <div className="flex items-center space-x-2">
+                              <Percent className="h-4 w-4" />
+                              <span>Pourcentage par produit</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="absolute">
+                            <div className="flex items-center space-x-2">
+                              <DollarSign className="h-4 w-4" />
+                              <span>Valeur absolue par produit</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <div>
-                      <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
-                      <Input
-                        type="number"
-                        id="editOrganizationBenefit"
-                        name="organizationBenefit"
-                        defaultValue={editingCampaign.profitSplit?.organizationBenefit}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
-                      <Input
-                        type="number"
-                        id="editRaffleBenefit"
-                        name="raffleBenefit"
-                        defaultValue={editingCampaign.profitSplit?.raffleBenefit}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        className="mt-1"
-                      />
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="editStudentBenefit">Bénéfice étudiant (%)</Label>
+                        <Input
+                          type="number"
+                          id="editStudentBenefit"
+                          name="studentBenefit"
+                          defaultValue={editingCampaign.profitSplit?.studentBenefit}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="editOrganizationBenefit">Bénéfice organisation (%)</Label>
+                        <Input
+                          type="number"
+                          id="editOrganizationBenefit"
+                          name="organizationBenefit"
+                          defaultValue={editingCampaign.profitSplit?.organizationBenefit}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="editRaffleBenefit">Bénéfice tirage (%)</Label>
+                        <Input
+                          type="number"
+                          id="editRaffleBenefit"
+                          name="raffleBenefit"
+                          defaultValue={editingCampaign.profitSplit?.raffleBenefit}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          className="mt-1"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
               )}
 
               <div className="flex justify-end space-x-3 pt-4">
@@ -2318,8 +2318,8 @@ const handleCopy = (code) => {
                     <div>
                       <span className="text-sm font-medium">Répartition:</span>
                       <p className="text-sm">
-                        Étudiant: {reviewingCampaign.profitSplit?.studentBenefit}% | 
-                        Organisation: {reviewingCampaign.profitSplit?.organizationBenefit}% | 
+                        Étudiant: {reviewingCampaign.profitSplit?.studentBenefit}% |
+                        Organisation: {reviewingCampaign.profitSplit?.organizationBenefit}% |
                         Tirage: {reviewingCampaign.profitSplit?.raffleBenefit}%
                       </p>
                     </div>
@@ -2328,7 +2328,7 @@ const handleCopy = (code) => {
 
                 {/* Modified Values */}
                 <div className="space-y-4">
-                  <h4 className="font-semibold text-blue-700">Modifications proposées par Massibec</h4>
+                  <h4 className="font-semibold text-blue-700">Modifications proposées par Jappuie.ca</h4>
                   <div className="space-y-3 p-4 bg-blue-50 rounded-lg">
                     <div>
                       <span className="text-sm font-medium">Date de début:</span>
@@ -2349,8 +2349,8 @@ const handleCopy = (code) => {
                     <div>
                       <span className="text-sm font-medium">Répartition:</span>
                       <p className="text-sm">
-                        Étudiant: {reviewingCampaign.massibecModifications?.profitSplit?.studentBenefit}% | 
-                        Organisation: {reviewingCampaign.massibecModifications?.profitSplit?.organizationBenefit}% | 
+                        Étudiant: {reviewingCampaign.massibecModifications?.profitSplit?.studentBenefit}% |
+                        Organisation: {reviewingCampaign.massibecModifications?.profitSplit?.organizationBenefit}% |
                         Tirage: {reviewingCampaign.massibecModifications?.profitSplit?.raffleBenefit}%
                       </p>
                     </div>

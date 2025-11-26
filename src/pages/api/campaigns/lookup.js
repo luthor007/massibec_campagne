@@ -19,14 +19,14 @@ export default async function handler(req, res) {
 
     // Validate campaign code format
     if (!isValidCampaignCodeFormat(code)) {
-      return res.status(400).json({ 
-        message: 'Invalid campaign code format. Expected format: XXXXXX-CX' 
+      return res.status(400).json({
+        message: 'Invalid campaign code format. Expected format: XXXXXX-CX'
       });
     }
 
     // Find campaign by code
     const campaign = await Campaign.findOne({ campaignCode: code })
-      .populate('school', 'name code address ville codePostal')
+      .populate('school', 'name code address ville codePostal logo')
       .populate('customPrices.productId', 'name description price cost image');
 
     if (!campaign) {
@@ -45,7 +45,8 @@ export default async function handler(req, res) {
           code: campaign.school.code,
           address: campaign.school.address,
           ville: campaign.school.ville,
-          codePostal: campaign.school.codePostal
+          codePostal: campaign.school.codePostal,
+          logo: campaign.school.logo
         },
         startDate: campaign.startDate,
         endDate: campaign.endDate,
@@ -54,14 +55,15 @@ export default async function handler(req, res) {
         status: campaign.status,
         isActive: campaign.isActive,
         customPrices: campaign.customPrices,
-        notes: campaign.notes
+        notes: campaign.notes,
+        groups: campaign.groups || { enabled: false, list: [] }
       },
       canJoin: ['approved', 'active', 'pending_approval', 'pending_school_approval'].includes(campaign.status),
       statusMessage: campaign.status === 'pending_approval' ? 'Campaign en attente d\'approbation (mode test)' :
-                    campaign.status === 'pending_school_approval' ? 'Campaign en attente d\'approbation école (mode test)' :
-                    campaign.status === 'rejected' ? 'Campaign has been rejected' :
-                    campaign.status === 'completed' ? 'Campaign has ended' :
-                    'Campaign is available'
+        campaign.status === 'pending_school_approval' ? 'Campaign en attente d\'approbation école (mode test)' :
+          campaign.status === 'rejected' ? 'Campaign has been rejected' :
+            campaign.status === 'completed' ? 'Campaign has ended' :
+              'Campaign is available'
     });
 
   } catch (error) {

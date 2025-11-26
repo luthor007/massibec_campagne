@@ -20,6 +20,23 @@ You can start editing the page by modifying `app/page.js`. The page auto-updates
 
 This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
 
+## Environment Variables
+
+### Scraping Cache
+
+The scraping cache system stores previously scraped supplier website data to speed up registration for the same URLs.
+
+- **`ENABLE_SCRAPING_CACHE`** (default: `true`): Enable or disable the scraping cache
+  - Set to `false` to disable caching (always scrape fresh data)
+  - Set to `true` or omit to enable caching (use cached data when available)
+  - Example: `ENABLE_SCRAPING_CACHE=false` in `.env.local`
+
+When enabled, the cache:
+- Stores company information and sample products for each scraped URL
+- Automatically expires entries after 30 days
+- Returns cached data if available and less than 7 days old
+- Falls back to fresh scraping if cache is stale or missing
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

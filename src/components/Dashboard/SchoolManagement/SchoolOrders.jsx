@@ -93,7 +93,7 @@ const SchoolOrders = ({ schoolId, school }) => {
   const [expNum, setExpNum] = useState('');
   const [accumba, setAccumba] = useState('');
   const [pendingExportCallback, setPendingExportCallback] = useState(null);
-  
+
   const [filters, setFilters] = useState({
     studentName: '',
     orderIdFrom: '',
@@ -102,7 +102,7 @@ const SchoolOrders = ({ schoolId, school }) => {
     dateTo: '',
     email: ''
   });
-  
+
   // Add filtered orders state
   const [filteredOrders, setFilteredOrders] = useState([]);
 
@@ -117,7 +117,7 @@ const SchoolOrders = ({ schoolId, school }) => {
         throw new Error('Failed to fetch orders.');
       }
       const data = await response.json();
-      
+
       // Fetch parent names for all orders
       const ordersWithParentNames = await Promise.all(
         data.orders.map(async (order) => {
@@ -134,13 +134,15 @@ const SchoolOrders = ({ schoolId, school }) => {
           const userResponse = await fetch(`/api/users/by-email?email=${order.email}`);
           if (userResponse.ok) {
             const userData = await userResponse.json();
+            // Use parentInfo name if available, otherwise use user's name as fallback
+            const parentName = userData.parentInfo?.prenomParent && userData.parentInfo?.nomParent
+              ? `${userData.parentInfo.prenomParent} ${userData.parentInfo.nomParent}`
+              : userData.name || 'N/A';
             return {
               ...plainOrder,
               campaignNumber: orderCampaignNumber != null ? String(orderCampaignNumber) : 'N/A',
               campaignEndDate,
-              parentName: userData.parentInfo ? 
-                `${userData.parentInfo.prenomParent} ${userData.parentInfo.nomParent}` : 
-                'N/A'
+              parentName
             };
           }
           return {
@@ -151,7 +153,7 @@ const SchoolOrders = ({ schoolId, school }) => {
           };
         })
       );
-      
+
       setOrders(ordersWithParentNames);
     } catch (error) {
       setErrorOrders(error.message);
@@ -174,7 +176,7 @@ const SchoolOrders = ({ schoolId, school }) => {
 
     // Get all unique product names and sort them
     const uniqueProducts = [...new Set(
-      filteredOrders.flatMap(order => 
+      filteredOrders.flatMap(order =>
         order.products.map(product => product.productName)
       )
     )].sort();
@@ -183,7 +185,7 @@ const SchoolOrders = ({ schoolId, school }) => {
     const standardHeaders = AVAILABLE_COLUMNS
       .filter(col => selectedColumns.includes(col.key))
       .map(col => col.label);
-    
+
     const productHeaders = uniqueProducts.map(name => `Quantity - ${name}`);
     const headers = [...standardHeaders, ...productHeaders];
 
@@ -224,7 +226,7 @@ const SchoolOrders = ({ schoolId, school }) => {
       });
 
       // Get quantities for each product in the same order as uniqueProducts
-      const productQuantities = uniqueProducts.map(productName => 
+      const productQuantities = uniqueProducts.map(productName =>
         productQuantityMap.get(productName) || 0
       );
 
@@ -234,7 +236,7 @@ const SchoolOrders = ({ schoolId, school }) => {
     // Generate CSV content
     let csvContent = 'data:text/csv;charset=utf-8,';
     csvContent += headers.join(',') + '\n';
-    
+
     rows.forEach(rowArray => {
       const formattedRow = rowArray.map(field => {
         if (field === null || field === undefined) return '';
@@ -307,7 +309,7 @@ const SchoolOrders = ({ schoolId, school }) => {
   // In the table display, aggregate products for the expanded view
   const getAggregatedProducts = (products) => {
     const productMap = new Map();
-    
+
     products.forEach(product => {
       if (productMap.has(product.productName)) {
         const existing = productMap.get(product.productName);
@@ -337,7 +339,7 @@ const SchoolOrders = ({ schoolId, school }) => {
 
       // Remove the order from the local state
       setOrders(orders.filter(order => order._id !== orderId));
-      
+
       toast({
         title: 'Order deleted successfully',
       });
@@ -439,7 +441,7 @@ const SchoolOrders = ({ schoolId, school }) => {
             </div>
           </div>
         </div>
-        <Button 
+        <Button
           className="mt-4"
           onClick={applyFilters}
         >
@@ -453,32 +455,32 @@ const SchoolOrders = ({ schoolId, school }) => {
     let filtered = [...orders];
 
     if (filters.studentName) {
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         order.studentName.toLowerCase().includes(filters.studentName.toLowerCase())
       );
     }
 
     if (filters.email) {
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         order.email.toLowerCase().includes(filters.email.toLowerCase())
       );
     }
 
     if (filters.orderIdFrom) {
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         order.orderId >= parseInt(filters.orderIdFrom)
       );
     }
 
     if (filters.orderIdTo) {
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         order.orderId <= parseInt(filters.orderIdTo)
       );
     }
 
     if (filters.dateFrom) {
       const fromDate = new Date(filters.dateFrom);
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         new Date(order.timestamp) >= fromDate
       );
     }
@@ -486,7 +488,7 @@ const SchoolOrders = ({ schoolId, school }) => {
     if (filters.dateTo) {
       const toDate = new Date(filters.dateTo);
       toDate.setHours(23, 59, 59);
-      filtered = filtered.filter(order => 
+      filtered = filtered.filter(order =>
         new Date(order.timestamp) <= toDate
       );
     }
@@ -517,7 +519,7 @@ const SchoolOrders = ({ schoolId, school }) => {
       setPendingExportCallback(() => school);
       return;
     }
-    
+
     await continueExport(school);
   };
 
@@ -526,7 +528,7 @@ const SchoolOrders = ({ schoolId, school }) => {
       sonnerToast.error('Veuillez remplir tous les champs');
       return;
     }
-    
+
     try {
       // Update school with new information
       await fetch(`/api/schools/${schoolId}`, {
@@ -534,15 +536,15 @@ const SchoolOrders = ({ schoolId, school }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ expNum, accumba })
       });
-      
+
       // Get updated school data
       const schoolResponse = await fetch(`/api/schools/${schoolId}`);
       const school = await schoolResponse.json();
-      
+
       school.expNum = expNum;
       school.accumba = accumba;
       setShowExpDialog(false);
-      
+
       // Continue with export
       await continueExport(school);
       setPendingExportCallback(null);
@@ -577,7 +579,7 @@ const SchoolOrders = ({ schoolId, school }) => {
       return order.products.map((product, lineIndex) => {
         // Get the product ID from the mapping
         const productId = PRODUCT_MAPPING[product.productName] || 'N/A';
-        
+
         if (productId === 'N/A') {
           console.warn(`No mapping found for product: ${product.productName}`);
           return null;
@@ -622,7 +624,7 @@ const SchoolOrders = ({ schoolId, school }) => {
 
     let csvContent = 'data:text/csv;charset=utf-8,';
     csvContent += headers.join('|') + '\n';
-    
+
     rows.forEach(row => {
       const rowContent = headers.map(header => row[header] || '').join('|');
       csvContent += rowContent + '\n';
@@ -654,15 +656,15 @@ const SchoolOrders = ({ schoolId, school }) => {
       });
 
       if (!response.ok) throw new Error('Failed to update order');
-      
+
       // Update local state
-      setOrders(orders.map(order => 
+      setOrders(orders.map(order =>
         order._id === orderId ? { ...order, products: updatedProducts } : order
       ));
-      
+
       toast({ title: 'Order updated successfully' });
     } catch (error) {
-      toast({ 
+      toast({
         title: 'Error updating order',
         variant: 'destructive'
       });
@@ -673,7 +675,7 @@ const SchoolOrders = ({ schoolId, school }) => {
   // Add this new component for editing products
   const EditProductsForm = ({ products, onSave, productMapping }) => {
     const [editedProducts, setEditedProducts] = useState(products);
-    
+
     const addProduct = () => {
       setEditedProducts([...editedProducts, {
         productName: Object.keys(productMapping)[0],
@@ -751,7 +753,7 @@ const SchoolOrders = ({ schoolId, school }) => {
         </div>
       </div>
 
-      <FilterSection 
+      <FilterSection
         filters={filters}
         setFilters={setFilters}
         applyFilters={applyFilters}
@@ -885,7 +887,7 @@ const SchoolOrders = ({ schoolId, school }) => {
           </Table>
         </div>
       )}
-      
+
       {/* Dialog for Exp and Accumba numbers */}
       <Dialog open={showExpDialog} onOpenChange={setShowExpDialog}>
         <DialogContent>
@@ -926,7 +928,7 @@ const SchoolOrders = ({ schoolId, school }) => {
   );
 };
 
-export default SchoolOrders; 
+export default SchoolOrders;
 
 
 {/*

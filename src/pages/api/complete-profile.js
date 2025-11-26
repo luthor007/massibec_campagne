@@ -29,9 +29,7 @@ export default async function handler(req, res) {
         deliveryInstructions,
         distributionLocation,
         titreOuFonction,
-        telephone,
-        cellulaire,
-        momentPourJoindre
+        telephone
       } = req.body;
 
       // Validate organizationType
@@ -64,7 +62,7 @@ export default async function handler(req, res) {
             ]
           });
           logoPublicId = uploadResult.public_id;
-          
+
           // Delete old logo if it exists
           if (school.logo && school.logo.startsWith('school-logo/')) {
             try {
@@ -89,7 +87,7 @@ export default async function handler(req, res) {
         organizationType: organizationType,
         profileCompleted: true
       };
-      
+
       // Add optional fields if provided
       if (emailEcole) {
         schoolUpdateData.email = emailEcole;
@@ -109,20 +107,20 @@ export default async function handler(req, res) {
       if (distributionLocation) {
         schoolUpdateData.distributionLocation = distributionLocation;
       }
-      
+
       console.log('Updating school with data:', {
         schoolId: school._id,
         name: schoolUpdateData.name,
         organizationType: schoolUpdateData.organizationType,
         profileCompleted: schoolUpdateData.profileCompleted
       });
-      
+
       const updatedSchool = await School.findByIdAndUpdate(
-        school._id, 
+        school._id,
         schoolUpdateData,
         { new: true } // Return the updated document
       );
-      
+
       console.log('School updated successfully:', {
         schoolId: updatedSchool._id,
         name: updatedSchool.name,
@@ -133,8 +131,6 @@ export default async function handler(req, res) {
       await User.findByIdAndUpdate(userId, {
         'schoolManagerInfo.titreOuFonction': titreOuFonction,
         'schoolManagerInfo.telephone': telephone,
-        'schoolManagerInfo.cellulaire': cellulaire,
-        'schoolManagerInfo.momentPourJoindre': momentPourJoindre,
         profileCompleted: true,
         profileCompletionPercentage: 100
       });
@@ -146,7 +142,7 @@ export default async function handler(req, res) {
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
 
-      res.status(200).json({ 
+      res.status(200).json({
         message: 'Profil complété avec succès',
         profileCompleted: true
       });

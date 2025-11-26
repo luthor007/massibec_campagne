@@ -34,3 +34,54 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python (exclude cache and compiled files, but keep source files)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# firecrawl (large dependency, not needed in Docker build)
+firecrawl/
+
+# specstory (test/cache files)
+.specstory/
+
+# assets (scraped images, can be regenerated)
+assets/scraped-images/
+
+# large data files
+*.csv
+scraped_data.json
+converted_orders.csv
+fichier_commande_*.csv
+
+# cursor
+.cursor/
+
+# git
+.git/
+.gitignore
+.gitmodules
+
+# fly.io
+.fly/
+
+# documentation (not needed in production)
+*.md
+!README.md
+
+# scripts (keep essential scripts and scraper, exclude cache)
+scripts/__pycache__/
+# Explicitly include scraper files (needed for supplier scraping)
+!scripts/scraper/
+!scripts/scraper/**/*.py
+!scripts/requirements-scraper.txt

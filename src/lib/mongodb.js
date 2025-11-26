@@ -20,12 +20,8 @@ async function dbConnect() {
   }
 
   if (!cached.promise) {
-    const opts = {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    };
-
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+    // Remove deprecated options (no longer needed in mongoose 6+)
+    cached.promise = mongoose.connect(MONGODB_URI).then((mongoose) => {
       return mongoose;
     });
   }

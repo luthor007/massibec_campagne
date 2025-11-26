@@ -26,7 +26,7 @@ export interface IOrder extends Document {
   customerName: string;
   customerEmail: string;
   phoneNumber: string;
-  status: 'En attente' | 'Payé' | 'Commander' | 'Complété';
+  status: 'En attente' | 'Payé' | 'Commandé' | 'Complété';
   createdAt: Date;
   orderId: string;
   tip?: number;
@@ -53,7 +53,7 @@ const OrderSchema: Schema = new Schema({
   customerName: { type: String, required: true },
   customerEmail: { type: String, required: true },
   phoneNumber: { type: String, required: true },
-  status: { type: String, enum: ['En attente', 'Payé', 'Commander', 'Complété'], default: 'En attente' },
+  status: { type: String, enum: ['En attente', 'Payé', 'Commandé', 'Complété'], default: 'En attente' },
   createdAt: { type: Date, default: Date.now },
   orderId: { type: String },
   tip: { type: Number },

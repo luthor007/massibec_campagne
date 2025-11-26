@@ -4,7 +4,7 @@ export default function NousJoindre() {
   return (
     <div className="bg-gray-100 p-6 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4">Nous Joindre</h2>
-      
+
       {/* Adresse */}
       <div className="flex items-center mb-4">
         <MapPin className="mr-2 h-5 w-5 text-primary" />
@@ -29,8 +29,8 @@ export default function NousJoindre() {
         <div>
           <p className="font-semibold">Courriel:</p>
           <p>
-            <a href="mailto:louis@massibec.com" className="text-blue-600 hover:underline">
-              louis@massibec.com
+            <a href="mailto:contact@jappuie.ca" className="text-blue-600 hover:underline">
+              contact@jappuie.ca
             </a>
           </p>
         </div>

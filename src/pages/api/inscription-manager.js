@@ -32,7 +32,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       console.log('Starting inscription-manager API call');
-      
+
       // Connect to the database
       await dbConnect();
       console.log('Database connected successfully');
@@ -91,13 +91,11 @@ export default async function handler(req, res) {
         email,
         motDePasse,
         telephone,
-        cellulaire,
         organisme,
         titreOuFonction,
         ville,
         codePostal,
         adresse,
-        momentPourJoindre,
         preferredPaymentMethod,
         deliveryInstructions
       } = req.body;
@@ -119,34 +117,32 @@ export default async function handler(req, res) {
         ville: sanitizeString(ville),
         codePostal: sanitizeString(codePostal),
         telephone: sanitizeString(telephone),
-        cellulaire: sanitizeString(cellulaire),
-        momentPourJoindre: sanitizeString(momentPourJoindre)
       };
 
       // Validate required fields
       if (!organisme || !adresse) {
-        return res.status(400).json({ 
-          message: 'Le nom de l\'école et l\'adresse sont requis' 
+        return res.status(400).json({
+          message: 'Le nom de l\'école et l\'adresse sont requis'
         });
       }
 
       // Additional validation for string fields
       const sanitizedOrganisme = sanitizeString(organisme);
       const sanitizedAddress = sanitizeString(adresse);
-      
+
       if (!sanitizedOrganisme || sanitizedOrganisme.trim().length === 0 || sanitizedOrganisme.length > 200) {
-        return res.status(400).json({ 
-          message: 'Le nom de l\'école doit contenir entre 1 et 200 caractères' 
-        });
-      }
-      
-      if (!sanitizedAddress || sanitizedAddress.trim().length === 0 || sanitizedAddress.length > 200) {
-        return res.status(400).json({ 
-          message: 'L\'adresse doit contenir entre 1 et 200 caractères' 
+        return res.status(400).json({
+          message: 'Le nom de l\'école doit contenir entre 1 et 200 caractères'
         });
       }
 
-      // Create a new School (without initial campaign)
+      if (!sanitizedAddress || sanitizedAddress.trim().length === 0 || sanitizedAddress.length > 200) {
+        return res.status(400).json({
+          message: 'L\'adresse doit contenir entre 1 et 200 caractères'
+        });
+      }
+
+      // Create a new School (without initial campaign, auto-approved)
       const newSchool = new School({
         name: sanitizedOrganisme.trim(),
         address: sanitizedAddress.trim(),
@@ -159,7 +155,8 @@ export default async function handler(req, res) {
         deliveryInstructions: sanitizeString(deliveryInstructions), // Add delivery instructions
         currentCampaignNumber: 0, // No campaigns initially
         campaigns: [], // Empty campaigns array
-        approved: false
+        approved: true, // Auto-approved
+        status: 'approved' // Auto-approved
       });
 
       // Save with error handling for encoding issues
@@ -167,15 +164,15 @@ export default async function handler(req, res) {
         await newSchool.save();
       } catch (saveError) {
         console.error('Error saving school:', saveError);
-        
+
         if (saveError.message && saveError.message.includes('Invalid UTF-8')) {
-          return res.status(400).json({ 
-            message: 'Les données contiennent des caractères invalides. Veuillez utiliser uniquement des caractères de texte standard.' 
+          return res.status(400).json({
+            message: 'Les données contiennent des caractères invalides. Veuillez utiliser uniquement des caractères de texte standard.'
           });
         }
-        
-        return res.status(500).json({ 
-          message: 'Erreur lors de la création de l\'école. Veuillez vérifier que toutes les données sont valides.' 
+
+        return res.status(500).json({
+          message: 'Erreur lors de la création de l\'école. Veuillez vérifier que toutes les données sont valides.'
         });
       }
 
@@ -225,15 +222,12 @@ export default async function handler(req, res) {
       // No need to create duplicate products for each school
 
       const verificationUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${verificationToken}`;
-      
+
       // Confirmation d'inscription de l'école
-      // À: responsable, CC: commande@massibec.com
-      // De: Campagne Massibec <commande@massibec.com>
-      // Objet: Inscription (École xyz) Campagne Massibec
       await sendVerificationEmail({
         to: sanitizedEmail,
-        cc: 'commande@massibec.com',
-        subject: `Inscription (${sanitizedName}) Campagne Massibec`,
+        cc: 'alexis@jappuie.ca',
+        subject: `Inscription (${sanitizedName}) Jappuie`,
         firstName: sanitizedName.split(' ')[0],
         verificationUrl,
       });
@@ -244,29 +238,29 @@ export default async function handler(req, res) {
     } catch (error) {
       // Handle any errors
       console.error('Error during inscription:', error);
-      
+
       // Return more specific error information
       if (error.message === 'Only image files are allowed') {
         return res.status(400).json({ message: error.message });
       }
-      
+
       // Check for specific error types
       if (error.name === 'ValidationError') {
-        return res.status(400).json({ 
-          message: 'Erreur de validation des données', 
-          details: error.message 
+        return res.status(400).json({
+          message: 'Erreur de validation des données',
+          details: error.message
         });
       }
-      
+
       if (error.code === 11000) {
-        return res.status(400).json({ 
-          message: 'Cette adresse e-mail est déjà utilisée' 
+        return res.status(400).json({
+          message: 'Cette adresse e-mail est déjà utilisée'
         });
       }
-      
+
       // Generic error response
-      res.status(500).json({ 
-        message: 'Erreur interne du serveur', 
+      res.status(500).json({
+        message: 'Erreur interne du serveur',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Une erreur est survenue'
       });
     }

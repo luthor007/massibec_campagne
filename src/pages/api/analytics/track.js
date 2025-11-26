@@ -2,6 +2,8 @@ import dbConnect from '../../../lib/mongodb';
 import StoreVisit from '../../../models/StoreVisit';
 import ConversionEvent from '../../../models/ConversionEvent';
 import Store from '../../../models/Store';
+import FunnelEvent from '../../../models/FunnelEvent';
+import User from '../../../models/User';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../auth/[...nextauth]';
 import mongoose from 'mongoose';
@@ -22,6 +24,7 @@ export default async function handler(req, res) {
       userId,
       sessionId,
       deviceType,
+      source,
       metadata = {}
     } = req.body;
 
@@ -152,6 +155,43 @@ export default async function handler(req, res) {
 
     await conversionEvent.save();
 
+    // Determine funnel user type
+    let userTypeForFunnel = 'anonymous';
+    if (finalUserId) {
+      try {
+        const user = await User.findById(finalUserId).select('role');
+        if (user?.role === 'student') {
+          userTypeForFunnel = 'student';
+        } else if (user?.role === 'school_manager') {
+          userTypeForFunnel = 'school';
+        } else if (user?.role === 'supplier') {
+          userTypeForFunnel = 'supplier';
+        }
+      } catch (error) {
+        console.warn('Unable to resolve user type for funnel tracking:', error.message);
+      }
+    }
+
+    // Record funnel event for analytics dashboard
+    try {
+      await FunnelEvent.create({
+        eventType,
+        userType: userTypeForFunnel,
+        userId: finalUserId || null,
+        sessionId,
+        metadata: {
+          ...metadata,
+          storeId: finalStoreId,
+          campaignId,
+          schoolId,
+          deviceType: finalDeviceType,
+          source
+        }
+      });
+    } catch (error) {
+      console.error('Error recording funnel event for conversion tracking:', error);
+    }
+
     // Also create/store visit if it's a visit event
     if (eventType === 'visit') {
       // Check if visit already exists for this session (avoid duplicates)
@@ -164,6 +204,10 @@ export default async function handler(req, res) {
       });
 
       if (!existingVisit) {
+        // Normalize source - validate against enum values
+        const validSources = ['qr', 'facebook', 'instagram', 'twitter', 'email', 'direct', 'link', 'other', 'unknown'];
+        const normalizedSource = source && validSources.includes(source) ? source : 'unknown';
+
         const storeVisit = new StoreVisit({
           storeId: finalStoreId,
           userId: finalUserId || null,
@@ -173,7 +217,8 @@ export default async function handler(req, res) {
           deviceType: finalDeviceType,
           location,
           userAgent,
-          ip
+          ip,
+          source: normalizedSource
         });
 
         await storeVisit.save();

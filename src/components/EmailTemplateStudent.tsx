@@ -58,10 +58,14 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
         </p>
       )}
 
-      {autoDeposit ? null : <strong>La réponse à la question de sécurité est le courriel du client.</strong>}
- 
+      {!autoDeposit && (
+        <p style={{ marginTop: '15px', padding: '10px', backgroundColor: '#fff3cd', borderLeft: '4px solid #ffc107' }}>
+          <strong>Note importante :</strong> Comme vous n'avez pas activé le dépôt automatique, vous devez utiliser <strong>Cmd-{orderId}</strong> comme réponse à la question de sécurité lors du transfert Interac.
+        </p>
+      )}
+
       <h3>Produits commandés :</h3>
-      
+
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
         <thead>
           <tr>
@@ -106,9 +110,9 @@ const EmailTemplate: React.FC<EmailTemplateProps> = ({
           </tr>
         </tbody>
       </table>
-      
+
       <p>
-      Merci pour votre engagement et continuez à vendre avec succès !
+        Merci pour votre engagement et continuez à vendre avec succès !
       </p>
     </div>
   );

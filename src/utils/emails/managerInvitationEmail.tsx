@@ -16,17 +16,17 @@ interface ManagerInvitationData {
   expiresIn: string;
 }
 
-const ManagerInvitationEmailTemplate = ({ 
-  schoolName, 
-  inviterName, 
-  role, 
-  invitationUrl, 
-  expiresIn 
+const ManagerInvitationEmailTemplate = ({
+  schoolName,
+  inviterName,
+  role,
+  invitationUrl,
+  expiresIn
 }: ManagerInvitationData) => {
   return (
-    <div style={{ 
-      fontFamily: 'Arial, sans-serif', 
-      maxWidth: '600px', 
+    <div style={{
+      fontFamily: 'Arial, sans-serif',
+      maxWidth: '600px',
       margin: '0 auto',
       backgroundColor: '#f8f9fa',
       padding: '20px'
@@ -39,14 +39,14 @@ const ManagerInvitationEmailTemplate = ({
       }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <img 
-            src="/images/logo_massibec.png" 
-            alt="Massibec" 
+          <img
+            src="/images/jappuie_logo.svg"
+            alt="Jappuie"
             style={{ height: '60px', marginBottom: '20px' }}
           />
-          <h1 style={{ 
-            color: '#2563eb', 
-            fontSize: '24px', 
+          <h1 style={{
+            color: '#2563eb',
+            fontSize: '24px',
             margin: '0',
             fontWeight: 'bold'
           }}>
@@ -56,36 +56,36 @@ const ManagerInvitationEmailTemplate = ({
 
         {/* Content */}
         <div style={{ marginBottom: '30px' }}>
-          <p style={{ 
-            fontSize: '16px', 
-            lineHeight: '1.6', 
+          <p style={{
+            fontSize: '16px',
+            lineHeight: '1.6',
             color: '#374151',
             marginBottom: '20px'
           }}>
             Bonjour,
           </p>
-          
-          <p style={{ 
-            fontSize: '16px', 
-            lineHeight: '1.6', 
+
+          <p style={{
+            fontSize: '16px',
+            lineHeight: '1.6',
             color: '#374151',
             marginBottom: '20px'
           }}>
-            <strong>{inviterName}</strong> vous invite à devenir <strong>{role}</strong> pour l'école <strong>{schoolName}</strong> sur la plateforme Massibec.
+            <strong>{inviterName}</strong> vous invite à devenir <strong>{role}</strong> pour l'école <strong>{schoolName}</strong> sur la plateforme Jappuie.
           </p>
 
-          <p style={{ 
-            fontSize: '16px', 
-            lineHeight: '1.6', 
+          <p style={{
+            fontSize: '16px',
+            lineHeight: '1.6',
             color: '#374151',
             marginBottom: '20px'
           }}>
             En acceptant cette invitation, vous pourrez :
           </p>
 
-          <ul style={{ 
-            fontSize: '16px', 
-            lineHeight: '1.6', 
+          <ul style={{
+            fontSize: '16px',
+            lineHeight: '1.6',
             color: '#374151',
             marginBottom: '20px',
             paddingLeft: '20px'
@@ -101,7 +101,7 @@ const ManagerInvitationEmailTemplate = ({
 
         {/* CTA Button */}
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <a 
+          <a
             href={invitationUrl}
             style={{
               backgroundColor: '#2563eb',
@@ -126,8 +126,8 @@ const ManagerInvitationEmailTemplate = ({
           padding: '15px',
           marginBottom: '20px'
         }}>
-          <p style={{ 
-            fontSize: '14px', 
+          <p style={{
+            fontSize: '14px',
             color: '#92400e',
             margin: '0',
             textAlign: 'center'
@@ -137,25 +137,25 @@ const ManagerInvitationEmailTemplate = ({
         </div>
 
         {/* Footer */}
-        <div style={{ 
-          borderTop: '1px solid #e5e7eb', 
+        <div style={{
+          borderTop: '1px solid #e5e7eb',
           paddingTop: '20px',
           textAlign: 'center'
         }}>
-          <p style={{ 
-            fontSize: '14px', 
+          <p style={{
+            fontSize: '14px',
             color: '#6b7280',
             margin: '0'
           }}>
             Si vous ne souhaitez pas accepter cette invitation, vous pouvez ignorer cet email.
           </p>
-          
-          <p style={{ 
-            fontSize: '14px', 
+
+          <p style={{
+            fontSize: '14px',
             color: '#6b7280',
             margin: '10px 0 0 0'
           }}>
-            Questions ? Contactez-nous à <a href="mailto:commande@massibec.com" style={{ color: '#2563eb' }}>commande@massibec.com</a>
+            Questions ? Contactez-nous à <a href="mailto:commande@jappuie.ca" style={{ color: '#2563eb' }}>commande@jappuie.ca</a>
           </p>
         </div>
       </div>
@@ -192,10 +192,10 @@ export const sendManagerInvitationEmail = async ({
     const msg = {
       to,
       from: {
-        email: 'commande@massibec.com',
-        name: 'Massibec'
+        email: 'commande@jappuie.ca',
+        name: 'Jappuie'
       },
-      subject: `Invitation à gérer ${schoolName} - Massibec`,
+      subject: `Invitation à gérer ${schoolName} - Jappuie`,
       html: emailHtml,
     };
 

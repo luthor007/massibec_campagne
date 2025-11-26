@@ -40,8 +40,8 @@ export default async function handler(req, res) {
       campaign.approvedBy = token.sub;
       campaign.approvedAt = new Date();
       campaign.isActive = true;
-      
-      // Clear any Massibec modifications when approved
+
+      // Clear any admin modifications when approved
       campaign.massibecModifications = undefined;
 
       // Update school's main campaign dates and info
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
       await school.save();
 
-      res.status(200).json({ 
+      res.status(200).json({
         message: 'Campagne approuvée avec succès',
         campaign: campaign
       });

@@ -7,13 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, FileText, Edit } from 'lucide-react';
+import { Download, FileText, Edit, Printer } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import html2canvas from 'html2canvas';
-import { generate } from '@pdfme/generator';
-import { createPosterTemplate, preparePosterInputs } from './posterTemplate';
 import { getFullStoreUrl } from '../../utils/storeUrlHelpers';
 import ImageUpload from '../ImageUpload';
 
@@ -63,9 +61,9 @@ const quillStyles = `
 const getDefaultMessage = (discountEnabled = true, boutiqueUrl = '') => {
   // Shorter, friendlier default message matching the template style with proper line breaks
   return `Salut! Je participe à la campagne de financement de mon école 🎓
-Commandez mes pâtés et tartes Massibec,
+Commandez mes produits Jappuie.ca,
 ils sont vraiment délicieux et à bon prix 😋
-Les profits aide mon école et mes activités!
+Les profits aident mon école et mes activités!
 Merci à l'avance :)`;
 };
 
@@ -103,15 +101,8 @@ export default function PDFGenerator({ storeInfo }) {
   const [previewProducts, setPreviewProducts] = useState([]);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
 
-  const [studentPhotoUrl, setStudentPhotoUrl] = useState(() => {
-    // Load from localStorage on init
-    if (typeof window !== 'undefined' && storeInfo?.storeId) {
-      const storageKey = `studentPhoto_${storeInfo.storeId}`;
-      const saved = localStorage.getItem(storageKey);
-      return saved || '';
-    }
-    return '';
-  });
+  const [studentPhotoUrl, setStudentPhotoUrl] = useState('');
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
   const [studentSchoolText, setStudentSchoolText] = useState(() => {
     // Load from localStorage on init
     if (typeof window !== 'undefined' && storeInfo?.storeId) {
@@ -128,6 +119,25 @@ export default function PDFGenerator({ storeInfo }) {
     const boutiqueUrl = storeInfo ? getFullStoreUrl(storeInfo) : '';
     return getDefaultMessage(discountEnabled, boutiqueUrl);
   });
+
+  // Load student photo from MongoDB on component mount
+  useEffect(() => {
+    const loadStudentPhoto = async () => {
+      try {
+        const response = await fetch('/api/users/photo');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.studentPhoto) {
+            setStudentPhotoUrl(data.studentPhoto);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading student photo:', error);
+      }
+    };
+
+    loadStudentPhoto();
+  }, []);
 
   useEffect(() => {
     // Set student name automatically from storeInfo
@@ -146,27 +156,13 @@ export default function PDFGenerator({ storeInfo }) {
       }
     }
 
-    // Set student photo if available (check localStorage first, then storeInfo)
+    // Load student school text from localStorage (for backward compatibility)
     if (storeInfo?.storeId && typeof window !== 'undefined') {
       const storageKey = `studentPhoto_${storeInfo.storeId}`;
-      const savedPhoto = localStorage.getItem(storageKey);
-
-      if (savedPhoto) {
-        setStudentPhotoUrl(savedPhoto);
-      } else if (storeInfo?.ownerImage || storeInfo?.studentImage) {
-        const photoUrl = storeInfo.ownerImage || storeInfo.studentImage;
-        setStudentPhotoUrl(photoUrl);
-        // Save to localStorage
-        localStorage.setItem(storageKey, photoUrl);
-      }
-
-      // Load student school text from localStorage
       const savedText = localStorage.getItem(`${storageKey}_text`);
       if (savedText && !studentSchoolText) {
         setStudentSchoolText(savedText);
       }
-    } else if (storeInfo?.ownerImage || storeInfo?.studentImage) {
-      setStudentPhotoUrl(storeInfo.ownerImage || storeInfo.studentImage);
     }
 
     // Update default message if discountEnabled changes or storeInfo changes
@@ -236,7 +232,9 @@ export default function PDFGenerator({ storeInfo }) {
         if (response.ok) {
           const data = await response.json();
           const fetchedProducts = Array.isArray(data.products) ? data.products : [];
+          // Filter out bundles - only include regular products
           const topProducts = fetchedProducts
+            .filter(p => !p.isBundle) // Exclude bundles from poster
             .map(p => ({ ...p, order: p.order || 0 }))
             .sort((a, b) => (a.order || 0) - (b.order || 0))
             .slice(0, 4) // Show 4 products to match PNG output
@@ -262,7 +260,7 @@ export default function PDFGenerator({ storeInfo }) {
     const generatePreviewQR = async () => {
       if (storeInfo) {
         try {
-          const boutiqueUrl = getFullStoreUrl(storeInfo);
+          const boutiqueUrl = getFullStoreUrl(storeInfo, 'qr');
           const qrDataUrl = await QRCode.toDataURL(boutiqueUrl, {
             width: 200,
             margin: 1,
@@ -312,7 +310,9 @@ export default function PDFGenerator({ storeInfo }) {
         if (response.ok) {
           const data = await response.json();
           const fetchedProducts = Array.isArray(data.products) ? data.products : [];
+          // Filter out bundles - only include regular products
           const topProducts = fetchedProducts
+            .filter(p => !p.isBundle) // Exclude bundles from poster
             .map(p => ({ ...p, order: p.order || 0 }))
             .sort((a, b) => (a.order || 0) - (b.order || 0))
             .slice(0, 4)
@@ -557,11 +557,38 @@ export default function PDFGenerator({ storeInfo }) {
 
   const loadImage = (src) => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'Anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = src;
+      // If it's an SVG, convert it to a canvas first (jsPDF doesn't support SVG directly)
+      if (src.endsWith('.svg') || src.includes('.svg')) {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => {
+          // Use naturalWidth/naturalHeight for SVG dimensions
+          const width = img.naturalWidth || img.width || 200;
+          const height = img.naturalHeight || img.height || 200;
+
+          // Create a canvas to render the SVG
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert canvas to image
+          const canvasImg = new Image();
+          canvasImg.onload = () => resolve(canvasImg);
+          canvasImg.onerror = reject;
+          canvasImg.src = canvas.toDataURL('image/png');
+        };
+        img.onerror = reject;
+        img.src = src;
+      } else {
+        // For PNG/JPG, use the standard approach
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      }
     });
   };
 
@@ -626,113 +653,6 @@ export default function PDFGenerator({ storeInfo }) {
     }
   };
 
-  // Generate PDF with pdfme (professional approach)
-  const generatePDFWithPdfme = async () => {
-    if (!storeInfo) {
-      toast.error('Informations de la boutique non disponibles');
-      return;
-    }
-
-    setIsGenerating(true);
-
-    try {
-      // Generate QR code
-      const boutiqueUrl = getFullStoreUrl(storeInfo);
-      const qrCodeDataUrl = await QRCode.toDataURL(boutiqueUrl, {
-        width: 400,
-        margin: 1,
-        color: {
-          dark: '#1E3A8A', // Dark blue to match template
-          light: '#FFFFFF'
-        }
-      });
-
-      // Fetch products ordered by order field (top 3-4 products)
-      let products = [];
-      try {
-        // Get campaignId and schoolId from storeInfo to fetch products with correct prices
-        // campaignId is preferred as it's more reliable for getting custom prices
-        const campaignId = storeInfo?.campaignId;
-        const schoolId = storeInfo?.ownerSchool;
-
-        // Prefer campaignId over schoolId for custom pricing
-        const apiUrl = campaignId
-          ? `/api/products?limit=100&campaignId=${campaignId}`
-          : schoolId
-            ? `/api/products?limit=100&schoolId=${schoolId}`
-            : '/api/products?limit=100';
-
-        const response = await fetch(apiUrl);
-        if (response.ok) {
-          const data = await response.json();
-          const fetchedProducts = Array.isArray(data.products) ? data.products : [];
-          // Sort by order field and take top 4
-          products = fetchedProducts
-            .map(p => ({ ...p, order: p.order || 0 }))
-            .sort((a, b) => (a.order || 0) - (b.order || 0))
-            .slice(0, 4)
-            .map(p => ({
-              name: p.name || '',
-              price: p.price || 0, // Use sales price from API (already includes custom prices)
-              image: p.image || '/images/placeholder-product.svg'
-            }));
-        }
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        // Fallback to empty products array
-        products = [];
-      }
-
-      // Get student image URL (check if available in storeInfo or user data)
-      // For now, we'll use placeholder or empty string
-      // TODO: Add student image field to User model if needed
-      const studentImageUrl = storeInfo?.ownerImage || storeInfo?.studentImage || null;
-
-      // Convert HTML message to plain text for student text
-      const stripHtml = (html) => {
-        if (typeof window === 'undefined') return html;
-        const tmp = document.createElement('DIV');
-        tmp.innerHTML = html;
-        return tmp.textContent || tmp.innerText || '';
-      };
-      const studentText = stripHtml(richTextContent);
-
-      // Prepare inputs for pdfme
-      const posterInputs = await preparePosterInputs({
-        studentImageUrl,
-        studentName: customName,
-        studentText,
-        products,
-        qrCodeDataUrl,
-      });
-
-      // Create template (now async)
-      const template = await createPosterTemplate();
-
-      // Generate PDF
-      const pdf = await generate({ template, inputs: posterInputs });
-
-      // Download PDF
-      const blob = new Blob([pdf], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `affiche-${storeInfo.name || 'boutique'}.pdf`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      toast.success('Affiche PDF téléchargée avec succès!');
-      setIsGenerating(false);
-    } catch (error) {
-      console.error('Error generating PDF with pdfme:', error);
-      toast.error('Erreur lors de la génération du PDF: ' + (error.message || 'Erreur inconnue'));
-      setIsGenerating(false);
-    }
-  };
-
   // Helper function to convert HTML to plain text
   const stripHtml = (html) => {
     if (typeof window === 'undefined') return html;
@@ -742,23 +662,73 @@ export default function PDFGenerator({ storeInfo }) {
   };
 
   // Helper function to wrap text to fit within width
+  // Handles long words by breaking them if necessary
   const wrapText = (ctx, text, maxWidth) => {
+    if (!text || text.trim() === '') return [''];
+
     const words = text.split(' ');
     const lines = [];
-    let currentLine = words[0];
+    let currentLine = '';
 
-    for (let i = 1; i < words.length; i++) {
+    for (let i = 0; i < words.length; i++) {
       const word = words[i];
-      const width = ctx.measureText(currentLine + ' ' + word).width;
-      if (width < maxWidth) {
-        currentLine += ' ' + word;
+
+      // Check if the word itself is longer than maxWidth
+      const wordWidth = ctx.measureText(word).width;
+
+      if (wordWidth > maxWidth) {
+        // Word is too long, need to break it into characters
+        // First, push current line if it has content
+        if (currentLine) {
+          lines.push(currentLine);
+          currentLine = '';
+        }
+
+        // Break the long word into characters and build it up
+        let charLine = '';
+        for (let j = 0; j < word.length; j++) {
+          const char = word[j];
+          const testLine = charLine + char;
+          const testWidth = ctx.measureText(testLine).width;
+
+          if (testWidth <= maxWidth) {
+            charLine = testLine;
+          } else {
+            // Current charLine is full, push it and start new line
+            if (charLine) {
+              lines.push(charLine);
+            }
+            charLine = char;
+          }
+        }
+
+        // Add remaining characters as current line
+        if (charLine) {
+          currentLine = charLine;
+        }
       } else {
-        lines.push(currentLine);
-        currentLine = word;
+        // Word fits, try to add it to current line
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const testWidth = ctx.measureText(testLine).width;
+
+        if (testWidth <= maxWidth) {
+          currentLine = testLine;
+        } else {
+          // Current line is full, push it and start new line with this word
+          if (currentLine) {
+            lines.push(currentLine);
+          }
+          currentLine = word;
+        }
       }
     }
-    lines.push(currentLine);
-    return lines;
+
+    // Push remaining line
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines.length > 0 ? lines : [''];
   };
 
   // Helper function to draw speech bubble with tail
@@ -796,6 +766,467 @@ export default function PDFGenerator({ storeInfo }) {
   };
 
   // Generate PNG using template image
+  // Helper function to generate the poster canvas and return data URL
+  const generatePosterCanvasDataUrl = async () => {
+    if (!storeInfo) {
+      throw new Error('Informations de la boutique non disponibles');
+    }
+
+    // Template dimensions are fixed: 2550 x 3300 px
+    const templateWidth = 2550;
+    const templateHeight = 3300;
+
+    // Load template image and bubble image in parallel
+    const [templateImg, bubbleImg] = await Promise.all([
+      loadImage('/images/template_final_jappuie.png'),
+      loadImage('/images/icon_for_price.png')
+    ]);
+
+    // Create canvas with template dimensions
+    const canvas = document.createElement('canvas');
+    canvas.width = templateWidth;
+    canvas.height = templateHeight;
+    const ctx = canvas.getContext('2d');
+
+    // Draw template as base (scale if needed)
+    ctx.drawImage(templateImg, 0, 0, templateWidth, templateHeight);
+
+    // Fetch products ordered by order field (top 4)
+    let products = [];
+    try {
+      // Get campaignId and schoolId from storeInfo to fetch products with correct prices
+      // campaignId is preferred as it's more reliable for getting custom prices
+      const campaignId = storeInfo?.campaignId;
+      const schoolId = storeInfo?.ownerSchool;
+
+      // Prefer campaignId over schoolId for custom pricing
+      const apiUrl = campaignId
+        ? `/api/products?limit=100&campaignId=${campaignId}`
+        : schoolId
+          ? `/api/products?limit=100&schoolId=${schoolId}`
+          : '/api/products?limit=100';
+
+      const response = await fetch(apiUrl);
+      if (response.ok) {
+        const data = await response.json();
+        const fetchedProducts = Array.isArray(data.products) ? data.products : [];
+        // Filter out bundles - only include regular products
+        products = fetchedProducts
+          .filter(p => !p.isBundle) // Exclude bundles from poster
+          .map(p => ({ ...p, order: p.order || 0 }))
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .slice(0, 4)
+          .map(p => ({
+            name: p.name || '',
+            price: p.price || 0, // Use sales price from API (already includes custom prices)
+            image: p.image || '/images/placeholder-product.svg'
+          }));
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+
+    // Canvas dimensions (should match template dimensions)
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+
+    // Scale factor (should be 1.0 if template is correct)
+    const scaleX = canvasWidth / templateWidth;
+    const scaleY = canvasHeight / templateHeight;
+
+    // Helper function to scale coordinates
+    const scaleCoord = (coord, useX = true) => coord * (useX ? scaleX : scaleY);
+
+    // Product positions and sizes (exact coordinates from new template)
+    const productConfigs = [
+      // First product - Pâté à la viande
+      {
+        image: { x: 1218.9, y: 541.4, width: 845.8, height: 833.4 },
+        name: { x: 1476.3, y: 1397.8, width: 384.9, height: 62.5 },
+        // Bubble positioned to overlap top-right of product: product ends at ~2064, bubble starts at ~1850
+        bubble: { x: 1850, y: 470, width: 371.8, height: 239.5, rotation: 0 }
+      },
+      // Second product - Pâté au poulet
+      {
+        image: { x: 341.5, y: 1616.6, width: 571.1, height: 563.6 },
+        name: { x: 449.2, y: 2202.9, width: 355.7, height: 62.5 },
+        // Bubble positioned to overlap upper portion: product ends at ~912, bubble starts at ~750
+        bubble: { x: 750, y: 1550, width: 239.8, height: 154.4, rotation: -180 }
+      },
+      // Third product - Tarte au sucre à la crème
+      {
+        image: { x: 1034.3, y: 1616.6, width: 568.3, height: 563.6 },
+        name: { x: 997.9, y: 2204.9, width: 617.7, height: 62.5 },
+        // Bubble positioned to overlap upper portion: product ends at ~1602, bubble starts at ~1440
+        bubble: { x: 1440, y: 1550, width: 239.8, height: 154.4, rotation: -180 }
+      },
+      // Fourth product - Tarte aux framboises
+      {
+        image: { x: 1712.9, y: 1616.6, width: 568.3, height: 563.6 },
+        name: { x: 1737.6, y: 2202.9, width: 519.0, height: 62.5 },
+        // Bubble positioned to overlap upper portion: product ends at ~2281, bubble starts at ~2120
+        bubble: { x: 2120, y: 1550, width: 239.8, height: 154.4, rotation: -180 }
+      }
+    ];
+
+    // Draw products (4 products with bubbles)
+    for (let i = 0; i < Math.min(products.length, 4); i++) {
+      const product = products[i];
+      const config = productConfigs[i];
+
+      const baseWidth = config.image.width;
+      const baseHeight = config.image.height;
+
+      const baseDrawX = scaleCoord(config.image.x);
+      const baseDrawY = scaleCoord(config.image.y, false);
+      const baseDrawWidth = scaleCoord(baseWidth);
+      const baseDrawHeight = scaleCoord(baseHeight, false);
+
+      let productImg = null;
+      try {
+        productImg = await loadImage(product.image);
+      } catch (error) {
+        console.error(`Error loading product image for ${product.name}:`, error);
+      }
+
+      if (productImg) {
+        const imgAspectRatio = productImg.width / productImg.height;
+        let imgWidth = baseWidth;
+        let imgHeight = baseHeight;
+
+        if (imgAspectRatio > baseWidth / baseHeight) {
+          imgWidth = baseWidth;
+          imgHeight = baseWidth / imgAspectRatio;
+          if (imgHeight > baseHeight + 20) {
+            imgHeight = baseHeight + 20;
+            imgWidth = imgHeight * imgAspectRatio;
+          } else if (imgHeight < baseHeight - 20) {
+            imgHeight = baseHeight - 20;
+            imgWidth = imgHeight * imgAspectRatio;
+          }
+        } else {
+          imgHeight = baseHeight;
+          imgWidth = baseHeight * imgAspectRatio;
+          if (imgWidth > baseWidth + 20) {
+            imgWidth = baseWidth + 20;
+            imgHeight = imgWidth / imgAspectRatio;
+          } else if (imgWidth < baseWidth - 20) {
+            imgWidth = baseWidth - 20;
+            imgHeight = imgWidth / imgAspectRatio;
+          }
+        }
+
+        const centerXTemplate = config.image.x + baseWidth / 2;
+        const centerYTemplate = config.image.y + baseHeight / 2;
+        const finalImgXTemplate = centerXTemplate - imgWidth / 2;
+        const finalImgYTemplate = centerYTemplate - imgHeight / 2;
+
+        const finalImgX = scaleCoord(finalImgXTemplate);
+        const finalImgY = scaleCoord(finalImgYTemplate, false);
+        const scaledImgWidth = scaleCoord(imgWidth);
+        const scaledImgHeight = scaleCoord(imgHeight, false);
+
+        ctx.drawImage(productImg, finalImgX, finalImgY, scaledImgWidth, scaledImgHeight);
+      } else {
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fillRect(baseDrawX, baseDrawY, baseDrawWidth, baseDrawHeight);
+      }
+
+      // Draw product name below product image (rendered beneath bubble)
+      const nameX = scaleCoord(config.name.x);
+      const nameY = scaleCoord(config.name.y, false);
+      const nameWidth = scaleCoord(config.name.width);
+      const nameHeight = scaleCoord(config.name.height, false);
+
+      // Improved font styling: larger base size, better line height
+      // Top product gets larger font, others get consistent smaller size
+      let baseFontSize = i === 0 ? Math.max(28, Math.min(42, nameHeight * 0.65)) : Math.max(24, Math.min(34, nameHeight * 0.75));
+      ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+      ctx.fillStyle = '#000000'; // Pure black for maximum contrast
+      ctx.textBaseline = 'top';
+
+      // Calculate product image center for better alignment
+      const productCenterX = scaleCoord(config.image.x + config.image.width / 2);
+
+      // For bottom three products (i > 0), center text relative to product image
+      // For top product (i === 0), keep left alignment
+      if (i === 0) {
+        ctx.textAlign = 'left';
+      } else {
+        ctx.textAlign = 'center';
+      }
+
+      // Wrap text and adjust font size if needed to fit within available space
+      let productNameLines = wrapText(ctx, product.name, nameWidth);
+      let lineHeight = baseFontSize * 1.3;
+      let maxLines = Math.floor(nameHeight / lineHeight);
+
+      // If text generates more lines than available, reduce font size and re-wrap
+      if (productNameLines.length > maxLines && maxLines > 0) {
+        const minFontSize = i === 0 ? 20 : 18;
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        while (productNameLines.length > maxLines && baseFontSize > minFontSize && attempts < maxAttempts) {
+          baseFontSize = Math.max(minFontSize, baseFontSize * 0.9);
+          ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+          productNameLines = wrapText(ctx, product.name, nameWidth);
+          lineHeight = baseFontSize * 1.3;
+          maxLines = Math.floor(nameHeight / lineHeight);
+          attempts++;
+        }
+      }
+
+      const displayLines = productNameLines.slice(0, maxLines);
+
+      // Center text vertically within the available height
+      const totalTextHeight = displayLines.length * lineHeight;
+      const verticalOffset = (nameHeight - totalTextHeight) / 2;
+
+      // Use centered X for bottom products, original X for top product
+      const finalX = i === 0 ? nameX : productCenterX;
+
+      displayLines.forEach((line, lineIdx) => {
+        ctx.fillText(line, finalX, nameY + verticalOffset + lineIdx * lineHeight);
+      });
+    }
+
+    // Draw all price bubbles AFTER all products (so they appear on top)
+    for (let i = 0; i < Math.min(products.length, 4); i++) {
+      const product = products[i];
+      const config = productConfigs[i];
+
+      // Draw price bubble image above other layers
+      const rawPrice = product.price;
+      let numericPrice = typeof rawPrice === 'number'
+        ? rawPrice
+        : parseFloat(String(rawPrice).replace(',', '.').replace(/[^0-9.-]/g, ''));
+      if (Number.isNaN(numericPrice)) {
+        numericPrice = null;
+      }
+      const priceText = numericPrice !== null ? `$${numericPrice.toFixed(2)}` : (rawPrice ? String(rawPrice) : '');
+
+      if (config.bubble && bubbleImg && priceText) {
+        const bubbleX = scaleCoord(config.bubble.x);
+        const bubbleY = scaleCoord(config.bubble.y, false);
+        const bubbleWidth = scaleCoord(config.bubble.width);
+        const bubbleHeight = scaleCoord(config.bubble.height, false);
+        const rotation = config.bubble.rotation || 0;
+        const centerX = bubbleX + bubbleWidth / 2;
+        const centerY = bubbleY + bubbleHeight / 2;
+
+        ctx.save();
+
+        // Apply rotation if needed
+        if (rotation !== 0) {
+          ctx.translate(centerX, centerY);
+          ctx.rotate((rotation * Math.PI) / 180);
+          ctx.translate(-centerX, -centerY);
+        }
+
+        // Draw the full bubble image at exact coordinates
+        ctx.drawImage(bubbleImg, bubbleX, bubbleY, bubbleWidth, bubbleHeight);
+
+        ctx.restore();
+
+        // Draw price text inside bubble (always upright, regardless of bubble rotation)
+        // Adjust position slightly higher and left for better centering
+        const textOffsetX = -bubbleWidth * 0.02; // Slightly left
+        const textOffsetY = -bubbleHeight * 0.05; // Slightly higher
+        const textX = centerX + textOffsetX;
+        const textY = centerY + textOffsetY;
+
+        // Larger font size for first product (top bubble), smaller for others
+        const priceFontSize = i === 0
+          ? Math.max(28, Math.min(58, bubbleHeight * 0.5)) // First product: larger
+          : Math.max(18, Math.min(48, bubbleHeight * 0.4)); // Other products: smaller
+        ctx.font = `bold ${priceFontSize}px sans-serif`;
+        ctx.fillStyle = '#333333';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Text is always upright - no rotation applied to text
+        ctx.fillText(priceText, textX, textY);
+      }
+    }
+
+    // Draw student name (positioned above photo)
+    const studentNameX = scaleCoord(142.0);
+    const studentNameY = scaleCoord(2403.6, false);
+    const studentNameWidth = scaleCoord(628.6);
+    const studentNameHeight = scaleCoord(102.6, false);
+
+    const studentName = customName || storeInfo?.ownerName || storeInfo?.name || '';
+    const nameFontSize = Math.max(20, Math.min(40, studentNameHeight * 0.5));
+    ctx.font = `bold ${nameFontSize}px sans-serif`;
+    ctx.fillStyle = '#1E3A8A'; // Dark blue
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    // Wrap student name (can be on two lines)
+    const studentNameLines = wrapText(ctx, studentName, studentNameWidth);
+    const nameLineHeight = nameFontSize * 1.2;
+    const maxNameLines = Math.floor(studentNameHeight / nameLineHeight);
+    const displayNameLines = studentNameLines.slice(0, maxNameLines);
+
+    displayNameLines.forEach((line, lineIdx) => {
+      ctx.fillText(line, studentNameX, studentNameY + lineIdx * nameLineHeight);
+    });
+
+    // Draw student photo (if available)
+    const photoX = scaleCoord(142.0);
+    const photoY = scaleCoord(2529.2, false);
+    const photoWidth = scaleCoord(632.6);
+    const photoHeight = scaleCoord(702.9, false);
+
+    if (studentPhotoUrl) {
+      try {
+        const studentPhotoImg = await loadImage(studentPhotoUrl);
+
+        // Calculate aspect ratio to maintain proportions
+        const photoAspectRatio = studentPhotoImg.width / studentPhotoImg.height;
+        let finalPhotoWidth = photoWidth;
+        let finalPhotoHeight = photoHeight;
+
+        // Maintain aspect ratio while fitting in the area
+        if (photoAspectRatio > photoWidth / photoHeight) {
+          finalPhotoWidth = photoWidth;
+          finalPhotoHeight = photoWidth / photoAspectRatio;
+        } else {
+          finalPhotoHeight = photoHeight;
+          finalPhotoWidth = photoHeight * photoAspectRatio;
+        }
+
+        // Center photo in the area
+        const centerX = photoX + photoWidth / 2;
+        const centerY = photoY + photoHeight / 2;
+        const finalPhotoX = centerX - finalPhotoWidth / 2;
+        const finalPhotoY = centerY - finalPhotoHeight / 2;
+
+        // Draw student photo
+        ctx.drawImage(studentPhotoImg, finalPhotoX, finalPhotoY, finalPhotoWidth, finalPhotoHeight);
+      } catch (error) {
+        console.error('Error loading student photo:', error);
+      }
+    }
+
+    // Draw student text (to the right of photo)
+    const studentTextX = scaleCoord(804.9);
+    const studentTextY = scaleCoord(2536.1, false);
+    const studentTextWidth = scaleCoord(1239.6);
+    const studentTextHeight = scaleCoord(730.9, false);
+
+    // Draw text box border
+    ctx.strokeStyle = '#E0E0E0'; // Light gray border
+    ctx.lineWidth = 2;
+    ctx.strokeRect(studentTextX, studentTextY, studentTextWidth, studentTextHeight);
+
+    const studentText = stripHtml(richTextContent);
+
+    // Padding inside the box
+    const padding = scaleCoord(20);
+    const innerX = studentTextX + padding;
+    const innerY = studentTextY + padding;
+    const innerWidth = studentTextWidth - (padding * 2);
+    const innerHeight = studentTextHeight - (padding * 2);
+
+    // Improved styling: bold, clean, readable font
+    // Calculate font size to fit text within the box area
+    let studentFontSize = Math.max(32, Math.min(42, innerHeight / 12));
+    let textFits = false;
+    let attempts = 0;
+    const maxAttempts = 15;
+
+    // Function to smartly wrap text respecting line breaks and box width
+    const smartWrapText = (text, maxWidth, fontSize) => {
+      const lines = [];
+      const rawLines = text.split('\n').filter(line => line.trim().length > 0);
+
+      ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+      ctx.textAlign = 'center';
+
+      rawLines.forEach(rawLine => {
+        const words = rawLine.trim().split(/\s+/);
+        let currentLine = '';
+
+        words.forEach(word => {
+          const testLine = currentLine ? `${currentLine} ${word}` : word;
+          const metrics = ctx.measureText(testLine);
+
+          if (metrics.width <= maxWidth) {
+            currentLine = testLine;
+          } else {
+            if (currentLine) {
+              lines.push(currentLine);
+            }
+            currentLine = word;
+          }
+        });
+
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+      });
+
+      return lines;
+    };
+
+    // Find optimal font size that fits the text in the box
+    let finalLines = [];
+    while (!textFits && attempts < maxAttempts) {
+      ctx.font = `bold ${studentFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+      finalLines = smartWrapText(studentText, innerWidth, studentFontSize);
+      const lineHeight = studentFontSize * 1.5;
+      const totalHeight = finalLines.length * lineHeight;
+
+      if (totalHeight <= innerHeight) {
+        textFits = true;
+      } else {
+        studentFontSize = studentFontSize * 0.92; // Reduce font size
+        attempts++;
+      }
+    }
+
+    // Draw the text
+    ctx.font = `bold ${studentFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+    ctx.fillStyle = '#000000'; // Pure black for maximum contrast
+    ctx.textAlign = 'center'; // Center-aligned text
+    ctx.textBaseline = 'top';
+
+    const studentLineHeight = studentFontSize * 1.5; // Generous line spacing
+    const textCenterX = innerX + innerWidth / 2;
+
+    // Center text vertically within the box
+    const totalTextHeight = finalLines.length * studentLineHeight;
+    const verticalOffset = (innerHeight - totalTextHeight) / 2;
+
+    finalLines.forEach((line, lineIdx) => {
+      const lineY = innerY + verticalOffset + lineIdx * studentLineHeight;
+      ctx.fillText(line, textCenterX, lineY);
+    });
+
+    // Generate and draw QR code in bottom right
+    const boutiqueUrl = getFullStoreUrl(storeInfo, 'qr');
+    const qrCodeDataUrl = await QRCode.toDataURL(boutiqueUrl, {
+      width: 400,
+      margin: 1,
+      color: {
+        dark: '#000000', // Pure black for better contrast and scanability
+        light: '#FFFFFF'
+      }
+    });
+
+    // Draw QR code at exact template position (adjusted slightly left and up)
+    const qrX = scaleCoord(2140);
+    const qrY = scaleCoord(2702, false);
+    const qrSize = scaleCoord(278.4); // Exact size from template
+
+    const qrImg = await loadImage(qrCodeDataUrl);
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+    // Return data URL instead of downloading
+    return canvas.toDataURL('image/png', 1.0);
+  };
+
   const generatePNG = async () => {
     if (!storeInfo) {
       toast.error('Informations de la boutique non disponibles');
@@ -805,481 +1236,135 @@ export default function PDFGenerator({ storeInfo }) {
     setIsGenerating(true);
 
     try {
-      // Template dimensions are fixed: 2550 x 3300 px
-      const templateWidth = 2550;
-      const templateHeight = 3300;
+      const canvasDataUrl = await generatePosterCanvasDataUrl();
 
-      // Load template image and bubble image in parallel
-      const [templateImg, bubbleImg] = await Promise.all([
-        loadImage('/images/template-massibec1.png'),
-        loadImage('/images/icon_for_price.png')
-      ]);
+      // Convert data URL to blob and download
+      const response = await fetch(canvasDataUrl);
+      const blob = await response.blob();
 
-      // Create canvas with template dimensions
-      const canvas = document.createElement('canvas');
-      canvas.width = templateWidth;
-      canvas.height = templateHeight;
-      const ctx = canvas.getContext('2d');
-
-      // Draw template as base (scale if needed)
-      ctx.drawImage(templateImg, 0, 0, templateWidth, templateHeight);
-
-      // Fetch products ordered by order field (top 4)
-      let products = [];
       try {
-        // Get campaignId and schoolId from storeInfo to fetch products with correct prices
-        // campaignId is preferred as it's more reliable for getting custom prices
-        const campaignId = storeInfo?.campaignId;
-        const schoolId = storeInfo?.ownerSchool;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `affiche-${storeInfo.name || 'boutique'}.png`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
-        // Prefer campaignId over schoolId for custom pricing
-        const apiUrl = campaignId
-          ? `/api/products?limit=100&campaignId=${campaignId}`
-          : schoolId
-            ? `/api/products?limit=100&schoolId=${schoolId}`
-            : '/api/products?limit=100';
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 1000);
 
-        const response = await fetch(apiUrl);
-        if (response.ok) {
-          const data = await response.json();
-          const fetchedProducts = Array.isArray(data.products) ? data.products : [];
-          products = fetchedProducts
-            .map(p => ({ ...p, order: p.order || 0 }))
-            .sort((a, b) => (a.order || 0) - (b.order || 0))
-            .slice(0, 4)
-            .map(p => ({
-              name: p.name || '',
-              price: p.price || 0, // Use sales price from API (already includes custom prices)
-              image: p.image || '/images/placeholder-product.svg'
-            }));
-        }
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      }
-
-      // Canvas dimensions (should match template dimensions)
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-
-      // Scale factor (should be 1.0 if template is correct)
-      const scaleX = canvasWidth / templateWidth;
-      const scaleY = canvasHeight / templateHeight;
-
-      // Helper function to scale coordinates
-      const scaleCoord = (coord, useX = true) => coord * (useX ? scaleX : scaleY);
-
-      // Product positions and sizes (exact coordinates from new template)
-      const productConfigs = [
-        // First product - Pâté à la viande
-        {
-          image: { x: 1218.9, y: 541.4, width: 845.8, height: 833.4 },
-          name: { x: 1476.3, y: 1397.8, width: 384.9, height: 62.5 },
-          // Bubble positioned to overlap top-right of product: product ends at ~2064, bubble starts at ~1850
-          bubble: { x: 1850, y: 470, width: 371.8, height: 239.5, rotation: 0 }
-        },
-        // Second product - Pâté au poulet
-        {
-          image: { x: 341.5, y: 1616.6, width: 571.1, height: 563.6 },
-          name: { x: 449.2, y: 2202.9, width: 355.7, height: 62.5 },
-          // Bubble positioned to overlap upper portion: product ends at ~912, bubble starts at ~750
-          bubble: { x: 750, y: 1550, width: 239.8, height: 154.4, rotation: -180 }
-        },
-        // Third product - Tarte au sucre à la crème
-        {
-          image: { x: 1034.3, y: 1616.6, width: 568.3, height: 563.6 },
-          name: { x: 997.9, y: 2204.9, width: 617.7, height: 62.5 },
-          // Bubble positioned to overlap upper portion: product ends at ~1602, bubble starts at ~1440
-          bubble: { x: 1440, y: 1550, width: 239.8, height: 154.4, rotation: -180 }
-        },
-        // Fourth product - Tarte aux framboises
-        {
-          image: { x: 1712.9, y: 1616.6, width: 568.3, height: 563.6 },
-          name: { x: 1737.6, y: 2202.9, width: 519.0, height: 62.5 },
-          // Bubble positioned to overlap upper portion: product ends at ~2281, bubble starts at ~2120
-          bubble: { x: 2120, y: 1550, width: 239.8, height: 154.4, rotation: -180 }
-        }
-      ];
-
-      // Draw products (4 products with bubbles)
-      for (let i = 0; i < Math.min(products.length, 4); i++) {
-        const product = products[i];
-        const config = productConfigs[i];
-
-        const baseWidth = config.image.width;
-        const baseHeight = config.image.height;
-
-        const baseDrawX = scaleCoord(config.image.x);
-        const baseDrawY = scaleCoord(config.image.y, false);
-        const baseDrawWidth = scaleCoord(baseWidth);
-        const baseDrawHeight = scaleCoord(baseHeight, false);
-
-        let productImg = null;
-        try {
-          productImg = await loadImage(product.image);
-        } catch (error) {
-          console.error(`Error loading product image for ${product.name}:`, error);
-        }
-
-        if (productImg) {
-          const imgAspectRatio = productImg.width / productImg.height;
-          let imgWidth = baseWidth;
-          let imgHeight = baseHeight;
-
-          if (imgAspectRatio > baseWidth / baseHeight) {
-            imgWidth = baseWidth;
-            imgHeight = baseWidth / imgAspectRatio;
-            if (imgHeight > baseHeight + 20) {
-              imgHeight = baseHeight + 20;
-              imgWidth = imgHeight * imgAspectRatio;
-            } else if (imgHeight < baseHeight - 20) {
-              imgHeight = baseHeight - 20;
-              imgWidth = imgHeight * imgAspectRatio;
-            }
-          } else {
-            imgHeight = baseHeight;
-            imgWidth = baseHeight * imgAspectRatio;
-            if (imgWidth > baseWidth + 20) {
-              imgWidth = baseWidth + 20;
-              imgHeight = imgWidth / imgAspectRatio;
-            } else if (imgWidth < baseWidth - 20) {
-              imgWidth = baseWidth - 20;
-              imgHeight = imgWidth / imgAspectRatio;
-            }
-          }
-
-          const centerXTemplate = config.image.x + baseWidth / 2;
-          const centerYTemplate = config.image.y + baseHeight / 2;
-          const finalImgXTemplate = centerXTemplate - imgWidth / 2;
-          const finalImgYTemplate = centerYTemplate - imgHeight / 2;
-
-          const finalImgX = scaleCoord(finalImgXTemplate);
-          const finalImgY = scaleCoord(finalImgYTemplate, false);
-          const scaledImgWidth = scaleCoord(imgWidth);
-          const scaledImgHeight = scaleCoord(imgHeight, false);
-
-          ctx.drawImage(productImg, finalImgX, finalImgY, scaledImgWidth, scaledImgHeight);
+        toast.success('Affiche PNG téléchargée!');
+      } catch (downloadError) {
+        console.error('Download error:', downloadError);
+        const newWindow = window.open();
+        if (newWindow) {
+          newWindow.document.write(`<img src="${canvasDataUrl}" style="max-width: 100%;" />`);
+          toast.info('Image ouverte dans une nouvelle fenêtre. Faites clic droit pour enregistrer.');
         } else {
-          ctx.fillStyle = '#E0E0E0';
-          ctx.fillRect(baseDrawX, baseDrawY, baseDrawWidth, baseDrawHeight);
-        }
-
-        // Draw product name below product image (rendered beneath bubble)
-        const nameX = scaleCoord(config.name.x);
-        const nameY = scaleCoord(config.name.y, false);
-        const nameWidth = scaleCoord(config.name.width);
-        const nameHeight = scaleCoord(config.name.height, false);
-
-        // Improved font styling: larger base size, better line height
-        // Top product gets larger font, others get consistent smaller size
-        const baseFontSize = i === 0 ? Math.max(28, Math.min(42, nameHeight * 0.65)) : Math.max(24, Math.min(34, nameHeight * 0.75));
-        ctx.font = `600 ${baseFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
-        ctx.fillStyle = '#000000'; // Pure black for maximum contrast
-        ctx.textBaseline = 'top';
-
-        // Calculate product image center for better alignment
-        const productCenterX = scaleCoord(config.image.x + config.image.width / 2);
-
-        // For bottom three products (i > 0), center text relative to product image
-        // For top product (i === 0), keep left alignment
-        if (i === 0) {
-          ctx.textAlign = 'left';
-        } else {
-          ctx.textAlign = 'center';
-        }
-
-        // Wrap text with better spacing
-        const productNameLines = wrapText(ctx, product.name, nameWidth);
-        const lineHeight = baseFontSize * 1.3; // Slightly increased line spacing for better readability
-        const maxLines = Math.floor(nameHeight / lineHeight);
-        const displayLines = productNameLines.slice(0, maxLines);
-
-        // Center text vertically within the available height
-        const totalTextHeight = displayLines.length * lineHeight;
-        const verticalOffset = (nameHeight - totalTextHeight) / 2;
-
-        // Use centered X for bottom products, original X for top product
-        const finalX = i === 0 ? nameX : productCenterX;
-
-        displayLines.forEach((line, lineIdx) => {
-          ctx.fillText(line, finalX, nameY + verticalOffset + lineIdx * lineHeight);
-        });
-      }
-
-      // Draw all price bubbles AFTER all products (so they appear on top)
-      for (let i = 0; i < Math.min(products.length, 4); i++) {
-        const product = products[i];
-        const config = productConfigs[i];
-
-        // Draw price bubble image above other layers
-        const rawPrice = product.price;
-        let numericPrice = typeof rawPrice === 'number'
-          ? rawPrice
-          : parseFloat(String(rawPrice).replace(',', '.').replace(/[^0-9.-]/g, ''));
-        if (Number.isNaN(numericPrice)) {
-          numericPrice = null;
-        }
-        const priceText = numericPrice !== null ? `$${numericPrice.toFixed(2)}` : (rawPrice ? String(rawPrice) : '');
-
-        if (config.bubble && bubbleImg && priceText) {
-          const bubbleX = scaleCoord(config.bubble.x);
-          const bubbleY = scaleCoord(config.bubble.y, false);
-          const bubbleWidth = scaleCoord(config.bubble.width);
-          const bubbleHeight = scaleCoord(config.bubble.height, false);
-          const rotation = config.bubble.rotation || 0;
-          const centerX = bubbleX + bubbleWidth / 2;
-          const centerY = bubbleY + bubbleHeight / 2;
-
-          ctx.save();
-
-          // Apply rotation if needed
-          if (rotation !== 0) {
-            ctx.translate(centerX, centerY);
-            ctx.rotate((rotation * Math.PI) / 180);
-            ctx.translate(-centerX, -centerY);
-          }
-
-          // Draw the full bubble image at exact coordinates
-          ctx.drawImage(bubbleImg, bubbleX, bubbleY, bubbleWidth, bubbleHeight);
-
-          ctx.restore();
-
-          // Draw price text inside bubble (always upright, regardless of bubble rotation)
-          // Adjust position slightly higher and left for better centering
-          const textOffsetX = -bubbleWidth * 0.02; // Slightly left
-          const textOffsetY = -bubbleHeight * 0.05; // Slightly higher
-          const textX = centerX + textOffsetX;
-          const textY = centerY + textOffsetY;
-
-          // Larger font size for first product (top bubble), smaller for others
-          const priceFontSize = i === 0
-            ? Math.max(28, Math.min(58, bubbleHeight * 0.5)) // First product: larger
-            : Math.max(18, Math.min(48, bubbleHeight * 0.4)); // Other products: smaller
-          ctx.font = `bold ${priceFontSize}px sans-serif`;
-          ctx.fillStyle = '#333333';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          // Text is always upright - no rotation applied to text
-          ctx.fillText(priceText, textX, textY);
+          toast.error('Impossible de télécharger l\'image. Vérifiez les paramètres de votre navigateur.');
         }
       }
-
-      // Products loop continues here for drawing names...
-      // Actually, we already drew names above, so this is fine
-
-      // Draw student name (positioned above photo)
-      const studentNameX = scaleCoord(142.0);
-      const studentNameY = scaleCoord(2403.6, false);
-      const studentNameWidth = scaleCoord(628.6);
-      const studentNameHeight = scaleCoord(102.6, false);
-
-      const studentName = customName || storeInfo?.ownerName || storeInfo?.name || '';
-      const nameFontSize = Math.max(20, Math.min(40, studentNameHeight * 0.5));
-      ctx.font = `bold ${nameFontSize}px sans-serif`;
-      ctx.fillStyle = '#1E3A8A'; // Dark blue
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-
-      // Wrap student name (can be on two lines)
-      const studentNameLines = wrapText(ctx, studentName, studentNameWidth);
-      const nameLineHeight = nameFontSize * 1.2;
-      const maxNameLines = Math.floor(studentNameHeight / nameLineHeight);
-      const displayNameLines = studentNameLines.slice(0, maxNameLines);
-
-      displayNameLines.forEach((line, lineIdx) => {
-        ctx.fillText(line, studentNameX, studentNameY + lineIdx * nameLineHeight);
-      });
-
-      // Draw student photo (if available)
-      const photoX = scaleCoord(142.0);
-      const photoY = scaleCoord(2529.2, false);
-      const photoWidth = scaleCoord(632.6);
-      const photoHeight = scaleCoord(702.9, false);
-
-      if (studentPhotoUrl) {
-        try {
-          const studentPhotoImg = await loadImage(studentPhotoUrl);
-
-          // Calculate aspect ratio to maintain proportions
-          const photoAspectRatio = studentPhotoImg.width / studentPhotoImg.height;
-          let finalPhotoWidth = photoWidth;
-          let finalPhotoHeight = photoHeight;
-
-          // Maintain aspect ratio while fitting in the area
-          if (photoAspectRatio > photoWidth / photoHeight) {
-            finalPhotoWidth = photoWidth;
-            finalPhotoHeight = photoWidth / photoAspectRatio;
-          } else {
-            finalPhotoHeight = photoHeight;
-            finalPhotoWidth = photoHeight * photoAspectRatio;
-          }
-
-          // Center photo in the area
-          const centerX = photoX + photoWidth / 2;
-          const centerY = photoY + photoHeight / 2;
-          const finalPhotoX = centerX - finalPhotoWidth / 2;
-          const finalPhotoY = centerY - finalPhotoHeight / 2;
-
-          // Draw student photo
-          ctx.drawImage(studentPhotoImg, finalPhotoX, finalPhotoY, finalPhotoWidth, finalPhotoHeight);
-        } catch (error) {
-          console.error('Error loading student photo:', error);
-        }
-      }
-
-      // Draw student text (to the right of photo)
-      const studentTextX = scaleCoord(804.9);
-      const studentTextY = scaleCoord(2536.1, false);
-      const studentTextWidth = scaleCoord(1239.6);
-      const studentTextHeight = scaleCoord(730.9, false);
-
-      // Draw text box border
-      ctx.strokeStyle = '#E0E0E0'; // Light gray border
-      ctx.lineWidth = 2;
-      ctx.strokeRect(studentTextX, studentTextY, studentTextWidth, studentTextHeight);
-
-      const studentText = stripHtml(richTextContent);
-
-      // Padding inside the box
-      const padding = scaleCoord(20);
-      const innerX = studentTextX + padding;
-      const innerY = studentTextY + padding;
-      const innerWidth = studentTextWidth - (padding * 2);
-      const innerHeight = studentTextHeight - (padding * 2);
-
-      // Improved styling: bold, clean, readable font
-      // Calculate font size to fit text within the box area
-      let studentFontSize = Math.max(32, Math.min(42, innerHeight / 12));
-      let textFits = false;
-      let attempts = 0;
-      const maxAttempts = 15;
-
-      // Function to smartly wrap text respecting line breaks and box width
-      const smartWrapText = (text, maxWidth, fontSize) => {
-        const lines = [];
-        const rawLines = text.split('\n').filter(line => line.trim().length > 0);
-
-        ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
-        ctx.textAlign = 'center';
-
-        rawLines.forEach(rawLine => {
-          const words = rawLine.trim().split(/\s+/);
-          let currentLine = '';
-
-          words.forEach(word => {
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
-            const metrics = ctx.measureText(testLine);
-
-            if (metrics.width <= maxWidth) {
-              currentLine = testLine;
-            } else {
-              if (currentLine) {
-                lines.push(currentLine);
-              }
-              currentLine = word;
-            }
-          });
-
-          if (currentLine) {
-            lines.push(currentLine);
-          }
-        });
-
-        return lines;
-      };
-
-      // Find optimal font size that fits the text in the box
-      let finalLines = [];
-      while (!textFits && attempts < maxAttempts) {
-        ctx.font = `bold ${studentFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
-        finalLines = smartWrapText(studentText, innerWidth, studentFontSize);
-        const lineHeight = studentFontSize * 1.5;
-        const totalHeight = finalLines.length * lineHeight;
-
-        if (totalHeight <= innerHeight) {
-          textFits = true;
-        } else {
-          studentFontSize = studentFontSize * 0.92; // Reduce font size
-          attempts++;
-        }
-      }
-
-      // Draw the text
-      ctx.font = `bold ${studentFontSize}px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
-      ctx.fillStyle = '#000000'; // Pure black for maximum contrast
-      ctx.textAlign = 'center'; // Center-aligned text
-      ctx.textBaseline = 'top';
-
-      const studentLineHeight = studentFontSize * 1.5; // Generous line spacing
-      const textCenterX = innerX + innerWidth / 2;
-
-      // Center text vertically within the box
-      const totalTextHeight = finalLines.length * studentLineHeight;
-      const verticalOffset = (innerHeight - totalTextHeight) / 2;
-
-      finalLines.forEach((line, lineIdx) => {
-        const lineY = innerY + verticalOffset + lineIdx * studentLineHeight;
-        ctx.fillText(line, textCenterX, lineY);
-      });
-
-      // Generate and draw QR code in bottom right
-      const boutiqueUrl = getFullStoreUrl(storeInfo);
-      const qrCodeDataUrl = await QRCode.toDataURL(boutiqueUrl, {
-        width: 400,
-        margin: 1,
-        color: {
-          dark: '#000000', // Pure black for better contrast and scanability
-          light: '#FFFFFF'
-        }
-      });
-
-      // Draw QR code at exact template position (adjusted slightly left and up)
-      const qrX = scaleCoord(2140);
-      const qrY = scaleCoord(2702, false);
-      const qrSize = scaleCoord(278.4); // Exact size from template
-
-      const qrImg = await loadImage(qrCodeDataUrl);
-      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-      // Convert canvas to blob and download
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          toast.error('Erreur lors de la création de l\'image');
-          setIsGenerating(false);
-          return;
-        }
-
-        try {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `affiche-${storeInfo.name || 'boutique'}.png`;
-          link.style.display = 'none';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-
-          setTimeout(() => {
-            URL.revokeObjectURL(url);
-          }, 1000);
-
-          toast.success('Affiche PNG téléchargée! Vous pouvez maintenant l\'imprimer.');
-        } catch (downloadError) {
-          console.error('Download error:', downloadError);
-          const dataUrl = canvas.toDataURL('image/png');
-          const newWindow = window.open();
-          if (newWindow) {
-            newWindow.document.write(`<img src="${dataUrl}" style="max-width: 100%;" />`);
-            toast.info('Image ouverte dans une nouvelle fenêtre. Faites clic droit pour enregistrer.');
-          } else {
-            toast.error('Impossible de télécharger l\'image. Vérifiez les paramètres de votre navigateur.');
-          }
-        }
-        setIsGenerating(false);
-      }, 'image/png', 1.0); // Maximum quality
-
+      setIsGenerating(false);
     } catch (error) {
       console.error('Error generating PNG:', error);
       toast.error('Erreur lors de la génération de l\'image: ' + (error.message || 'Erreur inconnue'));
+      setIsGenerating(false);
+    }
+  };
+
+  // Function to generate PNG and open native print dialog
+  const handlePrint = async () => {
+    if (!storeInfo) {
+      toast.error('Informations de la boutique non disponibles');
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      const canvasDataUrl = await generatePosterCanvasDataUrl();
+
+      // Open print dialog with the image
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Imprimer l'affiche</title>
+              <style>
+                @page {
+                  margin: 0;
+                  size: auto;
+                }
+                @media print {
+                  * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                  }
+                  html, body {
+                    width: 100%;
+                    height: 100%;
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                  }
+                  body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                  }
+                  img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                    page-break-inside: avoid;
+                    page-break-after: avoid;
+                    page-break-before: avoid;
+                  }
+                }
+                @media screen {
+                  body {
+                    margin: 0;
+                    padding: 20px;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    min-height: 100vh;
+                    background: #f0f0f0;
+                  }
+                  img {
+                    max-width: 100%;
+                    height: auto;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              <img src="${canvasDataUrl}" alt="Affiche Jappuie.ca" />
+              <script>
+                window.onload = function() {
+                  window.print();
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        toast.success('Ouverture de la boîte de dialogue d\'impression...');
+      } else {
+        toast.error('Impossible d\'ouvrir la fenêtre d\'impression. Vérifiez les bloqueurs de fenêtres popup.');
+      }
+
+      setIsGenerating(false);
+    } catch (error) {
+      console.error('Error generating print image:', error);
+      toast.error('Erreur lors de la génération de l\'image pour l\'impression: ' + (error.message || 'Erreur inconnue'));
       setIsGenerating(false);
     }
   };
@@ -1324,7 +1409,7 @@ export default function PDFGenerator({ storeInfo }) {
       pdf.setLineWidth(0.5);
       pdf.line(18, headerY + headerHeight - 2, pageWidth - 18, headerY + headerHeight - 2);
 
-      // Logo - Use school logo if available, otherwise Massibec logo (MUCH BIGGER)
+      // Logo - Use school logo if available, otherwise Jappuie logo (MUCH BIGGER)
       let logoLoaded = false;
       const logoWidth = 70; // Increased from 40
       const logoHeight = 25; // Increased from 15
@@ -1349,13 +1434,13 @@ export default function PDFGenerator({ storeInfo }) {
           pdf.addImage(logoImg, 'PNG', centeredLogoX, logoY, finalLogoWidth, finalLogoHeight);
           logoLoaded = true;
         } catch (e) {
-          console.log('School logo non charge, utilisation du logo Massibec');
+          console.log('School logo non charge, utilisation du logo Jappuie');
         }
       }
 
       if (!logoLoaded) {
         try {
-          const logoImg = await loadImage('/images/logo_massibec.png');
+          const logoImg = await loadImage('/images/jappuie_logo.svg');
           const logoAspectRatio = logoImg.width / logoImg.height;
           let finalLogoWidth = logoWidth;
           let finalLogoHeight = logoHeight;
@@ -1369,7 +1454,7 @@ export default function PDFGenerator({ storeInfo }) {
           const centeredLogoX = pageWidth / 2 - finalLogoWidth / 2;
           pdf.addImage(logoImg, 'PNG', centeredLogoX, logoY, finalLogoWidth, finalLogoHeight);
         } catch (e) {
-          console.log('Logo Massibec non charge');
+          console.log('Logo Jappuie non charge');
         }
       }
 
@@ -1381,8 +1466,8 @@ export default function PDFGenerator({ storeInfo }) {
 
       pdf.setFontSize(16);
       pdf.setFont('helvetica', 'normal');
-      // Use school/organization name instead of "Massibec" if available
-      const organizationName = schoolName || 'Massibec';
+      // Use school/organization name instead of "Jappuie.ca" if available
+      const organizationName = schoolName || 'Jappuie.ca';
       pdf.setTextColor(160, 82, 45);
       pdf.text(organizationName, pageWidth / 2, logoY + logoHeight + 14, { align: 'center' });
 
@@ -1507,7 +1592,7 @@ export default function PDFGenerator({ storeInfo }) {
       const qrX = 22;
       const qrY = yPos + (sectionHeight - qrSize) / 2;
 
-      const boutiqueUrl = getFullStoreUrl(storeInfo);
+      const boutiqueUrl = getFullStoreUrl(storeInfo, 'qr');
       const qrCodeDataUrl = await QRCode.toDataURL(boutiqueUrl, {
         width: 400,
         margin: 1,
@@ -1598,49 +1683,53 @@ export default function PDFGenerator({ storeInfo }) {
             />
           </div>
 
-          <div>
-            <Label htmlFor="studentSchoolText" className="text-sm font-medium">Texte sous votre photo (ex: Élève de...)</Label>
-            <Input
-              id="studentSchoolText"
-              value={studentSchoolText}
-              onChange={(e) => {
-                const value = e.target.value;
-                setStudentSchoolText(value);
-                // Save to localStorage
-                if (typeof window !== 'undefined' && storeInfo?.storeId) {
-                  const storageKey = `studentPhoto_${storeInfo.storeId}`;
-                  if (value) {
-                    localStorage.setItem(`${storageKey}_text`, value);
-                  } else {
-                    localStorage.removeItem(`${storageKey}_text`);
-                  }
-                }
-              }}
-              placeholder="Ex: Élève du Séminaire Saint-Joseph"
-              className="mt-1"
-            />
-          </div>
 
           <div>
             <Label htmlFor="studentPhoto" className="text-sm font-medium">Photo de l'élève</Label>
             <ImageUpload
               value={studentPhotoUrl}
-              onChange={(url) => {
+              onChange={async (url) => {
                 setStudentPhotoUrl(url);
-                // Save to localStorage
-                if (typeof window !== 'undefined' && storeInfo?.storeId) {
-                  const storageKey = `studentPhoto_${storeInfo.storeId}`;
-                  if (url) {
-                    localStorage.setItem(storageKey, url);
+                setLoadingPhoto(true);
+
+                try {
+                  // Save to MongoDB
+                  const response = await fetch('/api/users/photo', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ studentPhoto: url || null })
+                  });
+
+                  if (response.ok) {
+                    // Also save to localStorage for backward compatibility
+                    if (typeof window !== 'undefined' && storeInfo?.storeId) {
+                      const storageKey = `studentPhoto_${storeInfo.storeId}`;
+                      if (url) {
+                        localStorage.setItem(storageKey, url);
+                      } else {
+                        localStorage.removeItem(storageKey);
+                      }
+                    }
                   } else {
-                    localStorage.removeItem(storageKey);
+                    const error = await response.json();
+                    console.error('Error saving photo:', error);
+                    toast.error('Erreur lors de la sauvegarde de la photo');
                   }
+                } catch (error) {
+                  console.error('Error saving photo:', error);
+                  toast.error('Erreur lors de la sauvegarde de la photo');
+                } finally {
+                  setLoadingPhoto(false);
                 }
               }}
               className="mt-1"
               showPreview={true}
               previewClassName="max-w-xs"
+              uploadType="student-photo"
             />
+            {loadingPhoto && (
+              <p className="text-xs text-gray-500 mt-1">Sauvegarde de la photo...</p>
+            )}
             <p className="text-xs text-gray-500 mt-2">
               Ajoutez une photo de l'élève qui apparaîtra dans le coin inférieur gauche de l'affiche
             </p>
@@ -1668,7 +1757,7 @@ export default function PDFGenerator({ storeInfo }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Button
-              onClick={generatePDFWithPdfme}
+              onClick={handlePrint}
               disabled={isGenerating || !storeInfo}
               className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-semibold py-4 sm:py-6"
             >
@@ -1679,8 +1768,8 @@ export default function PDFGenerator({ storeInfo }) {
                 </>
               ) : (
                 <>
-                  <Download className="mr-2 h-5 w-5" />
-                  Telecharger PDF
+                  <Printer className="mr-2 h-5 w-5" />
+                  Imprimer
                 </>
               )}
             </Button>
@@ -1706,7 +1795,7 @@ export default function PDFGenerator({ storeInfo }) {
 
           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-xs text-blue-800">
-              <span className="font-semibold">💡 Note:</span> Téléchargez l'affiche au format PDF ou PNG haute qualité, prête pour l'impression. Le PNG utilise le template Massibec avec vos produits et votre message personnalisé.
+              <span className="font-semibold">💡 Note:</span> Téléchargez l'affiche au format PNG haute qualité ou imprimez-la directement. Le PNG utilise le template Jappuie.ca avec vos produits et votre message personnalisé.
             </p>
           </div>
         </CardContent>
@@ -1729,7 +1818,7 @@ export default function PDFGenerator({ storeInfo }) {
             <div className="bg-white rounded-lg shadow-lg overflow-hidden relative" style={{ aspectRatio: '2550/3300' }} data-poster-preview>
               {/* Template background */}
               <img
-                src="/images/template-massibec1.png"
+                src="/images/template_final_jappuie.png"
                 alt="Template"
                 className="absolute inset-0 w-full h-full object-cover"
               />
@@ -1773,7 +1862,7 @@ export default function PDFGenerator({ storeInfo }) {
                     className="absolute"
                     style={{
                       left: `${(1850 / 2550) * 100}%`,
-                      top: `${(540 / 3300) * 100}%`,
+                      top: `${(450 / 3300) * 100}%`,
                       width: `${(371.8 / 2550) * 100}%`,
                       height: `${(239.5 / 3300) * 100}%`
                     }}

@@ -45,11 +45,11 @@ export default async function handler(
         return res.status(404).json({ message: 'Commande non trouvée' });
       }
 
-      // Update order status and/or distributionNotes
-      const { status, distributionNotes } = req.body;
-      
+      // Update order status, distributionNotes, and/or delivery options
+      const { status, distributionNotes, deliveryOption, customDeliveryOption, customerDeliveryAddress } = req.body;
+
       if (status !== undefined) {
-        const validStatuses = ['En attente', 'Payé', 'Commander', 'Complété'];
+        const validStatuses = ['En attente', 'Payé', 'Commandé', 'Complété'];
         if (!validStatuses.includes(status)) {
           return res.status(400).json({
             message: `Statut invalide. Les statuts valides sont : ${validStatuses.join(', ')}.`,
@@ -57,18 +57,30 @@ export default async function handler(
         }
         order.status = status;
       }
-      
+
       if (distributionNotes !== undefined) {
         order.distributionNotes = distributionNotes || '';
       }
-      
+
+      if (deliveryOption !== undefined) {
+        order.deliveryOption = deliveryOption || '';
+      }
+
+      if (customDeliveryOption !== undefined) {
+        order.customDeliveryOption = customDeliveryOption || '';
+      }
+
+      if (customerDeliveryAddress !== undefined) {
+        order.customerDeliveryAddress = customerDeliveryAddress || '';
+      }
+
       await order.save();
 
       res.status(200).json({ message: 'Statut de la commande mis à jour avec succès' });
     } catch (error: any) {
       console.error('Erreur lors de la mise à jour de la commande:', error);
-      res.status(400).json({ 
-        message: `Erreur lors de la mise à jour de la commande: ${error.message}` 
+      res.status(400).json({
+        message: `Erreur lors de la mise à jour de la commande: ${error.message}`
       });
     }
   } else if (req.method === 'DELETE') {
@@ -125,8 +137,8 @@ export default async function handler(
       res.status(200).json({ message: 'Commande supprimée avec succès.' });
     } catch (error: any) {
       console.error('Erreur lors de la suppression de la commande:', error);
-      res.status(500).json({ 
-        message: `Erreur lors de la suppression de la commande: ${error.message}` 
+      res.status(500).json({
+        message: `Erreur lors de la suppression de la commande: ${error.message}`
       });
     }
   } else if (req.method === 'GET') {
@@ -144,8 +156,8 @@ export default async function handler(
       res.status(200).json(orders);
     } catch (error: any) {
       console.error('Erreur lors de la récupération des commandes:', error);
-      res.status(400).json({ 
-        message: `Erreur lors de la récupération des commandes: ${error.message}` 
+      res.status(400).json({
+        message: `Erreur lors de la récupération des commandes: ${error.message}`
       });
     }
   } else {

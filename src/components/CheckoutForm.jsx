@@ -11,11 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check, PartyPopper } from 'lucide-react'
+import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check, PartyPopper, AlertCircle } from 'lucide-react'
 import { getTerminology } from '@/utils/organizationHelpers'
 import { trackPaymentCompleted } from '@/lib/analytics'
+import { useSession } from 'next-auth/react'
 
-export default function CheckoutForm({ total, originalTotal, discount = 0, discountAmount = 0, onClose, items, removeAllItem, campaignId, schoolId, storeId, initialCampaignData, initialDeliveryOptions }) {
+export default function CheckoutForm({ total, originalTotal, discount = 0, discountAmount = 0, onClose, items, removeAllItem, campaignId, schoolId, storeId, initialCampaignData, initialDeliveryOptions, isExample = false }) {
+  const { data: session } = useSession()
   const [formData, setFormData] = useState({
     email: '',
     nom: '',
@@ -427,6 +429,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (isSubmitting) return
+
+    // Prevent submission in example mode
+    if (isExample) {
+      toast.error('Cette boutique est un exemple. Les commandes ne peuvent pas être passées ici.')
+      return
+    }
+
     if (!owner || !owner._id) {
       toast.error('Informations du propriétaire non disponibles. Veuillez réessayer plus tard.')
       return
@@ -522,7 +531,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
         }
         setIsSuccess(true)
 
-        // Track payment completed event
+        // Track payment completed event (both conversion and funnel)
         if (finalStoreId) {
           trackPaymentCompleted({
             storeId: finalStoreId,
@@ -532,6 +541,17 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
             orderId: orderIdFromResponse,
             totalAmount: currentFinalTotal
           })
+
+          // Also track in funnel if user is logged in
+          if (session?.user?.id) {
+            const { trackPaymentCompletedFunnel } = await import('@/lib/funnelAnalytics');
+            trackPaymentCompletedFunnel(
+              session.user.id,
+              orderIdFromResponse,
+              finalStoreId,
+              currentFinalTotal
+            );
+          }
         }
 
         // Emit order success event for onboarding
@@ -608,7 +628,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
       setSavedFinalTotal(null) // Reset saved total
       window.location.reload()
       merciTimeoutRef.current = null
-    }, 1800)
+    }, 5000) // Increased from 1800ms to 5000ms (5 seconds)
   }
 
   const handlePaymentCancel = () => {
@@ -638,21 +658,36 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               Quelques informations et vous y êtes !
             </DialogDescription>
           </DialogHeader>
+          {isExample && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mt-4">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold text-yellow-900 mb-1">
+                    🛍️ Boutique Exemple
+                  </h3>
+                  <p className="text-sm text-yellow-800">
+                    Cette boutique est un exemple pour vous montrer à quoi ressemble une boutique Jappuie.ca. Les commandes ne peuvent pas être passées ici. Pour créer votre propre boutique, inscrivez-vous en tant qu'élève ou école.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4 p-4 sm:p-5 pb-20 sm:pb-6 bg-white">
             <div className="space-y-3">
               {/* Full Name Field */}
               <div className="space-y-1.5">
                 <Label htmlFor="nom" className="text-sm sm:text-base font-medium text-gray-700">Nom complet</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
                   <Input
                     id="nom"
                     name="nom"
                     value={formData.nom}
                     onChange={handleChange}
                     required
-                    className="pl-11 py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg"
-                    placeholder="Jean Dupont"
+                    className="!pl-12 py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg bg-white"
+                    placeholder="Jean Bon"
                   />
                 </div>
               </div>
@@ -661,7 +696,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm sm:text-base font-medium text-gray-700">Adresse e-mail</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
                   <Input
                     type="email"
                     id="email"
@@ -669,8 +704,8 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="pl-11 py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg"
-                    placeholder="jean.dupont@example.com"
+                    className="!pl-12 py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg bg-white"
+                    placeholder="jean@bon.com"
                   />
                 </div>
               </div>
@@ -679,7 +714,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               <div className="space-y-1.5">
                 <Label htmlFor="phoneNumber" className="text-sm sm:text-base font-medium text-gray-700">Numéro de téléphone</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5 pointer-events-none" />
                   <Input
                     type="tel"
                     id="phoneNumber"
@@ -687,8 +722,8 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                     value={formData.phoneNumber}
                     onChange={handleChange}
                     required
-                    className="pl-11 py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg"
-                    placeholder="06 12 34 56 78"
+                    className="!pl-12 py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg bg-white"
+                    placeholder="819 555-1111"
                   />
                 </div>
               </div>
@@ -973,14 +1008,16 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !owner || isLoadingOwner}
-                className="w-full sm:flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center justify-center py-4 text-base sm:text-lg font-bold shadow-xl hover:shadow-2xl transition-all transform hover:scale-[1.02] active:scale-[0.98] order-1 sm:order-2"
+                disabled={isSubmitting || !owner || isLoadingOwner || isExample}
+                className="w-full sm:flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white flex items-center justify-center py-4 text-base sm:text-lg font-bold shadow-xl hover:shadow-2xl transition-all transform hover:scale-[1.02] active:scale-[0.98] order-1 sm:order-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Traitement...
                   </>
+                ) : isExample ? (
+                  'Boutique exemple - Commande désactivée'
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-5 w-5" />
@@ -1132,13 +1169,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                         <>
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-gray-700 flex-1">
-                              <strong>4. Question de sécurité :</strong> {formData.nom || 'Votre nom'}
+                              <strong>4. Question de sécurité :</strong> Numéro de commande
                             </p>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard(formData.nom || '', 'question')}
+                              onClick={() => copyToClipboard('Numéro de commande', 'question')}
                               title="Copier la question"
                             >
                               {copiedField === 'question' ? (
@@ -1151,13 +1188,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
 
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-gray-700 flex-1">
-                              <strong>5. Réponse :</strong> {formData.email}
+                              <strong>5. Réponse :</strong> {orderId ? `Cmd-${orderId}` : 'N/A'}
                             </p>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard(formData.email || '', 'reponse')}
+                              onClick={() => copyToClipboard(orderId ? `Cmd-${orderId}` : '', 'reponse')}
                               title="Copier la réponse"
                             >
                               {copiedField === 'reponse' ? (
@@ -1168,6 +1205,14 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                             </Button>
                           </div>
                         </>
+                      )}
+
+                      {!autoDeposit && orderId && (
+                        <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg mt-3">
+                          <p className="text-xs text-amber-800">
+                            <strong>Note importante :</strong> Comme vous n'avez pas activé le dépôt automatique, vous devez utiliser <strong>Cmd-{orderId}</strong> comme réponse à la question de sécurité lors du transfert Interac.
+                          </p>
+                        </div>
                       )}
 
                       <div className="flex items-start justify-between gap-2">

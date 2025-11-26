@@ -5,7 +5,7 @@ import CheckoutForm from './CheckoutForm'
 import { motion, AnimatePresence } from 'framer-motion'
 import { trackCheckoutReached } from '@/lib/analytics'
 
-export default function StickyCartMobile({ id, campaignId, schoolId, onCheckoutOpen, campaignData, initialDeliveryOptions }) {
+export default function StickyCartMobile({ id, campaignId, schoolId, onCheckoutOpen, campaignData, initialDeliveryOptions, isExample = false }) {
   const [items, setItems] = useState([])
   const [showCheckout, setShowCheckout] = useState(false)
   const [showFullCart, setShowFullCart] = useState(false)
@@ -245,11 +245,12 @@ export default function StickyCartMobile({ id, campaignId, schoolId, onCheckoutO
                 <span className="text-blue-600">{discountedTotal.toFixed(2)}$</span>
               </div>
               <Button
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white py-4 mt-3 font-bold shadow-xl text-base rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white py-4 mt-3 font-bold shadow-xl text-base rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleCheckout}
+                disabled={isExample}
               >
-                <span>Passer la commande</span>
-                <ArrowRight className="h-5 w-5" />
+                <span>{isExample ? 'Boutique exemple - Commande désactivée' : 'Passer la commande'}</span>
+                {!isExample && <ArrowRight className="h-5 w-5" />}
               </Button>
             </div>
           </motion.div>
@@ -279,6 +280,7 @@ export default function StickyCartMobile({ id, campaignId, schoolId, onCheckoutO
             storeId={id}
             initialCampaignData={campaignData}
             initialDeliveryOptions={initialDeliveryOptions}
+            isExample={isExample}
           />
         )}
       </AnimatePresence>

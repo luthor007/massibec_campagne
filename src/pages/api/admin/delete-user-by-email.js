@@ -37,32 +37,32 @@ export default async function handler(req, res) {
 
         // Find the user
         let user = await User.findOne({ email });
-        
+
         // If user not found, check if there's a supplier with this email
         if (!user) {
             const Supplier = (await import('../../../models/Supplier')).default;
             const supplier = await Supplier.findOne({ email });
-            
+
             if (supplier) {
                 // Delete supplier and associated data
                 const supplierId = supplier._id;
                 const supplierManagers = await SupplierManager.find({ supplier: supplierId });
                 const userIds = supplierManagers.map(sm => sm.user);
-                
+
                 // Delete campaigns
                 await Campaign.deleteMany({ supplier: supplierId });
-                
+
                 // Delete supplier managers
                 await SupplierManager.deleteMany({ supplier: supplierId });
-                
+
                 // Delete users
                 for (const userId of userIds) {
                     await User.findByIdAndDelete(userId);
                 }
-                
+
                 // Delete supplier
                 await Supplier.findByIdAndDelete(supplierId);
-                
+
                 return res.status(200).json({
                     message: 'Supplier et toutes les données associées supprimés avec succès',
                     summary: {
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
                     }
                 });
             }
-            
+
             return res.status(404).json({ message: `Utilisateur ou supplier avec l'email ${email} non trouvé` });
         }
 
@@ -179,7 +179,7 @@ export default async function handler(req, res) {
 
                 // Import Supplier model
                 const Supplier = (await import('../../../models/Supplier')).default;
-                
+
                 // Delete the supplier itself
                 await Supplier.findByIdAndDelete(supplierId);
                 deletionSummary.suppliers = 1;

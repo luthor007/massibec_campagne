@@ -98,7 +98,7 @@ export default async function handler(req, res) {
       user: userId,
       campaignId: activeCampaignId,
       name: `Boutique de ${schoolName}`,
-      description: "🎉 Profitez des pâtés exclusifs de Massibec (viande et poulet) ainsi que d'un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !",
+      description: "🎉 Profitez de nos produits exclusifs ainsi que d'un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !",
       autoDeposit: false,
       hoursAvailable: "18h-20h",
       discountEnabled: true

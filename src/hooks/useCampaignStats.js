@@ -30,7 +30,9 @@ export const useCampaignStats = (campaignId) => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/campaigns/${campaignId}/stats`);
+      const response = await fetch(`/api/campaigns/${campaignId}/stats`, {
+        credentials: 'include' // Ensure cookies are sent with the request
+      });
       if (!response.ok) {
         throw new Error(`Failed to fetch campaign stats: ${response.status}`);
       }

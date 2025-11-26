@@ -16,10 +16,30 @@ export function getStoreUrl(storeInfo) {
 }
 
 // Get full store URL with origin
-export function getFullStoreUrl(storeInfo) {
+export function getFullStoreUrl(storeInfo, source = null) {
     if (typeof window === 'undefined') return '';
 
     const path = getStoreUrl(storeInfo);
-    return path ? `${window.location.origin}${path}` : '';
+    if (!path) return '';
+
+    const baseUrl = `${window.location.origin}${path}`;
+
+    // Add source parameter if provided
+    if (source) {
+        const separator = path.includes('?') ? '&' : '?';
+        return `${baseUrl}${separator}source=${source}`;
+    }
+
+    return baseUrl;
+}
+
+// Get store URL with source parameter (for server-side usage)
+export function getFullStoreUrlWithSource(storeInfo, source, baseUrl) {
+    const path = getStoreUrl(storeInfo);
+    if (!path) return '';
+
+    const fullPath = baseUrl ? `${baseUrl}${path}` : path;
+    const separator = path.includes('?') ? '&' : '?';
+    return source ? `${fullPath}${separator}source=${source}` : fullPath;
 }
 

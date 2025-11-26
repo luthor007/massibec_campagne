@@ -25,8 +25,8 @@ export default async function handler(req, res) {
     const userId = token.sub;
     const user = await User.findById(userId).lean();
 
-    if (!user || user.role !== 'school_manager') {
-      return res.status(403).json({ message: 'Seuls les gestionnaires d\'école peuvent créer une école' });
+    if (!user || (user.role !== 'school_manager' && user.role !== 'supplier')) {
+      return res.status(403).json({ message: 'Seuls les gestionnaires d\'école et les fournisseurs peuvent créer une école' });
     }
 
     const { name, address, ville, codePostal, telephone, email } = req.body;
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'L\'adresse doit contenir entre 1 et 200 caractères' });
     }
 
-    // Create the new school
+    // Create the new school (auto-approved)
     const newSchool = new School({
       name: sanitizedName,
       address: sanitizedAddress,
@@ -63,8 +63,8 @@ export default async function handler(req, res) {
       email: sanitizedEmail || '',
       currentCampaignNumber: 0,
       campaigns: [],
-      approved: false,
-      status: 'pending',
+      approved: true, // Auto-approved
+      status: 'approved', // Auto-approved
       profileCompleted: false,
     });
 

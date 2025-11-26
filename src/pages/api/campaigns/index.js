@@ -22,7 +22,12 @@ export default async function handler(req, res) {
       // Get user info to find the schools
       const user = await User.findById(userId).lean();
 
-      if (!user || user.role !== 'school_manager') {
+      if (!user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+
+      // Allow school_manager or supplier (suppliers can access campaigns for their auto-created school)
+      if (user.role !== 'school_manager' && user.role !== 'supplier') {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
@@ -50,10 +55,11 @@ export default async function handler(req, res) {
 
       // Get all campaigns for all schools this user manages
       let campaigns = await Campaign.find({ school: { $in: schoolIds } })
+        .populate('supplier', 'name logo email phone pricingSettings')
         .populate('customPrices.productId', 'name price cost image')
         .populate('profitSplits.productId', 'name')
         .sort({ campaignNumber: -1 }); // Most recent first
-      
+
       console.log('Fetched campaigns from database:', {
         schoolIds: schoolIds.map(id => id?.toString()),
         campaignsCount: campaigns.length,
@@ -64,29 +70,29 @@ export default async function handler(req, res) {
       if (campaigns.length === 0) {
         const schools = await School.find({ _id: { $in: schoolIds } }).lean();
         const legacyCampaigns = [];
-        
+
         for (const school of schools) {
           if (school.campaigns && school.campaigns.length > 0) {
             legacyCampaigns.push(...school.campaigns.map(campaign => ({
-          _id: campaign._id,
-          campaignNumber: campaign.campaignNumber,
-          startDate: campaign.startDate,
-          endDate: campaign.endDate,
-          deliveryDate: campaign.deliveryDate,
-          isActive: campaign.isActive,
-          status: campaign.status || 'active',
-          financialGoal: campaign.financialGoal,
-          profitSplitType: campaign.profitSplitType || 'absolute',
-          customPrices: campaign.customPrices || [],
-          profitSplits: campaign.profitSplits || [],
-          notes: campaign.notes,
+              _id: campaign._id,
+              campaignNumber: campaign.campaignNumber,
+              startDate: campaign.startDate,
+              endDate: campaign.endDate,
+              deliveryDate: campaign.deliveryDate,
+              isActive: campaign.isActive,
+              status: campaign.status || 'active',
+              financialGoal: campaign.financialGoal,
+              profitSplitType: campaign.profitSplitType || 'absolute',
+              customPrices: campaign.customPrices || [],
+              profitSplits: campaign.profitSplits || [],
+              notes: campaign.notes,
               createdAt: campaign.createdAt,
               updatedAt: campaign.updatedAt,
               school: school._id
             })));
           }
         }
-        
+
         if (legacyCampaigns.length > 0) {
           campaigns = legacyCampaigns;
         }

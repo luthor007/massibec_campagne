@@ -42,9 +42,20 @@ const EmailVerified = () => {
 
         if (result?.ok) {
           setStatus('success');
-          // Redirect to dashboard after 2 seconds
+
+          // Determine redirect path based on user role
+          let redirectPath = '/dashboard';
+          if (user.role === 'supplier' || user.role === 'fournisseur') {
+            redirectPath = '/dashboard-supplier/products?onboarding=true';
+          } else if (user.role === 'school_manager') {
+            redirectPath = '/dashboard-manager';
+          } else if (user.role === 'distributor') {
+            redirectPath = '/dashboard-distributor';
+          }
+
+          // Redirect to appropriate dashboard after 2 seconds
           setTimeout(() => {
-            router.push('/dashboard');
+            router.push(redirectPath);
           }, 2000);
         }
       } catch (err) {
@@ -69,7 +80,7 @@ const EmailVerified = () => {
             <div className="text-5xl animate-spin mt-8">⟳</div>
           </>
         )}
-        
+
         {status === 'success' && (
           <>
             <h1 className="text-3xl font-bold text-blue-600 mb-4">Bienvenue{router.query.name ? ` ${decodeURIComponent(router.query.name)}` : ''} ! 🎉</h1>
@@ -77,7 +88,7 @@ const EmailVerified = () => {
             <p className="text-md text-gray-600">Redirection vers votre tableau de bord...</p>
           </>
         )}
-        
+
         {status === 'error' && (
           <>
             <h1 className="text-3xl font-bold text-red-600 mb-4">Erreur de connexion</h1>

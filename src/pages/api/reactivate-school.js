@@ -14,7 +14,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Non authentifié' });
     }
 
-    // Check if user is Massibec (fournisseur)
+    // Check if user is supplier/admin (fournisseur)
     if (token.role !== 'fournisseur') {
       return res.status(403).json({ message: 'Accès non autorisé' });
     }
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     await school.save();
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'École réactivée avec succès',
       school: school.toObject()
     });

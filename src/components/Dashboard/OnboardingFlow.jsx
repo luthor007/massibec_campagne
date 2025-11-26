@@ -11,7 +11,7 @@ const OnboardingFlow = ({ currentStep, onComplete, onSkip, onNext }) => {
   const steps = [
     {
       id: 'campaign',
-      title: '🎉 Bienvenue dans Massibec !',
+      title: '🎉 Bienvenue dans Jappuie.ca !',
       message: 'Commencez par rejoindre une campagne de financement. C\'est le premier pas pour créer votre propre boutique et commencer à vendre !',
       buttonText: 'Rejoindre une campagne',
       emoji: '🚀',
@@ -95,7 +95,7 @@ const OnboardingFlow = ({ currentStep, onComplete, onSkip, onNext }) => {
                 <motion.div
                   key={index}
                   initial={{ scale: 0, opacity: 0, y: 50 }}
-                  animate={{ 
+                  animate={{
                     scale: [0, 1.5, 1],
                     opacity: [0, 1, 0],
                     y: [-50, -100, -150],
@@ -197,13 +197,12 @@ const OnboardingFlow = ({ currentStep, onComplete, onSkip, onNext }) => {
                     {steps.map((step, index) => (
                       <div
                         key={step.id}
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          index < steps.findIndex(s => s.id === currentStep)
+                        className={`h-2 rounded-full transition-all duration-300 ${index < steps.findIndex(s => s.id === currentStep)
                             ? 'bg-green-500 w-8'
                             : index === steps.findIndex(s => s.id === currentStep)
-                            ? `bg-gradient-to-r ${currentStepData.color} w-8`
-                            : 'bg-gray-300 w-2'
-                        }`}
+                              ? `bg-gradient-to-r ${currentStepData.color} w-8`
+                              : 'bg-gray-300 w-2'
+                          }`}
                       />
                     ))}
                   </div>
@@ -211,10 +210,10 @@ const OnboardingFlow = ({ currentStep, onComplete, onSkip, onNext }) => {
                   {/* Encouragement text */}
                   <div className="mt-4 text-center">
                     <p className="text-sm text-gray-500 italic">
-                      💡 {currentStep === 'campaign' ? 'C\'est votre première étape vers le succès !' : 
-                          currentStep === 'personalize' ? 'Créez quelque chose d\'unique qui vous ressemble !' :
+                      💡 {currentStep === 'campaign' ? 'C\'est votre première étape vers le succès !' :
+                        currentStep === 'personalize' ? 'Créez quelque chose d\'unique qui vous ressemble !' :
                           currentStep === 'tools' ? 'Vos outils de vente vous attendent !' :
-                          'Vous êtes presque arrivé au bout !'}
+                            'Vous êtes presque arrivé au bout !'}
                     </p>
                   </div>
                 </CardContent>

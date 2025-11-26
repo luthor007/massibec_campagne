@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import DashboardLayout from '../../../components/Dashboard/DashboardLayout';
 import SupplierCampaignManager from '../../../components/Dashboard/Supplier/SupplierCampaignManager';
+import CampaignStudentsList from '../../../components/Dashboard/Supplier/CampaignStudentsList';
 import { useSupplierSchools } from '../../../hooks/useSupplierSchools';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,23 +20,29 @@ const CampaignsPage = () => {
   const [allCampaigns, setAllCampaigns] = useState([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(true);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
-  
+
   const { schools, loading: schoolsLoading, refreshSchools } = useSupplierSchools();
 
   useEffect(() => {
     if (status === 'loading') return;
-    
+
     if (!session) {
       router.push('/connexion');
       return;
     }
-    
-    // Vérifier si l'utilisateur a le rôle fournisseur
-    if (session.user.role !== 'fournisseur') {
+
+    // Vérifier si l'utilisateur a le rôle supplier (ou fournisseur pour compatibilité)
+    if (session.user.role === 'supplier' || session.user.role === 'fournisseur') {
+      // Redirect suppliers to the new dashboard-supplier pages
+      router.push('/dashboard-supplier');
+      return;
+    }
+
+    if (session.user.role !== 'supplier' && session.user.role !== 'fournisseur') {
       router.push('/dashboard');
       return;
     }
-    
+
     fetchAllCampaigns();
   }, [session, status, router]);
 
@@ -51,12 +58,14 @@ const CampaignsPage = () => {
           'Expires': '0'
         }
       });
-      
+
       if (response.ok) {
         const campaigns = await response.json();
+        console.log('Campaigns fetched:', campaigns.length, campaigns);
         setAllCampaigns(campaigns);
       } else {
-        console.error('Error fetching campaigns:', response.statusText);
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        console.error('Error fetching campaigns:', response.status, errorData);
         setAllCampaigns([]);
       }
     } catch (error) {
@@ -214,7 +223,7 @@ const CampaignsPage = () => {
   }
 
   // Don't render if not authenticated or wrong role
-  if (!session || session.user.role !== 'fournisseur') {
+  if (!session || (session.user.role !== 'supplier' && session.user.role !== 'fournisseur')) {
     return null;
   }
 
@@ -222,15 +231,14 @@ const CampaignsPage = () => {
     <DashboardLayout>
       {/* Notification */}
       {notification.show && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
-          notification.type === 'success' 
-            ? 'bg-green-100 text-green-800 border border-green-200' 
-            : 'bg-red-100 text-red-800 border border-red-200'
-        }`}>
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${notification.type === 'success'
+          ? 'bg-green-100 text-green-800 border border-green-200'
+          : 'bg-red-100 text-red-800 border border-red-200'
+          }`}>
           {notification.message}
         </div>
       )}
-      
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -238,7 +246,7 @@ const CampaignsPage = () => {
             <h1 className="text-3xl font-bold text-gray-900">Gestion des Campagnes</h1>
             <p className="text-gray-600 mt-1">Gérez toutes les campagnes de toutes les écoles</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -248,7 +256,7 @@ const CampaignsPage = () => {
         </div>
 
         {/* Campaign Manager */}
-        <SupplierCampaignManager 
+        <SupplierCampaignManager
           campaigns={allCampaigns}
           loading={loadingCampaigns}
           onRefresh={handleRefresh}
@@ -261,6 +269,20 @@ const CampaignsPage = () => {
           onViewDetails={handleViewDetails}
           selectedCampaignId={selectedCampaignId}
         />
+
+        {/* Students List for Selected Campaign */}
+        {selectedCampaignId && (() => {
+          const selectedCampaign = allCampaigns.find(c => {
+            const cId = c._id?.toString() || c._id;
+            const sId = selectedCampaignId?.toString() || selectedCampaignId;
+            return cId === sId;
+          });
+          return selectedCampaign ? (
+            <CampaignStudentsList
+              campaign={selectedCampaign}
+            />
+          ) : null;
+        })()}
       </div>
     </DashboardLayout>
   );

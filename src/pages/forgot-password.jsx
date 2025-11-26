@@ -56,7 +56,7 @@ export default function ForgotPassword() {
         </Button>
       </form>
       <p className="mt-4 text-center">
-        <Link href="/login" className="text-blue-500 hover:underline">Retour à la connexion</Link>
+        <Link href="/connexion" className="text-blue-500 hover:underline">Retour à la connexion</Link>
       </p>
     </div>
   );

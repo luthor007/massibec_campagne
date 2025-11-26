@@ -20,6 +20,7 @@ const OrderStudentSchema = new mongoose.Schema({
     studentSchoolAccountBenefit: { type: Number, required: true }, // Bénéfice étudiant compte scolaire
     schoolProjectBenefit: { type: Number, required: true }, // Bénéfice projet école
     raffleBenefit: { type: Number, required: true }, // Bénéfice pour le tirage
+    isAdditional: { type: Boolean, default: false }, // True if product was added beyond sold quantities
     // Legacy fields for backward compatibility
     studentBenefit: { type: Number }, // Bénéfice pour l'élève (legacy)
     organizationBenefit: { type: Number }, // Bénéfice pour l'organisation (legacy)
@@ -50,6 +51,39 @@ const OrderStudentSchema = new mongoose.Schema({
 // Index unique composé: orderId est unique par campagne (campaignNumber)
 // Cela permet d'avoir orderId: 1, 2, 3... pour chaque campagne
 OrderStudentSchema.index({ campaignNumber: 1, orderId: 1 }, { unique: true });
+
+// Pre-save hook to sanitize string fields to ensure valid UTF-8
+OrderStudentSchema.pre('save', function (next) {
+  const stringFields = ['email', 'studentName', 'phoneNumber'];
+
+  // Sanitize top-level string fields
+  for (const field of stringFields) {
+    if (this[field] && typeof this[field] === 'string') {
+      try {
+        this[field] = Buffer.from(this[field], 'utf8').toString('utf8');
+      } catch (e) {
+        console.error(`Error encoding OrderStudent.${field}:`, e);
+        this[field] = '';
+      }
+    }
+  }
+
+  // Sanitize products array
+  if (this.products && Array.isArray(this.products)) {
+    for (const product of this.products) {
+      if (product.productName && typeof product.productName === 'string') {
+        try {
+          product.productName = Buffer.from(product.productName, 'utf8').toString('utf8');
+        } catch (e) {
+          console.error(`Error encoding OrderStudent.products.productName:`, e);
+          product.productName = '';
+        }
+      }
+    }
+  }
+
+  next();
+});
 
 // Get the model instance
 const OrderStudentModel = mongoose.models.OrderStudent || mongoose.model('OrderStudent', OrderStudentSchema);

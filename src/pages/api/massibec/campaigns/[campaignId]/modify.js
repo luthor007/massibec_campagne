@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       modifiedAt: new Date()
     };
 
-    // Update status to indicate Massibec has proposed modifications
+    // Update status to indicate Jappuie.ca admin has proposed modifications
     campaign.status = 'pending_school_approval';
 
     await school.save();

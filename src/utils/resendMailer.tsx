@@ -10,8 +10,16 @@ import PasswordResetEmailTemplate from '../components/PasswordResetEmailTemplate
 import EmailTemplateStudent from '../components/EmailTemplateStudent';
 import { SendEmailParams as EmailTypesParams, ProductItemEmail } from './emailTypes';
 
-// Initialize Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Initialize Resend only if API key is available and valid
+let resend: any = null;
+if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== '') {
+  try {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  } catch (error) {
+    // Resend initialization failed, will be null
+    resend = null;
+  }
+}
 
 // Get from email address
 const getFromEmail = () => {
@@ -19,7 +27,7 @@ const getFromEmail = () => {
 };
 
 const getFromName = () => {
-  return process.env.GMAIL_FROM_NAME || 'Massibec Financement';
+  return process.env.GMAIL_FROM_NAME || 'Jappuie';
 };
 
 // Local interfaces
@@ -99,6 +107,10 @@ interface SendVerificationEmailParams {
 const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
   const { to, cc, subject, firstName, verificationUrl } = params;
 
+  if (!resend) {
+    throw new Error('Resend API key not configured');
+  }
+
   try {
     // Générer le contenu HTML en utilisant le composant EmailVerificationTemplate
     const htmlContent = ReactDOMServer.renderToStaticMarkup(
@@ -110,7 +122,7 @@ const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const emailOptions: any = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <campagne@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -142,6 +154,10 @@ const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
 const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
   const { to, subject, resetLink } = params;
 
+  if (!resend) {
+    throw new Error('Resend API key not configured');
+  }
+
   try {
     // Générer le contenu HTML en utilisant le composant PasswordResetEmailTemplate
     const htmlContent = ReactDOMServer.renderToStaticMarkup(
@@ -152,7 +168,7 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const { data, error } = await resend.emails.send({
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie.ca <commande@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -176,6 +192,10 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
  * @param params - Paramètres pour personnaliser l'e-mail.
  */
 const sendEmail = async (params: SendEmailParams) => {
+  if (!resend) {
+    throw new Error('Resend API key not configured');
+  }
+
   const {
     to,
     cc,
@@ -244,7 +264,7 @@ const sendEmail = async (params: SendEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const emailOptions: any = {
-      from: from || `Campagne Massibec <commande@massibec.com>`,
+      from: from || `Jappuie <campagne@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -274,6 +294,10 @@ const sendEmail = async (params: SendEmailParams) => {
  * @param params - Paramètres pour personnaliser l'e-mail de suppression.
  */
 const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
+  if (!resend) {
+    throw new Error('Resend API key not configured');
+  }
+
   const {
     to,
     subject,
@@ -303,7 +327,7 @@ const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const { data, error } = await resend.emails.send({
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie.ca <commande@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -327,6 +351,10 @@ const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
  * @param params - Paramètres pour personnaliser l'e-mail de confirmation étudiant.
  */
 const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
+  if (!resend) {
+    throw new Error('Resend API key not configured');
+  }
+
   const {
     studentPercentage,
     orderId,
@@ -362,7 +390,7 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
 
     // Envoyer l'e-mail via Resend
     const { data, error } = await resend.emails.send({
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <campagne@jappuie.ca>`,
       to: email,
       subject: `Confirmation de votre commande - Commande #${orderId}`,
       html: htmlContent,
@@ -386,6 +414,10 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
  * @param params - Paramètres pour personnaliser l'e-mail de notification de vente.
  */
 const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams) => {
+  if (!resend) {
+    throw new Error('Resend API key not configured');
+  }
+
   const {
     to,
     cc,
@@ -427,7 +459,7 @@ const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams
 
     // Envoyer l'e-mail via Resend
     const emailOptions: any = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie.ca <commande@jappuie.ca>`,
       to: to,
       subject: subject || `Nouvelle Vente Reçue - Commande #${orderId}`,
       html: htmlContent,

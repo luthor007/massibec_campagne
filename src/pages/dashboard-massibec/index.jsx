@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import DashboardLayout from '../../components/Dashboard/DashboardLayout';
 import SupplierStats from '../../components/Dashboard/Supplier/SupplierStats';
 import SchoolsTable from '../../components/Dashboard/Supplier/SchoolsTable';
@@ -6,19 +8,34 @@ import { useSupplierSchools } from '../../hooks/useSupplierSchools';
 import { useSupplierStats } from '../../hooks/useSupplierStats';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Building2, 
-  Clock, 
-  CheckCircle, 
+import {
+  Building2,
+  Clock,
+  CheckCircle,
   AlertTriangle,
   Users,
   TrendingUp
 } from 'lucide-react';
 
 const DashboardMassibec = () => {
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [periode, setPeriode] = useState('mois');
-  const { schools, loading: schoolsLoading, refreshSchools, getSchoolsNeedingApproval } = useSupplierSchools();
+  const { schools, loading: schoolsLoading, refreshSchools } = useSupplierSchools();
   const { stats, loading: statsLoading, refreshStats } = useSupplierStats(periode);
+
+  useEffect(() => {
+    if (status === 'loading') return;
+    if (!session) {
+      router.push('/connexion');
+      return;
+    }
+    // Redirect suppliers to the new dashboard-supplier pages
+    if (session.user.role === 'supplier' || session.user.role === 'fournisseur') {
+      router.push('/dashboard-supplier');
+      return;
+    }
+  }, [session, status, router]);
 
   const handleApproveSchool = async (school) => {
     console.log('handleApproveSchool called for:', school.name);
@@ -29,7 +46,7 @@ const DashboardMassibec = () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       console.log('Approve response:', response.status);
       if (response.ok) {
         console.log('Refreshing data...');
@@ -50,7 +67,7 @@ const DashboardMassibec = () => {
         },
         body: JSON.stringify({ reason: 'Rejeté par l\'administrateur' })
       });
-      
+
       if (response.ok) {
         await Promise.all([refreshSchools(), refreshStats()]);
       }
@@ -68,7 +85,7 @@ const DashboardMassibec = () => {
         },
         body: JSON.stringify({ reason: 'Désactivation temporaire' })
       });
-      
+
       if (response.ok) {
         await Promise.all([refreshSchools(), refreshStats()]);
       }
@@ -85,7 +102,7 @@ const DashboardMassibec = () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         await Promise.all([refreshSchools(), refreshStats()]);
       }
@@ -107,7 +124,7 @@ const DashboardMassibec = () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         console.log('Campaign approved successfully');
         await Promise.all([refreshSchools(), refreshStats()]);
@@ -126,7 +143,7 @@ const DashboardMassibec = () => {
         },
         body: JSON.stringify({ reason })
       });
-      
+
       if (response.ok) {
         console.log('Campaign rejected successfully');
         await Promise.all([refreshSchools(), refreshStats()]);
@@ -144,7 +161,7 @@ const DashboardMassibec = () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         console.log('Campaign unapproved successfully');
         await Promise.all([refreshSchools(), refreshStats()]);
@@ -153,8 +170,6 @@ const DashboardMassibec = () => {
       console.error('Erreur lors de la désapprobation de la campagne:', error);
     }
   };
-
-  const schoolsNeedingApproval = getSchoolsNeedingApproval();
 
   return (
     <DashboardLayout>
@@ -165,7 +180,7 @@ const DashboardMassibec = () => {
             <h1 className="text-3xl font-bold text-gray-900">Dashboard Fournisseur</h1>
             <p className="text-gray-600">Gestion des écoles et campagnes Massibec</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={refreshSchools}>
               <TrendingUp className="w-4 h-4 mr-2" />
@@ -174,39 +189,8 @@ const DashboardMassibec = () => {
           </div>
         </div>
 
-        {/* Actions requises */}
-        {schoolsNeedingApproval.length > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-800">
-                <AlertTriangle className="w-5 h-5" />
-                Actions Requises
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-orange-700">
-                    {schoolsNeedingApproval.length} école(s) en attente d'approbation
-                  </p>
-                  <p className="text-sm text-orange-600 mt-1">
-                    Cliquez sur "Approuver" ou "Rejeter" dans le tableau ci-dessous
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
-                  onClick={() => document.getElementById('schools-table')?.scrollIntoView({ behavior: 'smooth' })}
-                >
-                  Voir les écoles
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Statistiques principales */}
-        <SupplierStats 
+        <SupplierStats
           stats={stats}
           loading={statsLoading}
           periode={periode}
@@ -216,19 +200,19 @@ const DashboardMassibec = () => {
 
         {/* Vue d'ensemble des écoles */}
         <div id="schools-table">
-        <SchoolsTable
-          schools={schools}
-          loading={schoolsLoading}
-          onRefresh={refreshSchools}
-          onApprove={handleApproveSchool}
-          onReject={handleRejectSchool}
-          onDeactivate={handleDeactivateSchool}
-          onReactivate={handleReactivateSchool}
-          onViewDetails={handleViewDetails}
-          onApproveCampaign={handleApproveCampaign}
-          onRejectCampaign={handleRejectCampaign}
-          onUnapproveCampaign={handleUnapproveCampaign}
-        />
+          <SchoolsTable
+            schools={schools}
+            loading={schoolsLoading}
+            onRefresh={refreshSchools}
+            onApprove={handleApproveSchool}
+            onReject={handleRejectSchool}
+            onDeactivate={handleDeactivateSchool}
+            onReactivate={handleReactivateSchool}
+            onViewDetails={handleViewDetails}
+            onApproveCampaign={handleApproveCampaign}
+            onRejectCampaign={handleRejectCampaign}
+            onUnapproveCampaign={handleUnapproveCampaign}
+          />
         </div>
 
         {/* Résumé rapide */}
@@ -248,20 +232,6 @@ const DashboardMassibec = () => {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                En Attente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{schoolsNeedingApproval.length}</div>
-              <div className="text-xs text-gray-500 mt-1">
-                Nécessitent une action
-              </div>
-            </CardContent>
-          </Card>
 
           <Card>
             <CardHeader className="pb-2">

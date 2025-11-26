@@ -6,6 +6,7 @@ import ProductList from '../../components/ProductList'
 import Cart from '../../components/Cart'
 import StickyCartMobile from '../../components/StickyCartMobile'
 import { ArrowLeft, ShoppingBag, Percent, AlertCircle, ChevronDown, ChevronUp, Clock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import ShareSection from '../../components/ShareSection'
 import StoreInfoCard from '../../components/StoreInfoCard'
@@ -16,6 +17,7 @@ import OnboardingTooltip from '../../components/Dashboard/OnboardingTooltip'
 import { toast } from 'sonner'
 import { isTestCampaign } from '../../utils/campaignHelpers'
 import { trackVisit } from '../../lib/analytics'
+import { getDateStringInTimezone } from '../../utils/dateHelpers'
 import dbConnect from '../../lib/mongodb'
 import Store from '../../models/Store'
 import User from '../../models/User'
@@ -58,6 +60,34 @@ export default function Boutique({
   const [discountEnabled, setDiscountEnabled] = useState(true)
   const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 })
   const [isExpired, setIsExpired] = useState(false)
+
+  // Store closed state
+  const isStoreClosed = initialStoreData?.isStoreClosed || false
+  const latestActiveStore = initialStoreData?.latestActiveStore || null
+
+  // Helper function to format dates in Quebec timezone for display
+  const formatDateForDisplay = (dateString, options = {}) => {
+    if (!dateString) return ''
+
+    try {
+      // First, get the date in Quebec timezone as YYYY-MM-DD
+      const quebecDateString = getDateStringInTimezone(new Date(dateString), 'America/Montreal')
+
+      // Parse it back to create a date at midnight Quebec time
+      const [year, month, day] = quebecDateString.split('-').map(Number)
+      const quebecDate = new Date(year, month - 1, day)
+
+      // Format with the requested options
+      return quebecDate.toLocaleDateString('fr-CA', {
+        timeZone: 'America/Montreal',
+        ...options
+      })
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      // Fallback to original method
+      return new Date(dateString).toLocaleDateString('fr-CA', options)
+    }
+  }
 
   // Timer countdown for order deadline
   useEffect(() => {
@@ -288,7 +318,9 @@ export default function Boutique({
       const highlightElement = (selector, className = 'ring-4 ring-blue-500 ring-opacity-75') => {
         const element = document.querySelector(selector);
         if (element) {
-          element.classList.add(className);
+          // Split className string into individual classes and add them separately
+          const classes = className.split(' ').filter(c => c.trim());
+          element.classList.add(...classes);
           return element;
         }
         return null;
@@ -504,8 +536,51 @@ export default function Boutique({
       )}
     </motion.div>
 
+    {/* Store Closed Banner */}
+    {isStoreClosed && (
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-4 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl p-4 sm:p-6 shadow-lg"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <AlertCircle className="h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0" />
+              <h2 className="text-lg sm:text-xl font-bold">Cette boutique est fermée</h2>
+            </div>
+            <p className="text-sm sm:text-base opacity-90 mb-4">
+              La période de commande pour cette campagne est terminée depuis plus de 2 semaines.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {latestActiveStore ? (
+                <Link href={`/${latestActiveStore.slug}`}>
+                  <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">
+                    Voir ma dernière boutique active
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/">
+                  <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">
+                    Retour à l'accueil
+                  </Button>
+                </Link>
+              )}
+              {latestActiveStore && (
+                <Link href="/">
+                  <Button variant="outline" className="w-full sm:w-auto border-white text-white hover:bg-white/10">
+                    Retour à l'accueil
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    )}
+
     {/* Urgency Banner - Date limite */}
-    {orderDeadline && (
+    {orderDeadline && !isStoreClosed && (
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -514,9 +589,13 @@ export default function Boutique({
         <div className="flex items-center gap-2 sm:gap-3">
           <Clock className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-sm sm:text-base font-semibold">⏰ Date limite : {new Date(orderDeadline).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p className="text-sm sm:text-base font-semibold" suppressHydrationWarning>
+              ⏰ Date limite : {formatDateForDisplay(orderDeadline, { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
             {deliveryDate && (
-              <p className="text-sm sm:text-base opacity-90 mt-0.5">📦 Livraison le {new Date(deliveryDate).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}</p>
+              <p className="text-sm sm:text-base opacity-90 mt-0.5" suppressHydrationWarning>
+                📦 Livraison le {formatDateForDisplay(deliveryDate, { day: 'numeric', month: 'long' })}
+              </p>
             )}
             {isExpired ? (
               <p className="text-xs sm:text-sm opacity-90 mt-1 font-semibold">⚠️ La période de commande est terminée</p>
@@ -595,13 +674,20 @@ export default function Boutique({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
       <div className="lg:col-span-2 order-2 lg:order-1">
         <div className="overflow-y-auto">
-          <ProductList
-            schoolId={schoolId}
-            campaignId={campaignId}
-            storeId={storeIdentifier}
-            isReady={isStoreDataLoaded || !!initialProducts}
-            initialProducts={initialProducts}
-          />
+          {isStoreClosed ? (
+            <div className="text-center py-12 bg-gray-50 rounded-xl">
+              <p className="text-gray-600 text-lg mb-4">Cette boutique n'accepte plus de commandes.</p>
+              <p className="text-gray-500 text-sm">Utilisez les boutons ci-dessus pour accéder à une boutique active ou retourner à l'accueil.</p>
+            </div>
+          ) : (
+            <ProductList
+              schoolId={schoolId}
+              campaignId={campaignId}
+              storeId={storeIdentifier}
+              isReady={isStoreDataLoaded || !!initialProducts}
+              initialProducts={initialProducts}
+            />
+          )}
         </div>
 
         {/* Mobile: StoreInfoCard and ShareSection below products */}
@@ -625,10 +711,12 @@ export default function Boutique({
 
       {/* Desktop sidebar */}
       <div className="lg:col-span-1 space-y-4 sm:space-y-6 lg:space-y-8 order-1 lg:order-2">
-        {/* Desktop Cart - hidden on mobile */}
-        <div className="hidden lg:block">
-          <Cart id={storeIdentifier} campaignId={campaignId} schoolId={schoolId} campaignData={initialStoreData?.campaign} initialDeliveryOptions={initialStoreData?.deliveryOptions} />
-        </div>
+        {/* Desktop Cart - hidden on mobile and when store is closed */}
+        {!isStoreClosed && (
+          <div className="hidden lg:block">
+            <Cart id={storeIdentifier} campaignId={campaignId} schoolId={schoolId} campaignData={initialStoreData?.campaign} initialDeliveryOptions={initialStoreData?.deliveryOptions} />
+          </div>
+        )}
 
         {/* Desktop: StoreInfoCard and ShareSection */}
         <div className="hidden lg:block space-y-4 sm:space-y-6 lg:space-y-8">
@@ -649,19 +737,21 @@ export default function Boutique({
         </div>
       </div>
 
-      {/* Mobile Sticky Cart */}
-      <StickyCartMobile
-        id={storeIdentifier}
-        campaignId={campaignId}
-        schoolId={schoolId}
-        campaignData={initialStoreData?.campaign}
-        initialDeliveryOptions={initialStoreData?.deliveryOptions}
-        onCheckoutOpen={() => {
-          if (currentStep?.key === 'visitedStore' && !isCompleted) {
-            setShowTestDataModal(true)
-          }
-        }}
-      />
+      {/* Mobile Sticky Cart - hidden when store is closed */}
+      {!isStoreClosed && (
+        <StickyCartMobile
+          id={storeIdentifier}
+          campaignId={campaignId}
+          schoolId={schoolId}
+          campaignData={initialStoreData?.campaign}
+          initialDeliveryOptions={initialStoreData?.deliveryOptions}
+          onCheckoutOpen={() => {
+            if (currentStep?.key === 'visitedStore' && !isCompleted) {
+              setShowTestDataModal(true)
+            }
+          }}
+        />
+      )}
     </div>
   </div>
 
@@ -892,6 +982,10 @@ export async function getServerSideProps(context) {
     let schoolName = null
     let schoolIdToUse = null
 
+    // Check if store is closed (delivery date + 2 weeks)
+    let isStoreClosed = false
+    let latestActiveStore = null
+
     if (campaignIdToUse) {
       const campaign = await Campaign.findById(campaignIdToUse).populate('school').lean()
       if (campaign) {
@@ -915,6 +1009,46 @@ export async function getServerSideProps(context) {
           schoolIdToUse = campaign.school._id.toString()
           schoolName = campaign.school.name
         }
+
+        // Check if store is closed (delivery date + 2 weeks)
+        if (campaign.deliveryDate) {
+          const deliveryDate = new Date(campaign.deliveryDate)
+          const twoWeeksAfterDelivery = new Date(deliveryDate)
+          twoWeeksAfterDelivery.setDate(twoWeeksAfterDelivery.getDate() + 14)
+          const now = new Date()
+
+          if (now > twoWeeksAfterDelivery) {
+            isStoreClosed = true
+
+            // Find the latest active store for this user
+            // Get all stores for this user, sorted by creation date
+            const userStores = await Store.find({ user: store.user })
+              .populate('campaignId')
+              .sort({ createdAt: -1 })
+              .lean()
+
+            // Find the first store that is not closed
+            for (const userStore of userStores) {
+              if (!userStore.campaignId) continue
+
+              const storeCampaign = await Campaign.findById(userStore.campaignId).lean()
+              if (!storeCampaign || !storeCampaign.deliveryDate) continue
+
+              const storeDeliveryDate = new Date(storeCampaign.deliveryDate)
+              const storeTwoWeeksAfter = new Date(storeDeliveryDate)
+              storeTwoWeeksAfter.setDate(storeTwoWeeksAfter.getDate() + 14)
+
+              // If this store is not closed and has a slug, use it
+              if (now <= storeTwoWeeksAfter && userStore.slug) {
+                latestActiveStore = {
+                  slug: userStore.slug,
+                  name: userStore.name
+                }
+                break
+              }
+            }
+          }
+        }
       }
     }
 
@@ -930,21 +1064,57 @@ export async function getServerSideProps(context) {
     }
 
     // Get owner phone
-    const ownerPhone = owner.role === 'school_manager'
-      ? (owner.schoolManagerInfo?.telephone || owner.schoolManagerInfo?.cellulaire || '')
-      : (owner.parentInfo?.telephone || '')
+    let ownerPhone = '';
+    if (owner.role === 'school_manager') {
+      ownerPhone = owner.schoolManagerInfo?.telephone || owner.schoolManagerInfo?.cellulaire || '';
+    } else if (owner.role === 'supplier') {
+      // For suppliers, check supplierManagerInfo first, then fetch from Supplier model
+      ownerPhone = owner.supplierManagerInfo?.telephone || owner.supplierManagerInfo?.cellulaire || '';
+
+      // If not found in user info, fetch from Supplier model
+      if (!ownerPhone && owner.supplierManagerInfo?.organisme) {
+        const Supplier = (await import('../../models/Supplier')).default;
+        const supplier = await Supplier.findById(owner.supplierManagerInfo.organisme).lean();
+        if (supplier && supplier.phone) {
+          ownerPhone = supplier.phone;
+        }
+      }
+    } else {
+      // For students
+      ownerPhone = owner.parentInfo?.telephone || '';
+    }
 
     // Fetch products with custom pricing
     let products = []
     if (campaignIdToUse) {
       const activeCampaign = await Campaign.findById(campaignIdToUse)
         .populate('customPrices.productId', '_id')
+        .populate('supplier', '_id')
         .lean()
 
-      const productDocs = await Product.find({})
+      // Build query to filter products by campaign's supplier
+      const productQuery = {};
+      if (activeCampaign?.supplier) {
+        const supplierId = activeCampaign.supplier._id || activeCampaign.supplier;
+        productQuery.supplier = supplierId;
+      }
+
+      const productDocs = await Product.find(productQuery)
         .sort({ order: 1, createdAt: -1 })
         .limit(100)
         .lean()
+
+      // Debug: Check if attributes are in the database
+      if (process.env.NODE_ENV === 'development' && productDocs.length > 0) {
+        const sampleDoc = productDocs.find(p => p.name === 'Pâté à la viande') || productDocs[0];
+        console.log(`[Boutique SSR] Sample productDoc from DB (with campaign):`, {
+          name: sampleDoc.name,
+          hasAttributes: !!sampleDoc.attributes,
+          attributes: sampleDoc.attributes,
+          attributesType: typeof sampleDoc.attributes,
+          allKeys: Object.keys(sampleDoc)
+        });
+      }
 
       products = productDocs
         .filter(product => product && product._id && product.name)
@@ -958,10 +1128,13 @@ export async function getServerSideProps(context) {
               if (!cp.productId) return false
               let cpProductId = null
               if (cp.productId._id) {
+                // Populated reference
                 cpProductId = cp.productId._id.toString()
               } else if (cp.productId.toString && typeof cp.productId.toString === 'function') {
+                // ObjectId instance
                 cpProductId = cp.productId.toString()
               } else if (typeof cp.productId === 'string') {
+                // Already a string
                 cpProductId = cp.productId
               } else {
                 try {
@@ -974,17 +1147,35 @@ export async function getServerSideProps(context) {
             })
 
             if (customPrice && customPrice.price !== undefined && customPrice.price !== null) {
-              finalPrice = customPrice.price
-              hasCustomPrice = true
+              const customPriceValue = Number(customPrice.price)
+              if (!isNaN(customPriceValue) && customPriceValue >= 0) {
+                finalPrice = customPriceValue
+                hasCustomPrice = true
+              }
             }
           }
+
+          // Get attributes from product, ensuring all fields are present
+          const productAttributes = product.attributes || {};
+          const sanitizedAttributes = {
+            freezable: productAttributes.freezable !== undefined ? productAttributes.freezable : (product.freezable !== undefined ? product.freezable : false),
+            glutenFree: productAttributes.glutenFree !== undefined ? productAttributes.glutenFree : false,
+            vegetarian: productAttributes.vegetarian !== undefined ? productAttributes.vegetarian : false,
+            vegan: productAttributes.vegan !== undefined ? productAttributes.vegan : false,
+            nutFree: productAttributes.nutFree !== undefined ? productAttributes.nutFree : false,
+            halal: productAttributes.halal !== undefined ? productAttributes.halal : false,
+            kosher: productAttributes.kosher !== undefined ? productAttributes.kosher : false,
+            organic: productAttributes.organic !== undefined ? productAttributes.organic : false,
+            quebecProduct: productAttributes.quebecProduct !== undefined ? productAttributes.quebecProduct : false,
+            allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+          };
 
           const productData = {
             id: product._id.toString(),
             name: sanitizeHtml(String(product.name || '')),
             description: sanitizeHtml(String(product.description || '')),
-            price: Number(finalPrice) || 0,
-            originalPrice: Number(product.price) || 0,
+            price: Number(finalPrice) || 0, // Prix final (peut être le prix personnalisé de l'école)
+            originalPrice: Number(product.price) || 0, // Prix original du produit (avant personnalisation)
             cost: Number(product.cost) || 0,
             image: sanitizeHtml(String(product.image || '')),
             ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
@@ -992,7 +1183,25 @@ export async function getServerSideProps(context) {
             isDefault: Boolean(product.isDefault),
             productId: String(product.productId || ''),
             order: Number(product.order) || 0,
-            hasCustomPrice: hasCustomPrice
+            hasCustomPrice: hasCustomPrice, // Indique si le prix a été personnalisé par l'école
+            attributes: sanitizedAttributes,
+            freezable: product.freezable // Keep for backward compatibility
+          }
+
+          // Debug: Log products with attributes
+          if (process.env.NODE_ENV === 'development') {
+            const hasAnyAttr = Object.values(sanitizedAttributes).some((val, idx) => {
+              if (idx === 9) return val && String(val).trim().length > 0; // allergens
+              return val === true;
+            });
+            if (hasAnyAttr || product.attributes || product.freezable !== undefined) {
+              console.log(`[Boutique SSR] Product "${productData.name}":`, {
+                'product.attributes from DB': product.attributes,
+                'product.freezable from DB': product.freezable,
+                'sanitizedAttributes': sanitizedAttributes,
+                'hasAnyAttribute': hasAnyAttr
+              });
+            }
           }
 
           // Debug: Log products with ingredient/nutrition images
@@ -1007,28 +1216,85 @@ export async function getServerSideProps(context) {
         })
     } else {
       // Fetch products without custom pricing
-      const productDocs = await Product.find({})
+      // Still try to filter by supplier if we can determine it from the store
+      const productQuery = {};
+
+      // Try to get supplier from store's campaign if available
+      if (rawStore.campaignId && mongoose.Types.ObjectId.isValid(rawStore.campaignId)) {
+        try {
+          const fallbackCampaign = await Campaign.findById(rawStore.campaignId)
+            .populate('supplier', '_id')
+            .lean();
+
+          if (fallbackCampaign?.supplier) {
+            const supplierId = fallbackCampaign.supplier._id || fallbackCampaign.supplier;
+            productQuery.supplier = supplierId;
+          }
+        } catch (error) {
+          console.error('Error fetching campaign for supplier filter:', error);
+        }
+      }
+
+      const productDocs = await Product.find(productQuery)
         .sort({ order: 1, createdAt: -1 })
         .limit(100)
         .lean()
+        .select('+attributes') // Explicitly include attributes field
 
       products = productDocs
         .filter(product => product && product._id && product.name)
-        .map(product => ({
-          id: product._id.toString(),
-          name: sanitizeHtml(String(product.name || '')),
-          description: sanitizeHtml(String(product.description || '')),
-          price: Number(product.price) || 0,
-          originalPrice: Number(product.price) || 0,
-          cost: Number(product.cost) || 0,
-          image: sanitizeHtml(String(product.image || '')),
-          ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
-          nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
-          isDefault: Boolean(product.isDefault),
-          productId: String(product.productId || ''),
-          order: Number(product.order) || 0,
-          hasCustomPrice: false
-        }))
+        .map(product => {
+          // Get attributes from product, ensuring all fields are present
+          const productAttributes = product.attributes || {};
+          const sanitizedAttributes = {
+            freezable: productAttributes.freezable !== undefined ? productAttributes.freezable : (product.freezable !== undefined ? product.freezable : false),
+            glutenFree: productAttributes.glutenFree !== undefined ? productAttributes.glutenFree : false,
+            vegetarian: productAttributes.vegetarian !== undefined ? productAttributes.vegetarian : false,
+            vegan: productAttributes.vegan !== undefined ? productAttributes.vegan : false,
+            nutFree: productAttributes.nutFree !== undefined ? productAttributes.nutFree : false,
+            halal: productAttributes.halal !== undefined ? productAttributes.halal : false,
+            kosher: productAttributes.kosher !== undefined ? productAttributes.kosher : false,
+            organic: productAttributes.organic !== undefined ? productAttributes.organic : false,
+            quebecProduct: productAttributes.quebecProduct !== undefined ? productAttributes.quebecProduct : false,
+            allergens: productAttributes.allergens !== undefined ? String(productAttributes.allergens) : ''
+          };
+
+          const productData = {
+            id: product._id.toString(),
+            name: sanitizeHtml(String(product.name || '')),
+            description: sanitizeHtml(String(product.description || '')),
+            price: Number(product.price) || 0,
+            originalPrice: Number(product.price) || 0,
+            cost: Number(product.cost) || 0,
+            image: sanitizeHtml(String(product.image || '')),
+            ingredientsImage: sanitizeHtml(String(product.ingredientsImage || '')),
+            nutritionImage: sanitizeHtml(String(product.nutritionImage || '')),
+            isDefault: Boolean(product.isDefault),
+            productId: String(product.productId || ''),
+            order: Number(product.order) || 0,
+            hasCustomPrice: false,
+            attributes: sanitizedAttributes,
+            freezable: product.freezable // Keep for backward compatibility
+          };
+
+          // Debug: Log products with attributes
+          if (process.env.NODE_ENV === 'development') {
+            const hasAnyAttr = Object.values(sanitizedAttributes).some((val, idx) => {
+              if (idx === 9) return val && String(val).trim().length > 0; // allergens
+              return val === true;
+            });
+            if (hasAnyAttr || product.attributes || product.freezable !== undefined) {
+              console.log(`[Boutique SSR] Product "${productData.name}" (no campaign):`, {
+                'product.attributes from DB': product.attributes,
+                'product.freezable from DB': product.freezable,
+                'sanitizedAttributes': sanitizedAttributes,
+                'hasAnyAttribute': hasAnyAttr
+              });
+            }
+          }
+
+          return productData;
+        })
     }
 
     // Normalize deliveryOptions (similar to /api/stores/[id])
@@ -1094,9 +1360,69 @@ export async function getServerSideProps(context) {
           slug: store.slug || null,
           campaign: campaignData,
           schoolName: schoolName,
-          deliveryOptions: normalizedDeliveryOptions
+          deliveryOptions: normalizedDeliveryOptions,
+          isStoreClosed: isStoreClosed,
+          latestActiveStore: latestActiveStore
         },
-        initialProducts: products
+        initialProducts: (() => {
+          // Debug: Check products before final mapping
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[Boutique SSR] Before final mapping - products count: ${products.length}`);
+            if (products.length > 0) {
+              const sample = products[0];
+              console.log(`[Boutique SSR] Sample product before mapping:`, {
+                name: sample.name,
+                hasAttributes: !!sample.attributes,
+                attributes: sample.attributes,
+                keys: Object.keys(sample)
+              });
+            }
+          }
+
+          return products.map(p => {
+            // Ensure attributes are always included and properly serialized
+            // Handle both cases: p.attributes is undefined/null OR p.attributes is an empty object
+            const existingAttributes = p.attributes && typeof p.attributes === 'object' ? p.attributes : {};
+            const productWithAttributes = {
+              ...p,
+              attributes: {
+                freezable: existingAttributes.freezable !== undefined ? existingAttributes.freezable : (p.freezable !== undefined ? p.freezable : false),
+                glutenFree: existingAttributes.glutenFree !== undefined ? existingAttributes.glutenFree : false,
+                vegetarian: existingAttributes.vegetarian !== undefined ? existingAttributes.vegetarian : false,
+                vegan: existingAttributes.vegan !== undefined ? existingAttributes.vegan : false,
+                nutFree: existingAttributes.nutFree !== undefined ? existingAttributes.nutFree : false,
+                halal: existingAttributes.halal !== undefined ? existingAttributes.halal : false,
+                kosher: existingAttributes.kosher !== undefined ? existingAttributes.kosher : false,
+                organic: existingAttributes.organic !== undefined ? existingAttributes.organic : false,
+                quebecProduct: existingAttributes.quebecProduct !== undefined ? existingAttributes.quebecProduct : false,
+                allergens: existingAttributes.allergens !== undefined ? String(existingAttributes.allergens) : ''
+              }
+            };
+
+            // Debug logging
+            if (process.env.NODE_ENV === 'development') {
+              if (!p.attributes || Object.keys(p.attributes || {}).length === 0) {
+                console.log(`[Boutique SSR] Product "${p.name}" being returned - ensuring attributes exist:`, {
+                  'p.attributes': p.attributes,
+                  'p.freezable': p.freezable,
+                  'productWithAttributes.attributes': productWithAttributes.attributes,
+                  'productKeys': Object.keys(p)
+                });
+              }
+              // Always log first product to see what's being returned
+              if (products.indexOf(p) === 0) {
+                console.log(`[Boutique SSR] First product being returned:`, {
+                  name: productWithAttributes.name,
+                  hasAttributes: !!productWithAttributes.attributes,
+                  attributes: productWithAttributes.attributes,
+                  allKeys: Object.keys(productWithAttributes)
+                });
+              }
+            }
+
+            return productWithAttributes;
+          });
+        })()
       }
     }
   } catch (error) {

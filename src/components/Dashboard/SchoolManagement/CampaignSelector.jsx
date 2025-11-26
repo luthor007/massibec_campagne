@@ -6,26 +6,25 @@ import { Calendar, Target, CheckCircle, Clock, AlertCircle, TrendingUp } from 'l
 import { isTestCampaign } from '../../../utils/campaignHelpers';
 
 const CampaignSelector = ({ campaigns, selectedCampaign, onSelect, loading }) => {
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 border-green-200';
-      case 'approved': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'pending_approval': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
-      case 'completed': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  const getModeColor = (mode) => {
+    if (mode === 'production') {
+      return 'bg-green-100 text-green-800 border-green-200';
     }
+    return 'bg-orange-100 text-orange-800 border-orange-200'; // Test mode
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'active': return <CheckCircle className="h-3 w-3" />;
-      case 'approved': return <CheckCircle className="h-3 w-3" />;
-      case 'pending_approval': return <Clock className="h-3 w-3" />;
-      case 'rejected': return <AlertCircle className="h-3 w-3" />;
-      case 'completed': return <CheckCircle className="h-3 w-3" />;
-      default: return <Clock className="h-3 w-3" />;
+  const getModeIcon = (mode) => {
+    if (mode === 'production') {
+      return <CheckCircle className="h-3 w-3" />;
     }
+    return <AlertCircle className="h-3 w-3" />; // Test mode icon
+  };
+
+  const getModeLabel = (mode) => {
+    if (mode === 'production') {
+      return 'Production';
+    }
+    return 'Test';
   };
 
   const formatDate = (date) => {
@@ -83,28 +82,29 @@ const CampaignSelector = ({ campaigns, selectedCampaign, onSelect, loading }) =>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div>
-                                <Badge className={`${getStatusColor(campaign.status)} border font-medium ${isTestCampaign(campaign) ? 'cursor-help' : ''}`}>
+                                <Badge className={`${getModeColor(campaign?.mode)} border font-medium ${campaign?.mode === 'test' || !campaign?.mode ? 'cursor-help' : ''}`}>
                                   <div className="flex items-center space-x-1">
-                                    {getStatusIcon(campaign.status)}
+                                    {getModeIcon(campaign?.mode)}
                                     <span className="text-xs">
-                                      {campaign.status === 'active' ? 'Active' :
-                                       campaign.status === 'approved' ? 'Approuvée' :
-                                       campaign.status === 'pending_approval' ? 'En attente' :
-                                       campaign.status === 'rejected' ? 'Rejetée' :
-                                       campaign.status === 'completed' ? 'Terminée' : campaign.status}
+                                      {getModeLabel(campaign?.mode)}
                                     </span>
-                                    {isTestCampaign(campaign) && (
-                                      <AlertCircle className="h-2.5 w-2.5 text-orange-600 ml-0.5" />
-                                    )}
                                   </div>
                                 </Badge>
                               </div>
                             </TooltipTrigger>
-                            {isTestCampaign(campaign) && (
+                            {(campaign?.mode === 'test' || !campaign?.mode) && (
                               <TooltipContent className="max-w-xs bg-gray-900 text-white text-xs">
                                 <p className="font-semibold mb-1">⚠️ Mode test</p>
                                 <p>
-                                  Cette campagne est en attente d'approbation. Toutes les données, commandes, statistiques et rapports sont en mode test et ne sont pas définitives jusqu'à l'approbation de la campagne par Massibec.
+                                  Cette campagne est en mode test. Vous pouvez modifier tous les paramètres. Les données, commandes, statistiques et rapports sont marqués comme test et ne sont pas définitifs. Passez en mode production pour démarrer la campagne réelle.
+                                </p>
+                              </TooltipContent>
+                            )}
+                            {campaign?.mode === 'production' && (
+                              <TooltipContent className="max-w-xs bg-gray-900 text-white text-xs">
+                                <p className="font-semibold mb-1">✓ Mode production</p>
+                                <p>
+                                  Cette campagne est en mode production. Les paramètres sont verrouillés et ne peuvent plus être modifiés. Toutes les données sont réelles et définitives.
                                 </p>
                               </TooltipContent>
                             )}

@@ -41,28 +41,28 @@ export default async function handler(req, res) {
     // Verify user belongs to this school
     const schoolId = campaign.school?._id?.toString() || campaign.school?.toString() || campaign.school;
     const userSchoolId = user.schoolManagerInfo?.organisme?.toString();
-    
+
     if (schoolId !== userSchoolId) {
       return res.status(403).json({ message: 'Accès non autorisé à cette campagne' });
     }
 
     // Only allow deletion if campaign is not approved or active
     if (campaign.status === 'approved' || campaign.status === 'active') {
-      return res.status(400).json({ 
-        message: 'Cette campagne a été approuvée ou est active et ne peut pas être supprimée. Contactez Massibec pour plus d\'informations.' 
+      return res.status(400).json({
+        message: 'Cette campagne a été approuvée ou est active et ne peut pas être supprimée. Contactez Jappuie.ca pour plus d\'informations.'
       });
     }
 
     // Check if there are any orders associated with this campaign
     const ordersCount = await Order.countDocuments({ campaignId: campaign._id });
-    const studentOrdersCount = await OrderStudent.countDocuments({ 
+    const studentOrdersCount = await OrderStudent.countDocuments({
       school: schoolId,
-      campaignNumber: campaign.campaignNumber 
+      campaignNumber: campaign.campaignNumber
     });
 
     if (ordersCount > 0 || studentOrdersCount > 0) {
-      return res.status(400).json({ 
-        message: `Cette campagne ne peut pas être supprimée car elle contient ${ordersCount + studentOrdersCount} commande(s). Veuillez d'abord supprimer toutes les commandes associées.` 
+      return res.status(400).json({
+        message: `Cette campagne ne peut pas être supprimée car elle contient ${ordersCount + studentOrdersCount} commande(s). Veuillez d'abord supprimer toutes les commandes associées.`
       });
     }
 
@@ -85,12 +85,12 @@ export default async function handler(req, res) {
 
     // Remove campaign from users' campaigns arrays
     await User.updateMany(
-      { 
-        'campaigns.campaignId': campaign._id 
+      {
+        'campaigns.campaignId': campaign._id
       },
       {
-        $pull: { 
-          campaigns: { campaignId: campaign._id } 
+        $pull: {
+          campaigns: { campaignId: campaign._id }
         }
       }
     );
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
       { $set: { activeCampaignId: null } }
     );
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Campagne supprimée avec succès'
     });
 

@@ -45,13 +45,13 @@ export default async function handler(req, res) {
       campaign.rejectionReason = reason.trim();
       campaign.approvedBy = token.sub;
       campaign.approvedAt = new Date();
-      
-      // Clear any Massibec modifications when rejected
+
+      // Clear any admin modifications when rejected
       campaign.massibecModifications = undefined;
 
       await school.save();
 
-      res.status(200).json({ 
+      res.status(200).json({
         message: 'Campagne rejetée avec succès',
         campaign: campaign
       });

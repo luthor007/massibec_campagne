@@ -4,15 +4,16 @@ import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 
-const ImageUpload = ({ 
-  value, 
-  onChange, 
-  className = '', 
+const ImageUpload = ({
+  value,
+  onChange,
+  className = '',
   previewClassName = '',
   showPreview = true,
   maxSize = 5 * 1024 * 1024, // 5MB
   acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'],
-  inputId
+  inputId,
+  uploadType = 'product' // 'product' or 'student-photo'
 }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -41,7 +42,11 @@ const ImageUpload = ({
       // Upload via server-side API
       const formData = new FormData();
       formData.append('image', file);
-      
+      // Add upload type if provided via props
+      if (uploadType) {
+        formData.append('type', uploadType);
+      }
+
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
@@ -87,11 +92,10 @@ const ImageUpload = ({
     <div className={`space-y-4 ${className}`}>
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-          dragOver 
-            ? 'border-blue-500 bg-blue-50' 
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
+        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${dragOver
+          ? 'border-blue-500 bg-blue-50'
+          : 'border-gray-300 hover:border-gray-400'
+          }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -154,7 +158,8 @@ const ImageUpload = ({
             <img
               src={value}
               alt="Preview"
-              className="w-full h-32 object-cover rounded-lg"
+              className="max-w-full h-auto rounded-lg"
+              style={{ maxHeight: '500px' }}
             />
           </Card>
         </div>

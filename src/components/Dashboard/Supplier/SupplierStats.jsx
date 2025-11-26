@@ -2,10 +2,10 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  TrendingUp, 
-  ShoppingCart, 
-  Building2, 
+import {
+  TrendingUp,
+  ShoppingCart,
+  Building2,
   DollarSign,
   AlertTriangle,
   CheckCircle,
@@ -98,32 +98,32 @@ const SupplierStats = ({ stats, loading, periode, onPeriodeChange, onRefresh }) 
   return (
     <div className="space-y-6">
       {/* En-tête avec contrôles */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Tableau de bord</h2>
-          <p className="text-gray-600">Vue d'ensemble des performances</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Tableau de bord</h2>
+          <p className="text-sm sm:text-base text-gray-600">Vue d'ensemble des performances</p>
         </div>
-        
-        <div className="flex items-center gap-3">
-          <select 
-            value={periode} 
+
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+          <select
+            value={periode}
             onChange={(e) => onPeriodeChange(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-md text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex-1 md:flex-none min-w-[140px]"
           >
             <option value="semaine">Cette semaine</option>
             <option value="mois">Ce mois</option>
             <option value="annee">Cette année</option>
             <option value="all">Tout le temps</option>
           </select>
-          
-          <Button onClick={onRefresh} variant="outline" size="sm">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Actualiser
+
+          <Button onClick={onRefresh} variant="outline" size="sm" className="flex-1 md:flex-none">
+            <BarChart3 className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Actualiser</span>
           </Button>
-          
-          <Button variant="outline" size="sm">
-            <Download className="w-4 h-4 mr-2" />
-            Exporter
+
+          <Button variant="outline" size="sm" className="flex-1 md:flex-none">
+            <Download className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Exporter</span>
           </Button>
         </div>
       </div>
@@ -151,7 +151,7 @@ const SupplierStats = ({ stats, loading, periode, onPeriodeChange, onRefresh }) 
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
         {kpiCards.map((kpi, index) => {
           const Icon = kpi.icon;
           return (
@@ -165,12 +165,12 @@ const SupplierStats = ({ stats, loading, periode, onPeriodeChange, onRefresh }) 
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-gray-900">{kpi.value}</div>
-                <div className="flex items-center mt-2">
+                <div className="text-xl lg:text-2xl font-bold text-gray-900 break-words">{kpi.value}</div>
+                <div className="flex flex-wrap items-center gap-1 lg:gap-2 mt-2">
                   <Badge variant="secondary" className="text-xs">
                     {kpi.change}
                   </Badge>
-                  <span className="text-xs text-gray-500 ml-2">vs période précédente</span>
+                  <span className="text-xs text-gray-500">vs période précédente</span>
                 </div>
               </CardContent>
             </Card>
@@ -179,7 +179,7 @@ const SupplierStats = ({ stats, loading, periode, onPeriodeChange, onRefresh }) 
       </div>
 
       {/* Graphiques et analyses */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         {/* Top écoles */}
         <Card>
           <CardHeader>
@@ -260,16 +260,18 @@ const SupplierStats = ({ stats, loading, periode, onPeriodeChange, onRefresh }) 
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-purple-600" />
-            Répartition des Campagnes par Statut
+            Répartition des Campagnes par Mode
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {stats.campagnesParStatut && Object.keys(stats.campagnesParStatut).length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(stats.campagnesParStatut).map(([statut, count]) => (
-                <div key={statut} className="text-center p-4 bg-gray-50 rounded-lg">
+          {stats.campagnesParMode && Object.keys(stats.campagnesParMode).length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              {Object.entries(stats.campagnesParMode).map(([mode, count]) => (
+                <div key={mode} className="text-center p-4 bg-gray-50 rounded-lg">
                   <div className="text-2xl font-bold text-gray-900">{count}</div>
-                  <div className="text-sm text-gray-600 capitalize">{statut}</div>
+                  <div className="text-sm text-gray-600 capitalize">
+                    {mode === 'production' ? 'Production' : mode === 'test' ? 'Test' : mode}
+                  </div>
                 </div>
               ))}
             </div>

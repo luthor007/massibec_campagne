@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.next/
+.firecrawl/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Large data files
+*.csv
+scraped_data.json
+assets/scraped-images/
+
+# Cache and temp
+.specstory/
+.cursor/
+.fly/
+
+# Git
+.git/

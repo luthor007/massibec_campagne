@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
       // Validate required fields
       if (!nomComplet || !email || !motDePasse || !confirmationMotDePasse) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: 'Tous les champs sont requis',
           missingFields: {
             nomComplet: !nomComplet,
@@ -65,15 +65,15 @@ export default async function handler(req, res) {
       // Check if email already exists - try multiple approaches
       // 1. Exact match first (most common case)
       let existingUser = await User.findOne({ email: sanitizedEmail });
-      
+
       // 2. If not found, try case-insensitive regex search
       if (!existingUser) {
         const escapedEmail = sanitizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        existingUser = await User.findOne({ 
+        existingUser = await User.findOne({
           email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') }
         });
       }
-      
+
       // 3. If still not found, get all users and check manually (fallback)
       // This is needed because MongoDB unique index might be case-sensitive depending on collation
       if (!existingUser) {
@@ -83,15 +83,15 @@ export default async function handler(req, res) {
           const normalizedExisting = u.email.toLowerCase().trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
           return normalizedExisting === sanitizedEmail;
         });
-        
+
         if (foundUser) {
           existingUser = await User.findById(foundUser._id);
         }
       }
-      
+
       if (existingUser) {
         const emailMatch = existingUser.email.toLowerCase().trim().replace(/[\u200B-\u200D\uFEFF]/g, '') === sanitizedEmail;
-        
+
         console.error('Email already exists:', {
           requestedEmail: sanitizedEmail,
           requestedEmailBytes: Buffer.from(sanitizedEmail).toString('hex'),
@@ -103,10 +103,10 @@ export default async function handler(req, res) {
           emailsMatch: emailMatch,
           normalizedMatch: existingUser.email.toLowerCase().trim().replace(/[\u200B-\u200D\uFEFF]/g, '') === sanitizedEmail
         });
-        
+
         // If email exists but is not verified and was created more than 24 hours ago, 
         // we could allow re-registration, but for now just show the error
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: 'Cette adresse e-mail est déjà utilisée.',
           ...(process.env.NODE_ENV === 'development' && {
             debug: {
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
           })
         });
       }
-      
+
       console.log('Email check passed - no existing user found for:', sanitizedEmail);
 
       // Generate a verification token
@@ -139,7 +139,8 @@ export default async function handler(req, res) {
         codePostal: 'À compléter', // Placeholder (maxlength: 20)
         currentCampaignNumber: 0,
         campaigns: [],
-        approved: false,
+        approved: true, // Auto-approved
+        status: 'approved', // Auto-approved
         profileCompleted: false // Flag to track if profile is complete
       });
 
@@ -149,15 +150,15 @@ export default async function handler(req, res) {
       const hashedPassword = bcrypt.hashSync(motDePasse, 10);
 
       // Double-check before creating user (prevent race condition)
-      const finalCheck = await User.findOne({ 
-        email: sanitizedEmail 
+      const finalCheck = await User.findOne({
+        email: sanitizedEmail
       });
       if (finalCheck) {
         console.error('Race condition detected - email found on final check:', {
           email: sanitizedEmail,
           existingUserId: finalCheck._id.toString()
         });
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: 'Cette adresse e-mail est déjà utilisée.',
           code: 'EMAIL_EXISTS'
         });
@@ -174,9 +175,7 @@ export default async function handler(req, res) {
           organisme: newSchool._id,
           ville: 'À compléter',
           codePostal: 'À compléter',
-          telephone: 'À compléter',
-          cellulaire: 'À compléter',
-          momentPourJoindre: 'À compléter'
+          telephone: 'À compléter'
         },
         verificationToken: verificationToken,
         verificationTokenExpires: verificationTokenExpires,
@@ -194,18 +193,18 @@ export default async function handler(req, res) {
             duplicateEmail: duplicateEmail,
             keyPattern: saveError.keyPattern
           });
-          
+
           // Verify the duplicate email actually matches
           const duplicateUser = await User.findOne({ email: duplicateEmail || sanitizedEmail });
           if (duplicateUser) {
-            return res.status(400).json({ 
+            return res.status(400).json({
               message: 'Cette adresse e-mail est déjà utilisée.',
               code: 'DUPLICATE_KEY'
             });
           }
-          
+
           // If we can't find the duplicate, it's a weird MongoDB issue
-          return res.status(500).json({ 
+          return res.status(500).json({
             message: 'Erreur lors de la création du compte. Veuillez réessayer.',
             code: 'SAVE_ERROR'
           });
@@ -232,16 +231,16 @@ export default async function handler(req, res) {
 
       // Send verification email
       const verificationUrl = `${process.env.NEXTAUTH_URL}/api/verify-email?token=${verificationToken}`;
-      
+
       await sendVerificationEmail({
         to: sanitizedEmail,
-        cc: 'commande@massibec.com',
-        subject: `Inscription (${sanitizedName}) Campagne Massibec`,
+        cc: 'alexis@jappuie.ca',
+        subject: `Inscription (${sanitizedName}) Jappuie`,
         firstName: sanitizedName.split(' ')[0],
         verificationUrl,
       });
 
-      res.status(201).json({ 
+      res.status(201).json({
         message: 'Compte créé avec succès. Vérifiez votre e-mail pour confirmer votre compte.',
         userId: newUser._id,
         schoolId: newSchool._id
@@ -256,16 +255,16 @@ export default async function handler(req, res) {
         keyPattern: error.keyPattern,
         keyValue: error.keyValue
       });
-      
+
       // Return more specific error information
       if (error.name === 'ValidationError') {
-        return res.status(400).json({ 
-          message: 'Erreur de validation des données', 
+        return res.status(400).json({
+          message: 'Erreur de validation des données',
           details: error.message,
           errors: error.errors
         });
       }
-      
+
       // MongoDB duplicate key error (unique constraint violation)
       if (error.code === 11000) {
         const field = Object.keys(error.keyPattern || {})[0] || 'email';
@@ -274,15 +273,15 @@ export default async function handler(req, res) {
           value: error.keyValue?.[field],
           existingValue: error.keyValue
         });
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: 'Cette adresse e-mail est déjà utilisée',
           field: field
         });
       }
-      
+
       // Generic error response with more details in development
-      res.status(500).json({ 
-        message: 'Erreur interne du serveur', 
+      res.status(500).json({
+        message: 'Erreur interne du serveur',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Une erreur est survenue',
         ...(process.env.NODE_ENV === 'development' && {
           stack: error.stack,

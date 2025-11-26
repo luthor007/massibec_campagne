@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       }
 
       const school = await School.findById(schoolId).lean();
-      
+
       if (!school) {
         return res.status(404).json({ message: 'École non trouvée' });
       }
@@ -30,15 +30,16 @@ export default async function handler(req, res) {
         telephone: school.telephone,
         email: school.email,
         preferredPaymentMethod: school.preferredPaymentMethod,
+        paymentInfo: school.paymentInfo || {},
         deliveryInstructions: school.deliveryInstructions,
         distributionLocation: school.distributionLocation,
         organizationType: school.organizationType || 'school', // Default to school for backward compatibility
         numberOfStudents: school.numberOfStudents || null,
         logo: school.logo,
-        logoUrl: school.logo && school.logo.startsWith('school-logo/') 
+        logoUrl: school.logo && school.logo.startsWith('school-logo/')
           ? `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${school.logo}.png`
-          : school.logo && school.logo.startsWith('http') 
-            ? school.logo 
+          : school.logo && school.logo.startsWith('http')
+            ? school.logo
             : null,
         dateDeLivraison: school.finCampagne || school.debutCampagne,
         objectifFinancier: school.objectifFinancier,
@@ -93,13 +94,13 @@ export default async function handler(req, res) {
       if (!user || user.role !== 'school_manager') {
         return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier cette école' });
       }
-      
+
       // Check if this user is associated with this school
       const schoolIdFromUser = user.schoolManagerInfo?.organisme;
       if (schoolIdFromUser?.toString() !== schoolId) {
         return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à modifier cette école' });
       }
-      
+
       // For backward compatibility, treat as owner
       schoolManager = { role: 'owner' };
     }
@@ -173,19 +174,19 @@ export default async function handler(req, res) {
         finalUpdateObject,
         { new: true, runValidators: true, upsert: false }
       );
-      
+
       console.log('School after update - logo field:', updatedSchool.logo);
     } catch (saveError) {
       console.error('Error updating school:', saveError);
-      
+
       if (saveError.message && saveError.message.includes('Invalid UTF-8')) {
-        return res.status(400).json({ 
-          message: 'Les données contiennent des caractères invalides. Veuillez utiliser uniquement des caractères de texte standard.' 
+        return res.status(400).json({
+          message: 'Les données contiennent des caractères invalides. Veuillez utiliser uniquement des caractères de texte standard.'
         });
       }
-      
-      return res.status(500).json({ 
-        message: 'Erreur lors de la mise à jour de l\'école. Veuillez vérifier que toutes les données sont valides.' 
+
+      return res.status(500).json({
+        message: 'Erreur lors de la mise à jour de l\'école. Veuillez vérifier que toutes les données sont valides.'
       });
     }
 
@@ -209,13 +210,14 @@ export default async function handler(req, res) {
         telephone: updatedSchool.telephone,
         email: updatedSchool.email,
         preferredPaymentMethod: updatedSchool.preferredPaymentMethod,
+        paymentInfo: updatedSchool.paymentInfo || {},
         deliveryInstructions: updatedSchool.deliveryInstructions,
         distributionLocation: updatedSchool.distributionLocation,
         logo: updatedSchool.logo,
-        logoUrl: updatedSchool.logo && updatedSchool.logo.startsWith('school-logo/') 
+        logoUrl: updatedSchool.logo && updatedSchool.logo.startsWith('school-logo/')
           ? `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${updatedSchool.logo}.png`
-          : updatedSchool.logo && updatedSchool.logo.startsWith('http') 
-            ? updatedSchool.logo 
+          : updatedSchool.logo && updatedSchool.logo.startsWith('http')
+            ? updatedSchool.logo
             : null
       }
     });

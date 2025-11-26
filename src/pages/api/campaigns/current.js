@@ -3,6 +3,7 @@ import Campaign from '../../../models/Campaign';
 import School from '../../../models/School';
 import User from '../../../models/User';
 import Product from '../../../models/Product';
+import SupplierManager from '../../../models/SupplierManager';
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
@@ -46,57 +47,103 @@ export default async function handler(req, res) {
             // Fall back to legacy school field
             schoolId = user.school?._id || user.school;
           }
+        } else if (user.role === 'supplier') {
+          // For suppliers, we'll handle this separately after getting the supplier
+          // Don't set schoolId here, we'll find it from the campaign
         } else {
           return res.status(401).json({ message: 'Rôle non autorisé' });
         }
       }
 
-      if (!schoolId) {
-        return res.status(404).json({ message: 'Aucune école associée à cet utilisateur' });
-      }
-
-      // Find the school
-      const school = await School.findById(schoolId).lean();
-      if (!school) {
-        return res.status(404).json({ message: 'École non trouvée' });
-      }
-
-      // Get campaign ID from user's campaigns array if available (works for both students and school_managers who joined campaigns)
+      // Handle suppliers separately
       let campaignId = null;
-      
-      // First, check if user has joined any campaigns
-      if (user.campaigns && user.campaigns.length > 0) {
-        // For both students and school_managers, prioritize their activeCampaignId if set
-        if (user.activeCampaignId) {
-          // Check if the activeCampaignId corresponds to a joined campaign
-          const activeCampaignEntry = user.campaigns.find(c => {
-            const entryCampaignId = c.campaignId?._id || c.campaignId;
-            return entryCampaignId?.toString() === user.activeCampaignId.toString();
-          });
-          if (activeCampaignEntry) {
-            campaignId = user.activeCampaignId;
-            if (user.role === 'school_manager') {
-              console.log(`[campaigns/current] School manager in preview mode: Using user.activeCampaignId: ${campaignId}`);
+      let school = null;
+
+      if (user.role === 'supplier') {
+        // Get supplier for this user
+        const supplierManager = await SupplierManager.findOne({
+          user: userId,
+          status: 'active'
+        }).populate('supplier').lean();
+
+        if (!supplierManager || !supplierManager.supplier) {
+          return res.status(404).json({ message: 'Fournisseur non trouvé pour cet utilisateur' });
+        }
+
+        const supplierId = supplierManager.supplier._id;
+
+        // If querySchoolId is provided, use it to find a specific campaign
+        if (querySchoolId) {
+          schoolId = querySchoolId;
+          school = await School.findById(schoolId).lean();
+          if (!school) {
+            return res.status(404).json({ message: 'École non trouvée' });
+          }
+        }
+
+        // Find a campaign for this supplier (prefer active one, or most recent)
+        const supplierCampaigns = await Campaign.find({ supplier: supplierId })
+          .populate('school', 'name address ville codePostal logo')
+          .sort({ isActive: -1, createdAt: -1 })
+          .limit(1)
+          .lean();
+
+        if (supplierCampaigns.length > 0) {
+          campaignId = supplierCampaigns[0]._id;
+          if (!school && supplierCampaigns[0].school) {
+            school = supplierCampaigns[0].school;
+            schoolId = school._id.toString();
+          }
+        } else {
+          return res.status(404).json({ message: 'Aucune campagne trouvée pour ce fournisseur' });
+        }
+      } else {
+        // Original logic for students and school_managers
+        if (!schoolId) {
+          return res.status(404).json({ message: 'Aucune école associée à cet utilisateur' });
+        }
+
+        // Find the school
+        school = await School.findById(schoolId).lean();
+        if (!school) {
+          return res.status(404).json({ message: 'École non trouvée' });
+        }
+
+        // Get campaign ID from user's campaigns array if available (works for both students and school_managers who joined campaigns)
+        // First, check if user has joined any campaigns
+        if (user.campaigns && user.campaigns.length > 0) {
+          // For both students and school_managers, prioritize their activeCampaignId if set
+          if (user.activeCampaignId) {
+            // Check if the activeCampaignId corresponds to a joined campaign
+            const activeCampaignEntry = user.campaigns.find(c => {
+              const entryCampaignId = c.campaignId?._id || c.campaignId;
+              return entryCampaignId?.toString() === user.activeCampaignId.toString();
+            });
+            if (activeCampaignEntry) {
+              campaignId = user.activeCampaignId;
+              if (user.role === 'school_manager') {
+                console.log(`[campaigns/current] School manager in preview mode: Using user.activeCampaignId: ${campaignId}`);
+              }
             }
           }
-        }
-        
-        // If no activeCampaignId or not found in joined campaigns, use the first active campaign or first campaign
-        if (!campaignId) {
-          const activeCampaignEntry = user.campaigns.find(c => c.isActive) || user.campaigns[0];
-          campaignId = activeCampaignEntry?.campaignId?._id || activeCampaignEntry?.campaignId;
-          if (user.role === 'school_manager') {
-            console.log(`[campaigns/current] School manager in preview mode: Using joined campaign (fallback): ${campaignId}`);
+
+          // If no activeCampaignId or not found in joined campaigns, use the first active campaign or first campaign
+          if (!campaignId) {
+            const activeCampaignEntry = user.campaigns.find(c => c.isActive) || user.campaigns[0];
+            campaignId = activeCampaignEntry?.campaignId?._id || activeCampaignEntry?.campaignId;
+            if (user.role === 'school_manager') {
+              console.log(`[campaigns/current] School manager in preview mode: Using joined campaign (fallback): ${campaignId}`);
+            }
           }
-        }
-      } else if (user.role === 'school_manager') {
-        // Only use school's activeCampaignId if the school_manager hasn't joined any campaigns
-        // This is the normal manager view, not preview mode
-        campaignId = school.activeCampaignId;
-        if (campaignId) {
-          console.log(`[campaigns/current] School manager: Using school.activeCampaignId: ${campaignId}`);
-        } else {
-          console.log(`[campaigns/current] School manager: No activeCampaignId found for school ${schoolId}`);
+        } else if (user.role === 'school_manager') {
+          // Only use school's activeCampaignId if the school_manager hasn't joined any campaigns
+          // This is the normal manager view, not preview mode
+          campaignId = school.activeCampaignId;
+          if (campaignId) {
+            console.log(`[campaigns/current] School manager: Using school.activeCampaignId: ${campaignId}`);
+          } else {
+            console.log(`[campaigns/current] School manager: No activeCampaignId found for school ${schoolId}`);
+          }
         }
       }
 
@@ -105,30 +152,33 @@ export default async function handler(req, res) {
       if (campaignId) {
         // If we have a specific campaign ID, use that
         activeCampaign = await Campaign.findById(campaignId)
+          .populate('supplier', 'name logo email phone pricingSettings')
           .populate('customPrices.productId', 'name price cost image')
           .populate('profitSplits.productId', 'name')
           .lean();
       } else {
         // Otherwise, find any active campaign for the school (including test campaigns)
         // For school managers, also check campaigns that might not be marked as isActive
-        activeCampaign = await Campaign.findOne({ 
-          school: schoolId, 
+        activeCampaign = await Campaign.findOne({
+          school: schoolId,
           status: { $in: ['active', 'approved', 'pending_approval', 'pending_school_approval'] }
         })
-        .sort({ createdAt: -1 }) // Get the most recent one
-        .populate('customPrices.productId', 'name price cost image')
-        .populate('profitSplits.productId', 'name')
-        .lean();
-        
-        // If still not found and user is school_manager, try without status filter
-        if (!activeCampaign && user.role === 'school_manager') {
-          activeCampaign = await Campaign.findOne({ 
-            school: schoolId
-          })
           .sort({ createdAt: -1 }) // Get the most recent one
+          .populate('supplier', 'name logo email phone pricingSettings')
           .populate('customPrices.productId', 'name price cost image')
           .populate('profitSplits.productId', 'name')
           .lean();
+
+        // If still not found and user is school_manager, try without status filter
+        if (!activeCampaign && user.role === 'school_manager') {
+          activeCampaign = await Campaign.findOne({
+            school: schoolId
+          })
+            .sort({ createdAt: -1 }) // Get the most recent one
+            .populate('supplier', 'name logo email phone pricingSettings')
+            .populate('customPrices.productId', 'name price cost image')
+            .populate('profitSplits.productId', 'name')
+            .lean();
         }
       }
 
@@ -166,7 +216,7 @@ export default async function handler(req, res) {
         return res.status(404).json({ message: 'Aucune campagne active trouvée' });
       }
 
-      res.status(200).json({ 
+      res.status(200).json({
         campaign,
         school: {
           _id: school._id,

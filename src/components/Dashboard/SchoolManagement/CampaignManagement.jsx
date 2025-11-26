@@ -58,7 +58,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
   }, [school, selectedCampaignId]);
 
   const selectedCampaign = campaigns.find(c => c._id === selectedCampaignId);
-  
+
   // Ensure campaign has default profit split values only if they don't exist
   const campaignWithDefaults = selectedCampaign ? {
     ...selectedCampaign,
@@ -123,15 +123,15 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
 
     const formData = new FormData(e.target);
     const financialGoalValue = formData.get('financialGoal');
-    
-    
+
+
     // Validate financial goal
     if (!financialGoalValue || financialGoalValue === '' || isNaN(parseFloat(financialGoalValue))) {
       toast.error('L\'objectif financier est requis et doit être un nombre valide');
       setIsSaving(false);
       return;
     }
-    
+
     const updateData = {
       startDate: formData.get('startDate'),
       endDate: formData.get('endDate'),
@@ -155,16 +155,16 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
 
       if (response.ok) {
         const updatedCampaign = await response.json();
-        
+
         // Update local state
-        setCampaigns(prev => prev.map(c => 
+        setCampaigns(prev => prev.map(c =>
           c._id === selectedCampaignId ? { ...c, ...updatedCampaign.campaign } : c
         ));
-        
+
         // Trigger save animation
         setSaveAnimation(true);
         setTimeout(() => setSaveAnimation(false), 2000);
-        
+
         // Notify parent component
         if (onCampaignUpdate) {
           onCampaignUpdate(updatedCampaign.campaign);
@@ -193,7 +193,7 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
 
       if (response.ok) {
         const updatedCampaign = await response.json();
-        setCampaigns(prev => prev.map(c => 
+        setCampaigns(prev => prev.map(c =>
           c._id === selectedCampaignId ? { ...c, ...updatedCampaign.campaign } : c
         ));
       } else {
@@ -220,10 +220,10 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
 
       if (response.ok) {
         const updatedCampaign = await response.json();
-        setCampaigns(prev => prev.map(c => 
+        setCampaigns(prev => prev.map(c =>
           c._id === selectedCampaignId ? { ...c, ...updatedCampaign.campaign } : c
         ));
-        
+
         // Notify parent component
         if (onCampaignUpdate) {
           onCampaignUpdate(updatedCampaign.campaign);
@@ -358,8 +358,9 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   variant="outline"
                   size="sm"
                   onClick={() => handleStatusChange('active')}
-                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'active'}
+                  disabled={isUpdatingStatus || campaignWithDefaults.status === 'active' || campaignWithDefaults.status !== 'approved'}
                   className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                  title={campaignWithDefaults.status !== 'approved' ? 'La campagne doit être approuvée avant d\'être activée' : 'Activer la campagne'}
                 >
                   <Play className="h-4 w-4 mr-1" />
                   Activer
@@ -414,11 +415,10 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                 size="sm"
                 onClick={() => handleToggleLock('profit')}
                 disabled={isTogglingLock}
-                className={`flex items-center transition-colors ${
-                  campaignWithDefaults.profitSplitLocked 
-                    ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' 
+                className={`flex items-center transition-colors ${campaignWithDefaults.profitSplitLocked
+                    ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
                     : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200'
-                }`}
+                  }`}
               >
                 {campaignWithDefaults.profitSplitLocked ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
                 {campaignWithDefaults.profitSplitLocked ? 'Déverrouiller Profits' : 'Verrouiller Profits'}
@@ -428,11 +428,10 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                 size="sm"
                 onClick={() => handleToggleLock('dates')}
                 disabled={isTogglingLock}
-                className={`flex items-center transition-colors ${
-                  campaignWithDefaults.datesLocked 
-                    ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200' 
+                className={`flex items-center transition-colors ${campaignWithDefaults.datesLocked
+                    ? 'bg-red-100 text-red-700 border-red-300 hover:bg-red-200'
                     : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200'
-                }`}
+                  }`}
               >
                 {campaignWithDefaults.datesLocked ? <Lock className="h-4 w-4 mr-1" /> : <Unlock className="h-4 w-4 mr-1" />}
                 {campaignWithDefaults.datesLocked ? 'Déverrouiller Dates' : 'Verrouiller Dates'}
@@ -498,12 +497,12 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
                   <Percent className="h-5 w-5 text-blue-600" />
                   <h3 className="text-lg font-semibold text-blue-900">Configuration des profits</h3>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="profitSplitType">Type de répartition</Label>
-                    <Select 
-                      defaultValue={campaignWithDefaults.profitSplitType || 'percentage'} 
+                    <Select
+                      defaultValue={campaignWithDefaults.profitSplitType || 'percentage'}
                       name="profitSplitType"
                       disabled={campaignWithDefaults.profitSplitLocked}
                     >
@@ -592,14 +591,13 @@ const CampaignManagement = ({ school, onCampaignUpdate }) => {
               </div>
 
               <div className="flex justify-end">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={isSaving}
-                  className={`flex items-center space-x-2 transition-all duration-300 ${
-                    saveAnimation 
-                      ? 'bg-green-600 hover:bg-green-700 scale-105' 
+                  className={`flex items-center space-x-2 transition-all duration-300 ${saveAnimation
+                      ? 'bg-green-600 hover:bg-green-700 scale-105'
                       : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
+                    }`}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

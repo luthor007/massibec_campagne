@@ -207,7 +207,13 @@ export default function CampaignDetails({
             throw new Error('Aucune école associée à cette campagne.');
           }
 
-          const response = await fetch(`/api/products?schoolId=${schoolId}`);
+          // Use campaignId if available to ensure custom prices are applied correctly
+          const campaignId = campaignData?._id || campaignData?.id;
+          const apiUrl = campaignId
+            ? `/api/products?schoolId=${schoolId}&campaignId=${campaignId}`
+            : `/api/products?schoolId=${schoolId}`;
+
+          const response = await fetch(apiUrl);
           if (response.ok) {
             const data = await response.json();
             setProducts(data.products);
@@ -239,11 +245,43 @@ export default function CampaignDetails({
     }
 
     // Get product ID - products from API use 'id' field, not '_id'
-    const productId = product._id?.toString() || product.id?.toString();
+    // For bundles, the API returns 'id' which is the actual _id, not the formatted productId
+    // IMPORTANT: For bundles, use 'id' field first (API returns bundle._id.toString() as 'id')
+    let productId = product.id?.toString() || product._id?.toString();
+
+    // For bundles, ensure we use the actual _id (stored in 'id' field from API)
+    if (product.isBundle && !productId) {
+      // Fallback: if id is not available, try to extract from productId format BUNDLE-XXXXXX
+      // But this shouldn't happen as API always returns 'id' field
+      productId = product._id?.toString();
+    }
 
     // Check if this product has custom pricing in the campaign
+    // For bundles, customPrices in campaign use the bundle's _id (not the formatted BUNDLE-xxx productId)
     const customPrice = campaignData.customPrices?.find(cp => {
-      const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
+      if (!cp.productId) return false;
+
+      // Handle multiple formats: populated object, ObjectId, or string
+      let cpProductId = null;
+      if (cp.productId._id) {
+        // Populated reference (nested _id)
+        cpProductId = cp.productId._id.toString();
+      } else if (cp.productId.toString && typeof cp.productId.toString === 'function') {
+        // ObjectId instance or populated object
+        cpProductId = cp.productId.toString();
+      } else if (typeof cp.productId === 'string') {
+        // Already a string
+        cpProductId = cp.productId;
+      } else {
+        // Try to convert anyway
+        try {
+          cpProductId = String(cp.productId);
+        } catch (e) {
+          return false;
+        }
+      }
+
+      // Match by actual _id (works for both products and bundles)
       return cpProductId === productId;
     });
 
@@ -253,8 +291,34 @@ export default function CampaignDetails({
       return psProductId === productId;
     });
 
+    // Get custom price from campaign if available, otherwise use product's default price
     const productPrice = customPrice?.price || product.price;
-    const profit = productPrice - product.cost;
+
+    // IMPORTANT: product.acquisitionCost or product.price is the ROUNDED price (source of truth)
+    // Always prefer these values over computed values when available
+    let schoolCost = 0;
+    if (product.acquisitionCost !== undefined && product.acquisitionCost !== null && product.acquisitionCost > 0) {
+      // Use acquisitionCost from API (already rounded to nearest 5 cents)
+      schoolCost = Number(product.acquisitionCost);
+    } else if (product.isBundle && product.acquisitionCost !== undefined && product.acquisitionCost !== null) {
+      // Bundle already has acquisitionCost calculated in API
+      schoolCost = Number(product.acquisitionCost) || 0;
+    } else if (product.price !== undefined && product.price !== null && product.price > 0) {
+      // product.price is already rounded to nearest 5 cents (source of truth) - use it directly
+      schoolCost = Number(product.price);
+    } else {
+      // Last resort: calculate from pricePickup (should rarely happen as APIs set price correctly)
+      // Note: This should use dynamic markup, but we don't have supplier context here
+      // Fallback to 5% markup
+      const pricePickup = Number(product.pricePickup) || 0;
+      const deliveryCostToSchool = Number(product.deliveryCostToSchool) || 0;
+      const totalPrice = (pricePickup * 1.05) + deliveryCostToSchool;
+      // Round down to nearest 5 cents
+      schoolCost = Math.floor(totalPrice * 20) / 20;
+    }
+
+    // Profit = Custom selling price - School cost
+    const profit = productPrice - schoolCost;
 
     let studentCashProfit, studentSchoolAccountProfit, raffleProfitPerUnit, orgProfit;
 
@@ -290,11 +354,23 @@ export default function CampaignDetails({
   };
 
   if (status === 'loading' || (loadingCampaign && !initialCampaignData) || (loadingProducts && !initialProducts)) {
-    return <p>Chargement des informations...</p>;
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-lg">Chargement des informations...</p>
+        </div>
+      </Layout>
+    );
   }
 
   if (error) {
-    return <p>Erreur: {error}</p>;
+    return (
+      <Layout>
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-lg text-red-600">Erreur: {error}</p>
+        </div>
+      </Layout>
+    );
   }
 
   if (!session) {
@@ -303,7 +379,7 @@ export default function CampaignDetails({
 
   if (!campaignData) {
     return (
-      <Layout className="pt-24">
+      <Layout>
         <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden">
           <div className="container mx-auto px-4 py-12 overflow-x-hidden">
             <div className="text-center">
@@ -321,11 +397,14 @@ export default function CampaignDetails({
     );
   }
 
+  // Get supplier name from campaign data
+  const supplierName = campaignData?.supplier?.name || campaignData?.supplier || 'Jappuie';
+
   return (
-    <Layout className="pt-24">
-      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden">
-        <header className="bg-primary text-primary-foreground py-12">
-          <div className="container mx-auto px-4 overflow-x-hidden">
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-b from-primary/10 to-background pt-8 overflow-x-hidden w-full">
+        <header className="bg-primary text-primary-foreground py-12 w-full">
+          <div className="w-full max-w-7xl mx-auto px-4 overflow-x-hidden">
             {/* Back arrow */}
             <Link
               href="/dashboard"
@@ -343,7 +422,7 @@ export default function CampaignDetails({
             </Link>
 
             <h1 className="text-4xl font-bold mb-4">
-              {campaignData ? `Campagne #${campaignData.campaignNumber} - ${schoolData?.name}` : 'Campagne de Financement Massibec'}
+              {campaignData ? `Campagne #${campaignData.campaignNumber} - ${schoolData?.name}` : `Campagne de Financement ${supplierName}`}
             </h1>
             <p className="text-xl">
               {campaignData ?
@@ -363,7 +442,7 @@ export default function CampaignDetails({
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-12 space-y-12">
+        <main className="w-full max-w-7xl mx-auto px-4 py-12 space-y-12">
           {/* Section: Nos Produits et Profits */}
           <section>
             <h2 className="text-3xl font-semibold mb-6">Nos Produits et Profits</h2>
@@ -385,7 +464,7 @@ export default function CampaignDetails({
                         <TableRow>
                           <TableHead>Produit</TableHead>
                           <TableHead>Prix de vente</TableHead>
-                          <TableHead>Coût Massibec</TableHead>
+                          <TableHead>Coût produit</TableHead>
                           {hasStudentCashProfit && <TableHead>Profit comptant</TableHead>}
                           {hasStudentSchoolAccountProfit && <TableHead>Profit compte scolaire</TableHead>}
                           {hasOrgProfit && <TableHead>Profit école</TableHead>}
@@ -397,20 +476,91 @@ export default function CampaignDetails({
                           const profitData = profitsData[index];
 
                           // Get product ID - products from API use 'id' field, not '_id'
-                          const productId = product._id?.toString() || product.id?.toString();
+                          // For bundles, the API returns 'id' which is the actual _id, not the formatted BUNDLE-xxx productId
+                          let productId = product.id?.toString() || product._id?.toString();
+
+                          // For bundles, ensure we use the actual _id (stored in 'id' field from API)
+                          // CampaignEditor uses product._id || product.id, but API returns bundles with 'id' field
+                          if (product.isBundle && !productId) {
+                            // Fallback: if id is not available, try to extract from productId format BUNDLE-XXXXXX
+                            // But this shouldn't happen as API always returns 'id' field
+                            productId = product._id?.toString();
+                          }
 
                           // Get campaign-specific price if available
+                          // For bundles, customPrices in campaign use the bundle's _id (not the formatted BUNDLE-xxx productId)
                           const customPrice = campaignData?.customPrices?.find(cp => {
-                            const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString();
+                            if (!cp.productId) return false;
+
+                            // Handle multiple formats: populated object, ObjectId, or string
+                            let cpProductId = null;
+                            if (cp.productId._id) {
+                              // Populated reference (nested _id)
+                              cpProductId = cp.productId._id.toString();
+                            } else if (cp.productId.toString && typeof cp.productId.toString === 'function') {
+                              // ObjectId instance or populated object
+                              cpProductId = cp.productId.toString();
+                            } else if (typeof cp.productId === 'string') {
+                              // Already a string
+                              cpProductId = cp.productId;
+                            } else {
+                              // Try to convert anyway
+                              try {
+                                cpProductId = String(cp.productId);
+                              } catch (e) {
+                                return false;
+                              }
+                            }
+
+                            // Match by actual _id (works for both products and bundles)
                             return cpProductId === productId;
                           });
+
+                          // Use custom price if found, otherwise use product.price (which should already have custom price from API)
+                          // For bundles, the API already applies custom prices, so product.price should be correct
+                          // But we still check campaignData.customPrices as a fallback
                           const displayPrice = customPrice?.price || product.price;
+
+                          // Debug: Log bundle pricing issues
+                          if (product.isBundle) {
+                            console.log(`[detail.jsx] Bundle pricing for ${product.name || productId}:`, {
+                              productId,
+                              productPrice: product.price,
+                              customPriceFound: !!customPrice,
+                              customPriceValue: customPrice?.price,
+                              displayPrice,
+                              hasCustomPrice: product.hasCustomPrice,
+                              campaignCustomPricesCount: campaignData?.customPrices?.length || 0,
+                              customPricesSample: campaignData?.customPrices?.slice(0, 2).map(cp => ({
+                                productId: cp.productId?._id?.toString() || cp.productId?.toString(),
+                                price: cp.price
+                              }))
+                            });
+                          }
+
+                          // IMPORTANT: product.acquisitionCost or product.price is the ROUNDED price (source of truth)
+                          // Always prefer these values over computed values when available
+                          let displaySchoolCost = 0;
+                          if (product.acquisitionCost !== undefined && product.acquisitionCost !== null && product.acquisitionCost > 0) {
+                            // Use acquisitionCost from API (already rounded to nearest 5 cents)
+                            displaySchoolCost = Number(product.acquisitionCost);
+                          } else if (product.price !== undefined && product.price !== null && product.price > 0) {
+                            // product.price is already rounded to nearest 5 cents (source of truth) - use it directly
+                            displaySchoolCost = Number(product.price);
+                          } else {
+                            // Last resort: calculate from pricePickup (should rarely happen)
+                            const displayPricePickup = Number(product.pricePickup) || 0;
+                            const displayDeliveryCost = Number(product.deliveryCostToSchool) || 0;
+                            const totalPrice = (displayPricePickup * 1.05) + displayDeliveryCost;
+                            // Round down to nearest 5 cents
+                            displaySchoolCost = Math.floor(totalPrice * 20) / 20;
+                          }
 
                           return (
                             <TableRow key={productId}>
                               <TableCell className="font-medium">{product.name}</TableCell>
                               <TableCell>{displayPrice.toFixed(2)}$</TableCell>
-                              <TableCell>{product.cost.toFixed(2)}$</TableCell>
+                              <TableCell>{displaySchoolCost.toFixed(2)}$</TableCell>
                               {hasStudentCashProfit && <TableCell>{profitData.studentCashProfit}$</TableCell>}
                               {hasStudentSchoolAccountProfit && <TableCell>{profitData.studentSchoolAccountProfit}$</TableCell>}
                               {hasOrgProfit && <TableCell>{profitData.orgProfit}$</TableCell>}
@@ -465,14 +615,14 @@ export default function CampaignDetails({
                             <span className="font-bold text-blue-900 text-base sm:text-lg ml-7 sm:ml-0">
                               {campaignData.donationsForStudents.splitConfig.studentAccount !== undefined
                                 ? campaignData.donationsForStudents.splitConfig.studentAccount
-                                : 60}% → À transférer à Massibec (qui va transférer à l'école et le mettre dans votre compte scolaire)
+                                : 60}% → Payé à Jappuie.ca (qui va transférer à l'école et le mettre dans votre compte scolaire)
                             </span>
                           </div>
                         </div>
                       )}
                       <div className="bg-blue-200/50 rounded-lg p-3 sm:p-4 border border-blue-300">
                         <p className="text-xs sm:text-sm text-blue-900 leading-relaxed">
-                          <strong className="font-semibold">Exemple :</strong> Sur 10$ de dons, vous gardez {(10 * ((campaignData.donationsForStudents?.splitConfig?.studentCash !== undefined ? campaignData.donationsForStudents.splitConfig.studentCash : 40) / 100)).toFixed(0)}$ et vous transférez {(10 * ((campaignData.donationsForStudents?.splitConfig?.studentAccount !== undefined ? campaignData.donationsForStudents.splitConfig.studentAccount : 60) / 100)).toFixed(0)}$ à Massibec (qui va transférer à l'école et le mettre dans votre compte scolaire).
+                          <strong className="font-semibold">Exemple :</strong> Sur 10$ de dons, vous gardez {(10 * ((campaignData.donationsForStudents?.splitConfig?.studentCash !== undefined ? campaignData.donationsForStudents.splitConfig.studentCash : 40) / 100)).toFixed(0)}$ et {(10 * ((campaignData.donationsForStudents?.splitConfig?.studentAccount !== undefined ? campaignData.donationsForStudents.splitConfig.studentAccount : 60) / 100)).toFixed(0)}$ sont payés à Jappuie.ca (qui va transférer à l'école et le mettre dans votre compte scolaire).
                         </p>
                       </div>
                     </div>
@@ -486,12 +636,12 @@ export default function CampaignDetails({
                       </div>
                       <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-green-100 mb-4">
                         <p className="text-sm sm:text-base text-green-800 font-medium">
-                          100% des dons → À transférer à Massibec (qui va transférer à l'école)
+                          100% des dons → Payé à Jappuie.ca (qui va transférer à l'école)
                         </p>
                       </div>
                       <div className="bg-green-200/50 rounded-lg p-3 sm:p-4 border border-green-300">
                         <p className="text-xs sm:text-sm text-green-900 leading-relaxed">
-                          <strong className="font-semibold">Exemple :</strong> Si vous recevez 5$ de dons pour l'école, vous transférez 5$ à Massibec (qui va transférer à l'école).
+                          <strong className="font-semibold">Exemple :</strong> Si vous recevez 5$ de dons pour l'école, 5$ sont payés à Jappuie.ca (qui va transférer à l'école).
                         </p>
                       </div>
                     </div>

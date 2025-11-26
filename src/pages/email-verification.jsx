@@ -13,7 +13,7 @@ const EmailVerification = () => {
   useEffect(() => {
     // Get user email from session or sessionStorage
     if (status === 'loading') return;
-    
+
     if (session?.user?.email) {
       setUserEmail(session.user.email);
     } else {
@@ -28,14 +28,14 @@ const EmailVerification = () => {
   useEffect(() => {
     // Only start checking if we have an email
     if (!userEmail) return;
-    
+
     const checkVerification = async () => {
       try {
         if (session?.user?.id) {
           // User is logged in on this tab/device
           const response = await fetch(`/api/users/${session.user.id}`);
           const user = await response.json();
-          
+
           if (user.emailVerified) {
             // Email is verified, show welcome message then redirect
             handleVerified();
@@ -47,10 +47,10 @@ const EmailVerification = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: userEmail })
           });
-          
+
           if (response.ok) {
             const data = await response.json();
-            
+
             if (data.emailVerified) {
               // Email is verified, try to auto-login if we have a valid token
               if (data.loginToken && data.loginTokenExpires && new Date(data.loginTokenExpires) > Date.now()) {
@@ -93,15 +93,19 @@ const EmailVerification = () => {
       sessionStorage.removeItem('pendingVerificationEmail');
       setShowWelcome(true);
       setRedirecting(true);
-      
+
       // Determine redirect path based on user role
       let redirectPath = '/dashboard';
       try {
         if (session?.user?.id) {
           const response = await fetch(`/api/users/${session.user.id}`);
           const user = await response.json();
-          if (user?.role === 'school_manager') {
+          if (user?.role === 'supplier' || user?.role === 'fournisseur') {
+            redirectPath = '/dashboard-supplier/products?onboarding=true';
+          } else if (user?.role === 'school_manager') {
             redirectPath = '/dashboard-manager';
+          } else if (user?.role === 'distributor') {
+            redirectPath = '/dashboard-distributor';
           }
         } else if (userEmail) {
           // Check user by email if not logged in yet
@@ -112,8 +116,12 @@ const EmailVerification = () => {
           });
           if (response.ok) {
             const data = await response.json();
-            if (data?.user?.role === 'school_manager') {
+            if (data?.user?.role === 'supplier' || data?.user?.role === 'fournisseur') {
+              redirectPath = '/dashboard-supplier/products?onboarding=true';
+            } else if (data?.user?.role === 'school_manager') {
               redirectPath = '/dashboard-manager';
+            } else if (data?.user?.role === 'distributor') {
+              redirectPath = '/dashboard-distributor';
             }
           }
         }
@@ -121,7 +129,7 @@ const EmailVerification = () => {
         console.error('Error checking user role:', error);
         // Default to student dashboard on error
       }
-      
+
       // Show welcome for 3 seconds then redirect
       setTimeout(() => {
         router.push(redirectPath);

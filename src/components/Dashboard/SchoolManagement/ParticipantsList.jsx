@@ -12,15 +12,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { 
-  Users, 
-  DollarSign, 
-  Package, 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Users,
+  DollarSign,
+  Package,
   TrendingUp,
   RefreshCw,
   Search,
   Mail,
-  Phone
+  Phone,
+  CheckCircle2,
+  XCircle,
+  AlertCircle
 } from 'lucide-react';
 import { getTerminology } from '@/utils/organizationHelpers';
 
@@ -33,6 +43,7 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'totalSales', direction: 'desc' });
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'withSales', 'withoutSales'
 
   const fetchParticipants = async () => {
     if (!campaign?._id) return;
@@ -41,7 +52,9 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/campaigns/${campaign._id}/participants`);
+      const response = await fetch(`/api/campaigns/${campaign._id}/participants`, {
+        credentials: 'include' // Ensure cookies are sent with the request
+      });
       if (!response.ok) {
         throw new Error(`Failed to fetch participants: ${response.status}`);
       }
@@ -83,17 +96,28 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
     });
   };
 
-  const filteredParticipants = participants.filter(participant =>
-    participant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    participant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (participant.parentName && participant.parentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (participant.parentPhone && participant.parentPhone.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // Filter participants by search term and status
+  const filteredParticipants = participants.filter(participant => {
+    // Search filter
+    const matchesSearch =
+      participant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      participant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (participant.parentName && participant.parentName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (participant.parentPhone && participant.parentPhone.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    if (!matchesSearch) return false;
+
+    // Status filter
+    const hasSales = participant.totalSales > 0;
+    if (filterStatus === 'withSales') return hasSales;
+    if (filterStatus === 'withoutSales') return !hasSales;
+    return true; // 'all'
+  });
 
   // Sort participants
   const sortedParticipants = [...filteredParticipants].sort((a, b) => {
     let aValue, bValue;
-    
+
     switch (sortConfig.key) {
       case 'name':
         aValue = a.name.toLowerCase();
@@ -172,11 +196,21 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-            Participants - Campagne #{campaign.campaignNumber}
+            Liste des {terminology.participants} - Campagne #{campaign.campaignNumber}
           </h2>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">
-            {participants.length} participant{participants.length !== 1 ? 's' : ''} actif{participants.length !== 1 ? 's' : ''}
-          </p>
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            <p className="text-sm sm:text-base text-gray-600">
+              {participants.length} {terminology.participant} inscrit{participants.length !== 1 ? 's' : ''}
+            </p>
+            <Badge variant="outline" className="text-green-600 border-green-300">
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              {participants.filter(p => p.totalSales > 0).length} avec ventes
+            </Badge>
+            <Badge variant="outline" className="text-gray-500 border-gray-300">
+              <XCircle className="h-3 w-3 mr-1" />
+              {participants.filter(p => p.totalSales === 0).length} sans ventes
+            </Badge>
+          </div>
         </div>
         <Button onClick={handleRefresh} variant="outline" className="w-full sm:w-auto">
           <RefreshCw className="h-4 w-4 mr-2" />
@@ -184,15 +218,27 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
         </Button>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input
-          placeholder="Rechercher par nom, email, parent ou téléphone..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Rechercher par nom, email, parent ou téléphone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectValue placeholder="Filtrer par statut" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tous les {terminology.participants}</SelectItem>
+            <SelectItem value="withSales">Avec ventes</SelectItem>
+            <SelectItem value="withoutSales">Sans ventes</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Participants Table */}
@@ -208,8 +254,9 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50">
-                <TableHead className="font-semibold">Rang</TableHead>
-                <TableHead 
+                <TableHead className="font-semibold w-12">Statut</TableHead>
+                <TableHead className="font-semibold w-16">Rang</TableHead>
+                <TableHead
                   className="font-semibold cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('name')}
                 >
@@ -217,7 +264,7 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
                 </TableHead>
                 <TableHead className="font-semibold">Parent</TableHead>
                 <TableHead className="font-semibold">Téléphone</TableHead>
-                <TableHead 
+                <TableHead
                   className="font-semibold text-right cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('totalSales')}
                 >
@@ -229,19 +276,19 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
                 <TableHead className="font-semibold text-right text-blue-600">Profit {terminology.organization}</TableHead>
                 <TableHead className="font-semibold text-right text-purple-600">Dons {terminology.organization}</TableHead>
                 <TableHead className="font-semibold text-right text-indigo-600">Total {terminology.organization}</TableHead>
-                <TableHead 
+                <TableHead
                   className="font-semibold text-right cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('totalUnits')}
                 >
                   Unités {sortConfig.key === 'totalUnits' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="font-semibold text-right cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('orderCount')}
                 >
                   Cmd {sortConfig.key === 'orderCount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="font-semibold text-center cursor-pointer hover:bg-gray-100"
                   onClick={() => handleSort('progress')}
                 >
@@ -250,54 +297,96 @@ const ParticipantsList = ({ campaign, onRefresh, school }) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedParticipants.map((participant, index) => (
-                <TableRow key={participant._id} className="hover:bg-gray-50">
-                  <TableCell className="font-medium">
-                    <Badge variant="outline">#{index + 1}</Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">{participant.name}</TableCell>
-                  <TableCell className="text-sm text-gray-700">
-                    {participant.parentName || 'N/A'}
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-700">
-                    {participant.parentPhone || 'N/A'}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-green-600">
-                    {formatCurrency(participant.totalSales)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-green-600">
-                    {formatCurrency(participant.studentProfit || 0)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-orange-600">
-                    {formatCurrency(participant.studentDonation || 0)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-blue-700">
-                    {formatCurrency(participant.studentTotal || 0)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-blue-600">
-                    {formatCurrency(participant.schoolProfit || 0)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-purple-600">
-                    {formatCurrency(participant.schoolDonation || 0)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-indigo-600">
-                    {formatCurrency(participant.schoolTotal || 0)}
-                  </TableCell>
-                  <TableCell className="text-right">{participant.totalUnits}</TableCell>
-                  <TableCell className="text-right">{participant.orderCount}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Progress 
-                        value={Math.min(participant.progress, 100)} 
-                        className="h-2 flex-1" 
-                      />
-                      <span className="text-xs text-gray-600 min-w-[50px]">
-                        {participant.progress}%
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {sortedParticipants.map((participant, index) => {
+                const hasSales = participant.totalSales > 0;
+                return (
+                  <TableRow
+                    key={participant._id}
+                    className={`hover:bg-gray-50 ${!hasSales ? 'opacity-75' : ''}`}
+                  >
+                    <TableCell className="w-12">
+                      {hasSales ? (
+                        <div className="flex items-center justify-center">
+                          <CheckCircle2 className="h-5 w-5 text-green-500" title="A commencé à vendre" />
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center">
+                          <AlertCircle className="h-5 w-5 text-gray-400" title="N'a pas encore vendu" />
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium w-16">
+                      {hasSales ? (
+                        <Badge variant="outline" className="bg-green-50 border-green-300 text-green-700">
+                          #{index + 1}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-gray-50 border-gray-300 text-gray-500">
+                          -
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {participant.name}
+                        {participant.role === 'school_manager' && (
+                          <Badge variant="outline" className="text-xs bg-blue-50 border-blue-200 text-blue-700">
+                            Manager
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-700">
+                      {participant.parentName || 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-700">
+                      {participant.parentPhone || 'N/A'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-green-600' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.totalSales) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-green-600' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.studentProfit || 0) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-orange-600' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.studentDonation || 0) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-blue-700' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.studentTotal || 0) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-blue-600' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.schoolProfit || 0) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-purple-600' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.schoolDonation || 0) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right font-semibold ${hasSales ? 'text-indigo-600' : 'text-gray-400'}`}>
+                      {hasSales ? formatCurrency(participant.schoolTotal || 0) : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right ${hasSales ? '' : 'text-gray-400'}`}>
+                      {hasSales ? participant.totalUnits : '-'}
+                    </TableCell>
+                    <TableCell className={`text-right ${hasSales ? '' : 'text-gray-400'}`}>
+                      {hasSales ? participant.orderCount : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {hasSales ? (
+                        <div className="flex items-center space-x-2">
+                          <Progress
+                            value={Math.min(participant.progress, 100)}
+                            className="h-2 flex-1"
+                          />
+                          <span className="text-xs text-gray-600 min-w-[50px]">
+                            {participant.progress}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

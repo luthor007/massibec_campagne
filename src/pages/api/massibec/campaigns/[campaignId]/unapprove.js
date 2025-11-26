@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Non autorisé, pas connecté' });
     }
 
-    // Check if user is Massibec admin (fournisseur role)
+    // Check if user is supplier/admin (fournisseur role)
     if (token.role !== 'fournisseur') {
       return res.status(403).json({ message: 'Accès non autorisé' });
     }
@@ -35,8 +35,8 @@ export default async function handler(req, res) {
 
     // Only allow unapproving if campaign is approved
     if (campaign.status !== 'approved') {
-      return res.status(400).json({ 
-        message: `La campagne doit être approuvée pour être désapprouvée. Statut actuel: ${campaign.status}` 
+      return res.status(400).json({
+        message: `La campagne doit être approuvée pour être désapprouvée. Statut actuel: ${campaign.status}`
       });
     }
 
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
       newStatus: campaign.status
     });
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Campagne désapprouvée avec succès',
       campaign: campaign.toObject()
     });

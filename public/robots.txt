@@ -1,0 +1,25 @@
+# robots.txt for jappuie.ca
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /dashboard-*/
+Disallow: /admin/
+
+# Allow important pages
+Allow: /
+Allow: /ecole
+Allow: /eleve
+Allow: /fournisseur
+Allow: /inscription
+Allow: /inscription-manager
+Allow: /inscription-supplier
+Allow: /boutique/
+Allow: /blog/
+
+# Sitemap location
+Sitemap: https://jappuie.ca/sitemap.xml
+
+

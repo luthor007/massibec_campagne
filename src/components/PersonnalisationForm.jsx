@@ -31,12 +31,14 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
     autoDeposit: true, // Default to true
     discountEnabled: true, // Default to true
     deliveryOptions: [
-      { name: 'Travail', enabled: true },
-      { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-      { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-      { name: 'Autre', enabled: true }
+      { name: 'Travail', enabled: false },
+      { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+      { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+      { name: 'Autre', enabled: true } // Always active
     ], // Default delivery options with new structure
   });
+  // Store the original description with discount text to restore it when reactivating
+  const [descriptionWithDiscount, setDescriptionWithDiscount] = useState(null);
   const [campaigns, setCampaigns] = useState(initialCampaignContext?.campaigns || []); // User's campaigns - initialize from SSR
   const [selectedCampaignId, setSelectedCampaignId] = useState(initialCampaignContext?.activeCampaignId || null); // Currently selected campaign - initialize from SSR
   const router = useRouter();
@@ -132,47 +134,64 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
       const normalizeDeliveryOptions = (options) => {
         if (!options || !Array.isArray(options)) {
           return [
-            { name: 'Travail', enabled: true },
-            { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-            { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-            { name: 'Autre', enabled: true }
+            { name: 'Travail', enabled: false },
+            { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+            { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+            { name: 'Autre', enabled: true } // Always active
           ];
         }
 
         if (typeof options[0] === 'string') {
           const migrationMap = {
-            'Travail': { name: 'Travail', enabled: true },
-            'Livraison (si près de chez moi)': { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-            'Pickup (chez moi)': { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-            'Autre': { name: 'Autre', enabled: true }
+            'Travail': { name: 'Travail', enabled: false },
+            'Livraison (si près de chez moi)': { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+            'Pickup (chez moi)': { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+            'Autre': { name: 'Autre', enabled: true } // Always active
           };
-          return options.map(opt => migrationMap[opt] || { name: opt, enabled: true });
+          return options.map(opt => migrationMap[opt] || { name: opt, enabled: false });
         }
 
         const validOptions = options.filter(opt => opt && opt.name);
         if (validOptions.length === 0) {
           return [
-            { name: 'Travail', enabled: true },
-            { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-            { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-            { name: 'Autre', enabled: true }
+            { name: 'Travail', enabled: false },
+            { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+            { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+            { name: 'Autre', enabled: true } // Always active
           ];
         }
 
-        return validOptions.map(opt => ({
-          name: opt.name || 'Autre',
-          enabled: opt.enabled !== undefined ? opt.enabled : true,
-          pickupAddress: opt.pickupAddress || '',
-          deliveryRadius: opt.deliveryRadius || ''
-        }));
+        return validOptions.map(opt => {
+          const optionName = opt.name || 'Autre';
+          // Autre is always enabled, others preserve their stored state or default to false for new stores
+          const isEnabled = optionName === 'Autre'
+            ? true
+            : (opt.enabled !== undefined ? opt.enabled : false);
+
+          return {
+            name: optionName,
+            enabled: isEnabled,
+            pickupAddress: opt.pickupAddress || '',
+            deliveryRadius: opt.deliveryRadius || ''
+          };
+        });
       };
+
+      const initialDescription = initialCampaignContext.initialStoreInfo.description || '';
+      const initialDiscountEnabled = initialCampaignContext.initialStoreInfo.discountEnabled !== undefined ? initialCampaignContext.initialStoreInfo.discountEnabled : true;
+
+      // Store the description with discount if discount is enabled and description contains the phrase
+      const discountRegex = /Économisez plus en achetant plus\s*:\s*5\s*%\s*de rabais dès 6 produits\.?/i;
+      if (initialDiscountEnabled && discountRegex.test(initialDescription)) {
+        setDescriptionWithDiscount(initialDescription);
+      }
 
       setFormData(prev => ({
         ...prev,
         nomBoutique: initialCampaignContext.initialStoreInfo.name || '',
-        description: initialCampaignContext.initialStoreInfo.description || '',
+        description: initialDescription,
         autoDeposit: initialCampaignContext.initialStoreInfo.autoDeposit !== undefined ? initialCampaignContext.initialStoreInfo.autoDeposit : true,
-        discountEnabled: initialCampaignContext.initialStoreInfo.discountEnabled !== undefined ? initialCampaignContext.initialStoreInfo.discountEnabled : true,
+        discountEnabled: initialDiscountEnabled,
         deliveryOptions: normalizeDeliveryOptions(initialCampaignContext.initialStoreInfo.deliveryOptions),
       }));
 
@@ -199,10 +218,10 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
             if (!options || !Array.isArray(options)) {
               console.log('No options or not an array, returning defaults');
               return [
-                { name: 'Travail', enabled: true },
-                { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-                { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-                { name: 'Autre', enabled: true }
+                { name: 'Travail', enabled: false },
+                { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+                { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+                { name: 'Autre', enabled: true } // Always active
               ];
             }
 
@@ -210,12 +229,12 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
             if (typeof options[0] === 'string') {
               console.log('Migrating from string format');
               const migrationMap = {
-                'Travail': { name: 'Travail', enabled: true },
-                'Livraison (si près de chez moi)': { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-                'Pickup (chez moi)': { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-                'Autre': { name: 'Autre', enabled: true }
+                'Travail': { name: 'Travail', enabled: false },
+                'Livraison (si près de chez moi)': { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+                'Pickup (chez moi)': { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+                'Autre': { name: 'Autre', enabled: true } // Always active
               };
-              const migrated = options.map(opt => migrationMap[opt] || { name: opt, enabled: true });
+              const migrated = options.map(opt => migrationMap[opt] || { name: opt, enabled: false });
               console.log('Migrated options:', migrated);
               return migrated;
             }
@@ -229,7 +248,7 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
               }
               return {
                 name: opt.name,
-                enabled: opt.enabled !== undefined ? opt.enabled : true,
+                enabled: opt.name === 'Autre' ? true : (opt.enabled !== undefined ? opt.enabled : false), // Autre is always enabled, others default to false
                 pickupAddress: opt.pickupAddress || '',
                 deliveryRadius: opt.deliveryRadius || ''
               };
@@ -239,30 +258,45 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
             if (normalized.length === 0) {
               console.log('No valid options after normalization, returning defaults');
               return [
-                { name: 'Travail', enabled: true },
-                { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-                { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-                { name: 'Autre', enabled: true }
+                { name: 'Travail', enabled: false },
+                { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+                { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+                { name: 'Autre', enabled: true } // Always active
               ];
             }
 
-            // Ensure "Autre" is always present
+            // Ensure "Autre" is always present and enabled
             const hasAutre = normalized.some(opt => opt.name === 'Autre');
             if (!hasAutre) {
               normalized.push({ name: 'Autre', enabled: true });
+            } else {
+              // Ensure Autre is always enabled
+              const autreIndex = normalized.findIndex(opt => opt.name === 'Autre');
+              if (autreIndex !== -1) {
+                normalized[autreIndex].enabled = true;
+              }
             }
 
             console.log('Normalized options:', normalized);
             return normalized;
           };
 
+          const fetchedDescription = data.description || prevData.description;
+          const fetchedDiscountEnabled = data.discountEnabled !== false; // Default to true if not set
+
+          // Store the description with discount if discount is enabled and description contains the phrase
+          const discountRegex = /Économisez plus en achetant plus\s*:\s*5\s*%\s*de rabais dès 6 produits\.?/i;
+          if (fetchedDiscountEnabled && discountRegex.test(fetchedDescription)) {
+            setDescriptionWithDiscount(fetchedDescription);
+          }
+
           setFormData(prevData => ({
             ...prevData,
             nomBoutique: data.name || prevData.nomBoutique,
-            description: data.description || prevData.description,
+            description: fetchedDescription,
             hoursAvailable: data.hoursAvailable || '',
             autoDeposit: data.autoDeposit !== false, // Default to true if not set
-            discountEnabled: data.discountEnabled !== false, // Default to true if not set
+            discountEnabled: fetchedDiscountEnabled,
             deliveryOptions: normalizeDeliveryOptions(data.deliveryOptions),
           }));
 
@@ -315,7 +349,7 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
           ...prevData,
           nomBoutique: prevData.nomBoutique || `Campagne de ${session.user.name || ''}`,
           hoursAvailable: prevData.hoursAvailable || '',
-          description: prevData.description || `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et contactez-moi pour connaître les modalités de récupération de vos produits. 🙏 Merci pour votre soutien et bon appétit !`,
+          description: prevData.description || `🎉 Découvrez les produits exclusifs de la campagne de financement Jappuie.ca de fournisseurs 100% québécois ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et contactez-moi pour connaître les modalités de récupération de vos produits. 🙏 Merci pour votre soutien et bon appétit !`,
         }))
       }
     }
@@ -338,14 +372,25 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
         })
       }
 
-      const defaultDescription = `🎉 Découvrez les pâtés exclusifs de la campagne de financement Massibec (viande et poulet) ainsi qu'un délicieux choix de tartes parfaites pour les fêtes qui approchent ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`
+      const defaultDescription = `🎉 Découvrez les produits exclusifs de la campagne de financement Jappuie.ca de fournisseurs 100% québécois ! Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et, si vous ne le savez pas encore, contactez-moi pour connaître les modalités de récupération de vos produits le ${formatDate(dateDeLivraison)}. 🙏 Merci pour votre soutien et bon appétit !`
+
+      // If discount is enabled, add the discount phrase to default description
+      const discountPhrase = "Économisez plus en achetant plus : 5 % de rabais dès 6 produits.";
+      const finalDescription = formData.discountEnabled
+        ? defaultDescription.replace('Chaque achat', discountPhrase + ' Chaque achat')
+        : defaultDescription;
 
       setFormData(prevData => ({
         ...prevData,
-        description: defaultDescription
+        description: finalDescription
       }))
+
+      // Save description with discount if discount is enabled
+      if (formData.discountEnabled) {
+        setDescriptionWithDiscount(finalDescription);
+      }
     }
-  }, [dateDeLivraison, formData.description])
+  }, [dateDeLivraison, formData.description, formData.discountEnabled])
 
   // Onboarding logic for personalization form
   useEffect(() => {
@@ -582,6 +627,28 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
       return;
     }
 
+    // Validate delivery options: if Livraison or Pickup are enabled, their required fields must be filled
+    const livraisonOption = formData.deliveryOptions.find(opt => opt.name.includes('Livraison'));
+    const pickupOption = formData.deliveryOptions.find(opt => opt.name.includes('Pickup'));
+
+    const errors = [];
+
+    if (livraisonOption?.enabled && (!livraisonOption.deliveryRadius || livraisonOption.deliveryRadius.trim() === '')) {
+      errors.push('Livraison (si près de chez moi)');
+    }
+
+    if (pickupOption?.enabled && (!pickupOption.pickupAddress || pickupOption.pickupAddress.trim() === '')) {
+      errors.push('Pickup (chez moi)');
+    }
+
+    if (errors.length > 0) {
+      const errorMessage = errors.length === 1
+        ? `L'option "${errors[0]}" est activée mais son champ requis n'est pas rempli. Veuillez le remplir ou désactiver l'option.`
+        : `Les options "${errors.join('" et "')}" sont activées mais leurs champs requis ne sont pas remplis. Veuillez les remplir ou désactiver ces options.`;
+      toast.error(errorMessage);
+      return;
+    }
+
     try {
       const session = await getSession();
 
@@ -767,11 +834,16 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
         <p>
           <strong>Destinataire :</strong> {sellerName}<br />
           <strong>Adresse courriel :</strong> <a href={`mailto:${sellerEmail}`}>{sellerEmail}</a><br />
-          {formData.autoDeposit ? null : <><strong>Question de sécurité :</strong> {firstName}<br /></>}
-          {formData.autoDeposit ? null : <><strong>Réponse :</strong> <a href={`mailto:${customerEmail}`}>{customerEmail}</a><br /></>}
+          {formData.autoDeposit ? null : <><strong>Question de sécurité :</strong> Numéro de commande<br /></>}
+          {formData.autoDeposit ? null : <><strong>Réponse :</strong> Cmd-{orderId}<br /></>}
           <strong>Montant :</strong> {totalAmount.toFixed(2)} $<br />
           {formData.autoDeposit ? <><strong>Message :</strong> #{orderId}</> : null}
         </p>
+        {!formData.autoDeposit && (
+          <p style={{ fontSize: '0.9em', color: '#666', fontStyle: 'italic', marginTop: '10px' }}>
+            <strong>Note importante :</strong> Comme vous n'avez pas activé le dépôt automatique, vous devez utiliser <strong>Cmd-{orderId}</strong> comme réponse à la question de sécurité lors du transfert Interac.
+          </p>
+        )}
 
         <h3 style={{ color: '#4A90E2', fontWeight: 'bold' }}>Détails de la commande :</h3>
         <p><strong>Nom du vendeur :</strong> {sellerName}</p>
@@ -1078,7 +1150,50 @@ export default function PersonnalisationForm({ initialCampaignContext, hideCampa
             <Toggle
               id="discountEnabled"
               pressed={formData.discountEnabled}
-              onPressedChange={(pressed) => setFormData({ ...formData, discountEnabled: pressed })}
+              onPressedChange={(pressed) => {
+                // Handle discount text in description
+                const discountPhrase = "Économisez plus en achetant plus : 5 % de rabais dès 6 produits.";
+                // Flexible regex to match variations (with/without space before %, with/without period)
+                const discountRegex = /Économisez plus en achetant plus\s*:\s*5\s*%\s*de rabais dès 6 produits\.?/i;
+
+                let newDescription = formData.description;
+
+                if (!pressed) {
+                  // Deactivating: remove the discount phrase if present
+                  // Save the current description if it contains the phrase
+                  if (discountRegex.test(formData.description)) {
+                    setDescriptionWithDiscount(formData.description);
+                    // Remove the phrase and clean up surrounding punctuation/spaces
+                    newDescription = formData.description
+                      .replace(discountRegex, '')
+                      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+                      .replace(/\s*\.\s*\./g, '.') // Fix double periods
+                      .replace(/\s*,\s*,/g, ',') // Fix double commas
+                      .replace(/^\s+|\s+$/g, '') // Trim
+                      .replace(/\s+([.!?])/g, '$1') // Remove space before punctuation
+                      .replace(/([.!?])\s+/g, '$1 '); // Ensure space after punctuation
+                  }
+                } else {
+                  // Activating: restore the phrase if we have a saved version, or add it if not present
+                  if (descriptionWithDiscount && discountRegex.test(descriptionWithDiscount)) {
+                    // Restore the original description with the phrase
+                    newDescription = descriptionWithDiscount;
+                  } else if (!discountRegex.test(formData.description)) {
+                    // Add the phrase if it's not already there
+                    // Try to find a good place to insert it (after first sentence or at the end)
+                    const sentences = formData.description.split(/([.!?])\s+/);
+                    if (sentences.length > 2) {
+                      // Insert after first sentence
+                      newDescription = sentences.slice(0, 2).join('') + ' ' + discountPhrase + ' ' + sentences.slice(2).join('');
+                    } else {
+                      // Add at the end
+                      newDescription = formData.description.trim() + (formData.description.trim().endsWith('.') ? ' ' : '. ') + discountPhrase;
+                    }
+                  }
+                }
+
+                setFormData({ ...formData, discountEnabled: pressed, description: newDescription });
+              }}
               aria-label="Activer les réductions automatiques"
               size="sm"
               variant="outline"

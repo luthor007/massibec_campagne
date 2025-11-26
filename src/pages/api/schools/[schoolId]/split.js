@@ -16,12 +16,12 @@ export default async function handler(req, res) {
     }
 
     const { schoolId } = req.query;
-    const { 
-      splitType, 
-      studentBenefit, 
-      organizationBenefit, 
-      raffleBenefit, 
-      reason 
+    const {
+      splitType,
+      studentBenefit,
+      organizationBenefit,
+      raffleBenefit,
+      reason
     } = req.body;
 
     // Find the school
@@ -44,8 +44,8 @@ export default async function handler(req, res) {
     if (userRole === 'school') {
       const activeCampaign = school.campaigns?.find(campaign => campaign.status === 'active');
       if (activeCampaign) {
-        return res.status(400).json({ 
-          message: 'Vous ne pouvez pas modifier la répartition des profits une fois que la campagne est active. Contactez Massibec pour toute modification.' 
+        return res.status(400).json({
+          message: 'Vous ne pouvez pas modifier la répartition des profits une fois que la campagne est active. Contactez Jappuie.ca pour toute modification.'
         });
       }
     }
@@ -54,23 +54,23 @@ export default async function handler(req, res) {
     if (splitType === 'percentage') {
       const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
       if (Math.abs(total - 100) > 0.01) {
-        return res.status(400).json({ 
-          message: `Les pourcentages doivent totaliser 100%. Total actuel: ${total.toFixed(1)}%` 
+        return res.status(400).json({
+          message: `Les pourcentages doivent totaliser 100%. Total actuel: ${total.toFixed(1)}%`
         });
       }
     } else {
       // For absolute values, check that all values are positive
       if (studentBenefit < 0 || organizationBenefit < 0 || raffleBenefit < 0) {
-        return res.status(400).json({ 
-          message: 'Les valeurs absolues doivent être positives' 
+        return res.status(400).json({
+          message: 'Les valeurs absolues doivent être positives'
         });
       }
-      
+
       // Check that total doesn't exceed $3.00 per product
       const total = parseFloat(studentBenefit) + parseFloat(organizationBenefit) + parseFloat(raffleBenefit);
       if (total > 3.00) {
-        return res.status(400).json({ 
-          message: `Le total ne peut pas dépasser 3.00$ par produit. Total actuel: ${total.toFixed(2)}$` 
+        return res.status(400).json({
+          message: `Le total ne peut pas dépasser 3.00$ par produit. Total actuel: ${total.toFixed(2)}$`
         });
       }
     }
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
 
     await school.save();
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Répartition des profits mise à jour avec succès',
       split: school.split,
       splitType: school.splitType,

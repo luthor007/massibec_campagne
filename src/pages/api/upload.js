@@ -30,11 +30,28 @@ apiRoute.post(async (req, res) => {
       return res.status(400).json({ message: 'No image file provided.' });
     }
 
+    // Determine folder based on upload type (default to 'products' for backward compatibility)
+    // req.body contains FormData fields after multer processing
+    const uploadType = req.body?.type || 'product'; // 'product', 'student-photo', etc.
+    let folder = 'products';
+
+    if (uploadType === 'student-photo') {
+      folder = 'student-photos';
+    } else if (uploadType === 'product') {
+      folder = 'products';
+    }
+
+    console.log('[upload] Uploading image to folder:', folder, 'type:', uploadType);
+
     // Upload image buffer to Cloudinary
     const uploadStr = req.file.buffer.toString('base64');
     const uploadResponse = await cloudinary.uploader.upload(`data:${req.file.mimetype};base64,${uploadStr}`, {
-      folder: 'products', // Optional: specify a folder in Cloudinary
+      folder: folder,
       resource_type: 'image',
+      // Optimize images for web
+      transformation: [
+        { quality: 'auto', fetch_format: 'auto' }
+      ]
     });
 
     res.status(200).json({ url: uploadResponse.secure_url });

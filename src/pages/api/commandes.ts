@@ -7,12 +7,16 @@ import User from '../../models/User';
 import School from '../../models/School';
 import Store from '../../models/Store';
 import Campaign from '../../models/Campaign';
+import Product from '../../models/Product';
+import StudentInventory from '../../models/StudentInventory';
+import FunnelEvent from '../../models/FunnelEvent';
 import { sendEmail, sendSaleNotificationEmail } from '../../utils/gmailMailer';
 import getNextOrderId from '../../utils/getNextOrderId';
 import { calculateDonationProfits, isTestCampaign } from '../../utils/campaignHelpers';
 import { getToken } from 'next-auth/jwt'; // Add this import
 import { IOrder } from '../../types/order'
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 interface ProductItem {
   product: string;
@@ -291,7 +295,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Confirmation de commande au client
       // À: Client, CC: vendeur
-      // De: (Nom du parent - Campagne (nom école)) <commande@massibec.com>
+      // De: (Nom du parent - Campagne (nom école)) <campagne@jappuie.ca>
       // Objet: (Commande #X)(Montant), pour (Nom du client), de (Nom du Parent) - Campagne (Nom école)
       // Use campaign data we already fetched
       const campaignData = activeCampaign;
@@ -325,26 +329,132 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const deliveryCity = schoolData.ville || finalOwner.schoolManagerInfo?.ville || '';
       const ownerPhone = finalOwner.parentInfo?.telephone || finalOwner.schoolManagerInfo?.telephone || finalOwner.schoolManagerInfo?.cellulaire || schoolData.telephone || '';
 
+      // Validate and update product prices from catalog (with campaign custom prices)
+      // This ensures orders always use current prices, even if cart had stale prices
+      let validatedProducts = products;
+      let priceUpdated = false;
+
+      if (products && products.length > 0) {
+        // Fetch all products from database
+        const productIds = products.map((p: any) => p.product).filter(Boolean);
+        const productDocs = await Product.find({ _id: { $in: productIds } }).lean();
+
+        // Get campaign with custom prices if available
+        let campaignWithPrices: any = null;
+        if (finalCampaignId) {
+          campaignWithPrices = await Campaign.findById(finalCampaignId)
+            .populate('customPrices.productId', '_id')
+            .lean();
+        }
+
+        // Validate and update prices
+        validatedProducts = products.map((item: any) => {
+          const productDoc: any = productDocs.find((p: any) => {
+            const pId = p._id?.toString() || p._id;
+            const itemId = item.product?.toString() || item.product;
+            return pId === itemId;
+          });
+
+          if (!productDoc) {
+            console.warn(`[Order API] Product ${item.product} not found in database, using provided price`);
+            return item;
+          }
+
+          // Get base price from product
+          let correctPrice = productDoc.price || item.price;
+          let correctCost = productDoc.cost || item.cost;
+
+          // Check for custom price in campaign
+          if (campaignWithPrices?.customPrices && Array.isArray(campaignWithPrices.customPrices) && campaignWithPrices.customPrices.length > 0) {
+            const productIdStr = productDoc._id?.toString() || String(productDoc._id);
+            const customPrice = campaignWithPrices.customPrices.find((cp: any) => {
+              const cpProductId = cp.productId?._id?.toString() || cp.productId?.toString() || String(cp.productId);
+              return cpProductId === productIdStr;
+            });
+
+            if (customPrice && customPrice.price !== undefined && customPrice.price !== null) {
+              correctPrice = customPrice.price;
+              console.log(`[Order API] Using custom price for ${item.name}: ${item.price} -> ${correctPrice}`);
+            }
+          }
+
+          // Check if price needs updating
+          if (Math.abs(item.price - correctPrice) > 0.01) {
+            console.warn(`[Order API] Price mismatch for ${item.name}: cart had ${item.price}, catalog has ${correctPrice}. Updating to catalog price.`);
+            priceUpdated = true;
+          }
+
+          return {
+            ...item,
+            price: correctPrice,
+            cost: correctCost
+          };
+        });
+      }
+
+      // Recalculate subtotal if prices were updated
+      const validatedSubtotal = validatedProducts.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+
       // Calculate original subtotal before discount
-      const originalSubtotal = products.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+      const originalSubtotal = validatedSubtotal;
+
+      // If prices were updated, recalculate totalAmount (products only, donations stay the same)
+      let finalTotalAmount = totalAmount;
+      if (priceUpdated) {
+        // Recalculate total with correct prices
+        // Apply discount if store has discounts enabled
+        const discountRate = storeData.discountEnabled !== false && validatedSubtotal >= 6 ? 0.05 : 0;
+        finalTotalAmount = validatedSubtotal * (1 - discountRate);
+        console.log(`[Order API] Prices updated, recalculated total: ${totalAmount} -> ${finalTotalAmount}`);
+      }
 
       // Calculate discount amount if store has discounts enabled
       const discountAmount = storeData.discountEnabled !== false
-        ? Math.max(0, originalSubtotal - totalAmount)
+        ? Math.max(0, originalSubtotal - finalTotalAmount)
         : 0;
 
+      // Check if we're in limited inventory mode (user has inventory records for this campaign)
+      let orderStatus = 'En attente'; // Default status
+      if (finalCampaignId && finalOwner._id) {
+        try {
+          const StudentInventory = (await import('../../models/StudentInventory')).default;
+          const mongoose = (await import('mongoose')).default;
+
+          // Convert campaignId to ObjectId if needed
+          let campaignIdObjectId: mongoose.Types.ObjectId | string = finalCampaignId;
+          if (mongoose.Types.ObjectId.isValid(finalCampaignId)) {
+            campaignIdObjectId = new mongoose.Types.ObjectId(finalCampaignId);
+          }
+
+          const inventoryCount = await StudentInventory.countDocuments({
+            userId: finalOwner._id,
+            campaignId: campaignIdObjectId
+          });
+
+          // If user has inventory records, we're in limited inventory mode
+          // Orders should be created with status 'Commandé' (already ordered)
+          if (inventoryCount > 0) {
+            orderStatus = 'Commandé';
+            console.log(`[Order Creation] Limited inventory mode detected (${inventoryCount} inventory records). Setting status to 'Commandé'`);
+          }
+        } catch (err) {
+          console.warn('[Order Creation] Error checking inventory mode:', err.message);
+          // Continue with default status if check fails
+        }
+      }
+
       // Créer une nouvelle commande
-      console.log('Creating order with campaignId:', finalCampaignId, 'campaignNumber:', campaignNumber, 'isTest:', isTest);
+      console.log('Creating order with campaignId:', finalCampaignId, 'campaignNumber:', campaignNumber, 'isTest:', isTest, 'status:', orderStatus);
       const newCommande = new Order({
         user: finalOwner._id,
-        products: products.map((item: any) => ({
+        products: validatedProducts.map((item: any) => ({
           product: item.product,
           quantity: item.quantity,
           productName: item.name,
           productPrice: item.price,
           productCost: item.cost
         })),
-        totalAmount: totalAmount,
+        totalAmount: finalTotalAmount,
         discount: discountAmount, // Store discount amount for profit calculations
         customerEmail: customerEmail,
         customerName: customerName,
@@ -354,6 +464,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         campaignId: finalCampaignId, // Always set campaignId if available, even if campaign not found in DB
         campaignNumber,
         phoneNumber: phoneNumber,
+        status: orderStatus, // Set status based on inventory mode
         // New donation fields
         studentDonation: studentDonation || 0,
         schoolDonation: schoolDonation || 0,
@@ -373,6 +484,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       await newCommande.save();
       console.log('Order created successfully with _id:', newCommande._id, 'campaignId:', newCommande.campaignId);
+
+      // Check if this is the first order for the user
+      const existingOrders = await Order.find({ user: finalOwner._id, isTest: { $ne: true } });
+      const isFirstOrder = existingOrders.length === 1;
+
+      // Track first order
+      if (isFirstOrder) {
+        const userType = finalOwner.role === 'student' ? 'student' : 'school';
+        const sessionId = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}`;
+
+        const funnelEvent = new FunnelEvent({
+          eventType: 'first_order_placed',
+          userType,
+          userId: finalOwner._id.toString(),
+          sessionId,
+          metadata: {
+            orderId: newCommande.orderId?.toString() || newCommande._id.toString(),
+            storeId: finalStoreId.toString(),
+            totalAmount: finalTotalAmount
+          }
+        });
+
+        await funnelEvent.save().catch(err => console.error('Error tracking first order:', err));
+      }
+
+      // Decrement inventory for each product
+      try {
+        const userId = finalOwner._id.toString();
+        const campaignIdForInventory = finalCampaignId;
+
+        if (userId && campaignIdForInventory) {
+          for (const item of products) {
+            const productName = item.name;
+            const quantity = item.quantity;
+
+            // Increment sold quantity in inventory
+            const inventory = await StudentInventory.findOne({
+              userId,
+              campaignId: campaignIdForInventory,
+              productName
+            });
+
+            if (inventory) {
+              inventory.soldQuantity += quantity;
+              inventory.availableQuantity = Math.max(0, inventory.orderedQuantity - inventory.soldQuantity);
+              await inventory.save();
+            } else {
+              // If inventory doesn't exist, this shouldn't happen, but handle gracefully
+              console.warn(`Inventory not found for userId: ${userId}, campaignId: ${campaignIdForInventory}, productName: ${productName}`);
+            }
+          }
+        } else {
+          console.warn('Could not decrement inventory: userId or campaignId missing', { userId, campaignId: campaignIdForInventory });
+        }
+      } catch (inventoryError) {
+        // Log error but don't fail the order creation
+        console.error('Error decrementing inventory:', inventoryError);
+      }
 
       // Calculate profit splits and benefits using campaign data
       const totalUnits = products.reduce((sum: number, item: any) => sum + item.quantity, 0);
@@ -445,7 +614,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const emailParams = {
         to: customerEmail,
         cc: finalOwner.email,
-        from: `${parentFullName} - Campagne ${schoolData.name} <commande@massibec.com>`,
+        from: `${parentFullName} - Campagne ${schoolData.name} <campagne@jappuie.ca>`,
         subject: `(Commande #${newOrderId})($${(totalAmount + totalDonations).toFixed(2)}), pour (${customerName}), de (${parentFullName}) - Campagne (${schoolData.name})`,
         firstName: customerName,
         customerEmail: customerEmail,
@@ -501,7 +670,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
 
       // Envoyer l'e-mail de confirmation au client (avec vendeur en CC)
-      await sendEmail(emailParams);
+      // Wrap in try-catch to not block order creation if email fails
+      try {
+        await sendEmail(emailParams);
+      } catch (emailError: any) {
+        // Log detailed error information
+        console.error('Erreur lors de l\'envoi de l\'e-mail de confirmation:', emailError);
+        if (emailError.response?.body?.errors) {
+          console.error('Détails de l\'erreur SendGrid:', JSON.stringify(emailError.response.body.errors, null, 2));
+        }
+        // Don't throw - order creation should succeed even if email fails
+      }
 
       // Confirmation d'une commande au vendeur (copie interne supprimée)
       // Ne pas envoyer l'email "Félicitations!" si le client est l'étudiant lui-même
@@ -509,12 +688,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       //if (customerEmail.toLowerCase() !== owner.email.toLowerCase()) {
       if (false) {
         // À: vendeur
-        // De: Campagne Massibec <commande@massibec.com>
-        // Objet: (Commande #X) -(Montant)- de: (Nom du parent) - nom école - Pour: Massibec
+        // De: Jappuie <campagne@jappuie.ca>
+        // Objet: (Commande #X) -(Montant)- de: (Nom du parent) - nom école
         // Texte: La distribution se fera à (Adresse de l'école) le (date de livraison)
         const emailParams2 = {
           to: finalOwner.email,
-          subject: `(Commande #${newOrderId}) -($${(totalAmount + tipValue).toFixed(2)})- de: (${parentFullName}) - ${schoolData.name} - Pour: Massibec`,
+          subject: `(Commande #${newOrderId}) -($${(totalAmount + tipValue).toFixed(2)})- de: (${parentFullName}) - ${schoolData.name}`,
           studentName: finalOwner.name,
           firstName: customerName,
           customerEmail: customerEmail,
@@ -537,8 +716,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         };
 
-        // Envoyer l'e-mail de confirmation à Massibec (vendeur avec facturation en CC)
-        await sendSaleNotificationEmail(emailParams2);
+        // Envoyer l'e-mail de confirmation (vendeur avec facturation en CC)
+        try {
+          await sendSaleNotificationEmail(emailParams2);
+        } catch (emailError: any) {
+          console.error('Erreur lors de l\'envoi de l\'e-mail de notification de vente:', emailError);
+          if (emailError.response?.body?.errors) {
+            console.error('Détails de l\'erreur SendGrid:', JSON.stringify(emailError.response.body.errors, null, 2));
+          }
+          // Don't throw - order creation should succeed even if email fails
+        }
       } else {
         console.log(`Skipping sale notification email - student ${finalOwner.email} is ordering for themselves. They will receive the order confirmation in CC only.`);
       }

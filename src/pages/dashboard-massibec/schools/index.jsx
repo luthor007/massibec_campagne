@@ -24,19 +24,25 @@ const SchoolsPage = () => {
   const { data: session, status } = useSession();
   const [filterStatus, setFilterStatus] = useState('all');
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
-  
-  const { schools, loading: schoolsLoading, refreshSchools, getSchoolsNeedingApproval } = useSupplierSchools();
+
+  const { schools, loading: schoolsLoading, refreshSchools } = useSupplierSchools();
 
   useEffect(() => {
     if (status === 'loading') return;
-    
+
     if (!session) {
       router.push('/connexion');
       return;
     }
-    
-    // Vérifier si l'utilisateur a le rôle fournisseur
-    if (session.user.role !== 'fournisseur') {
+
+    // Vérifier si l'utilisateur a le rôle supplier (ou fournisseur pour compatibilité)
+    if (session.user.role === 'supplier' || session.user.role === 'fournisseur') {
+      // Redirect suppliers to the new dashboard-supplier pages
+      router.push('/dashboard-supplier');
+      return;
+    }
+
+    if (session.user.role !== 'supplier' && session.user.role !== 'fournisseur') {
       router.push('/dashboard');
       return;
     }
@@ -106,7 +112,7 @@ const SchoolsPage = () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         showNotification('Campagne approuvée avec succès!', 'success');
         refreshSchools();
@@ -129,7 +135,7 @@ const SchoolsPage = () => {
         },
         body: JSON.stringify({ reason })
       });
-      
+
       if (response.ok) {
         showNotification('Campagne rejetée avec succès!', 'success');
         refreshSchools();
@@ -151,7 +157,7 @@ const SchoolsPage = () => {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         showNotification('Approbation de la campagne annulée avec succès!', 'success');
         refreshSchools();
@@ -170,7 +176,6 @@ const SchoolsPage = () => {
     return school.status === filterStatus;
   }) : [];
 
-  const schoolsNeedingApproval = getSchoolsNeedingApproval();
 
   // Show loading state while checking authentication
   if (status === 'loading') {
@@ -185,7 +190,7 @@ const SchoolsPage = () => {
   }
 
   // Don't render if not authenticated or wrong role
-  if (!session || session.user.role !== 'fournisseur') {
+  if (!session || (session.user.role !== 'supplier' && session.user.role !== 'fournisseur')) {
     return null;
   }
 
@@ -193,15 +198,14 @@ const SchoolsPage = () => {
     <DashboardLayout>
       {/* Notification */}
       {notification.show && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
-          notification.type === 'success' 
-            ? 'bg-green-100 text-green-800 border border-green-200' 
-            : 'bg-red-100 text-red-800 border border-red-200'
-        }`}>
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${notification.type === 'success'
+          ? 'bg-green-100 text-green-800 border border-green-200'
+          : 'bg-red-100 text-red-800 border border-red-200'
+          }`}>
           {notification.message}
         </div>
       )}
-      
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -209,7 +213,7 @@ const SchoolsPage = () => {
             <h1 className="text-3xl font-bold text-gray-900">Gestion des Écoles</h1>
             <p className="text-gray-600 mt-1">Gérez toutes les écoles et leurs campagnes</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-full sm:w-48">
@@ -223,7 +227,7 @@ const SchoolsPage = () => {
                 <SelectItem value="deactivated">Désactivées</SelectItem>
               </SelectContent>
             </Select>
-            
+
             <Button variant="outline" onClick={refreshSchools}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Actualiser
@@ -242,7 +246,7 @@ const SchoolsPage = () => {
               <div className="text-2xl font-bold">{schools.length}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Approuvées</CardTitle>
@@ -254,19 +258,7 @@ const SchoolsPage = () => {
               </div>
             </CardContent>
           </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">En Attente</CardTitle>
-              <Clock className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">
-                {schoolsNeedingApproval.length}
-              </div>
-            </CardContent>
-          </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Rejetées</CardTitle>
@@ -278,7 +270,7 @@ const SchoolsPage = () => {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Désactivées</CardTitle>
@@ -290,7 +282,7 @@ const SchoolsPage = () => {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Campagnes Actives</CardTitle>
@@ -305,7 +297,7 @@ const SchoolsPage = () => {
         </div>
 
         {/* Schools Table */}
-        <SchoolsTable 
+        <SchoolsTable
           schools={filteredSchools}
           loading={schoolsLoading}
           onRefresh={refreshSchools}

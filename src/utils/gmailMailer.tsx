@@ -1,6 +1,6 @@
 // src/utils/gmailMailer.tsx
-// This file now acts as a router between Gmail/Nodemailer and Resend
-// Set EMAIL_PROVIDER=resend in your .env to use Resend, otherwise it defaults to Gmail
+// This file now acts as a router between Gmail/Nodemailer and SendGrid
+// Set EMAIL_PROVIDER=sendgrid in your .env to use SendGrid, otherwise it defaults to Gmail
 
 import nodemailer from 'nodemailer';
 import ReactDOMServer from 'react-dom/server';
@@ -10,9 +10,6 @@ import EmailDeletionTemplate from '../components/EmailDeletionTemplate';
 import StudentOrderEmailTemplate from '../components/StudentOrderEmailTemplate';
 import PasswordResetEmailTemplate from '../components/PasswordResetEmailTemplate';
 import EmailTemplateStudent from '../components/EmailTemplateStudent'; // Import the new email template
-
-// Import Resend implementations
-import * as ResendMailer from './resendMailer';
 
 // Import SendGrid implementations
 import * as SendGridMailer from './sendgridMailer';
@@ -90,8 +87,8 @@ interface SendVerificationEmailParams {
 }
 
 // Création du transporteur SMTP avec Nodemailer
-// Supporte Gmail, Outlook/Microsoft 365, Resend, et SendGrid
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'gmail';
+// Supporte Gmail, Outlook/Microsoft 365, et SendGrid
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER?.toLowerCase() || 'sendgrid';
 
 let transporterConfig: any;
 
@@ -141,7 +138,7 @@ const sendVerificationEmailViaGmail = async (params: SendVerificationEmailParams
 
     // Options de l'e-mail
     const mailOptions: any = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <commande@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -178,7 +175,7 @@ const sendPasswordResetEmailViaGmail = async (params: SendPasswordResetEmailPara
 
     // Options de l'e-mail
     const mailOptions = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <commande@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -267,7 +264,7 @@ const sendEmailViaGmail = async (params: SendEmailParams) => {
 
     // Options de l'e-mail
     const mailOptions: any = {
-      from: from || `Campagne Massibec <commande@massibec.com>`,
+      from: from || `Jappuie <campagne@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -321,7 +318,7 @@ const sendDeletionEmailViaGmail = async (params: SendDeletionEmailParams) => {
 
     // Options de l'e-mail
     const mailOptions = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <commande@jappuie.ca>`,
       to,
       subject,
       html: htmlContent,
@@ -377,7 +374,7 @@ const sendStudentOrderEmailViaGmail = async (params: SendStudentOrderEmailParams
 
     // Options de l'e-mail
     const mailOptions = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <commande@jappuie.ca>`,
       to: email, // Envoi à l'adresse e-mail de l'étudiant
       subject: `Confirmation de votre commande - Commande #${orderId}`,
       html: htmlContent,
@@ -439,7 +436,7 @@ const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEma
 
     // Options de l'e-mail
     const mailOptions: any = {
-      from: `Campagne Massibec <commande@massibec.com>`,
+      from: `Jappuie <commande@jappuie.ca>`,
       to: to,
       subject: subject || `Nouvelle Vente Reçue - Commande #${orderId}`,
       html: htmlContent,
@@ -467,14 +464,9 @@ const sendSaleNotificationEmailViaGmail = async (params: SendSaleNotificationEma
  * Routes sendVerificationEmail to the appropriate provider
  */
 const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for verification email');
-    return ResendMailer.sendVerificationEmail(params);
-  } else if (EMAIL_PROVIDER === 'sendgrid') {
-    console.log('📧 Using SendGrid for verification email');
+  if (EMAIL_PROVIDER === 'sendgrid') {
     return SendGridMailer.sendVerificationEmail(params);
   } else {
-    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for verification email`);
     return sendVerificationEmailViaGmail(params);
   }
 };
@@ -483,14 +475,9 @@ const sendVerificationEmail = async (params: SendVerificationEmailParams) => {
  * Routes sendPasswordResetEmail to the appropriate provider
  */
 const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for password reset email');
-    return ResendMailer.sendPasswordResetEmail(params);
-  } else if (EMAIL_PROVIDER === 'sendgrid') {
-    console.log('📧 Using SendGrid for password reset email');
+  if (EMAIL_PROVIDER === 'sendgrid') {
     return SendGridMailer.sendPasswordResetEmail(params);
   } else {
-    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for password reset email`);
     return sendPasswordResetEmailViaGmail(params);
   }
 };
@@ -499,19 +486,31 @@ const sendPasswordResetEmail = async (params: SendPasswordResetEmailParams) => {
  * Routes sendEmail to the appropriate provider
  */
 const sendEmail = async (params: SendEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for email');
-    return ResendMailer.sendEmail(params);
-  } else if (EMAIL_PROVIDER === 'sendgrid') {
-    console.log('📧 Using SendGrid for email');
+  if (EMAIL_PROVIDER === 'sendgrid') {
     try {
       return await SendGridMailer.sendEmail(params);
     } catch (err: any) {
-      console.warn('SendGrid sendEmail failed, falling back to Gmail:', err?.response?.body || err?.message);
-      return sendEmailViaGmail(params);
+      // Log SendGrid error details
+      console.error('Erreur SendGrid dans sendEmail:', err);
+      if (err.response?.body?.errors) {
+        console.error('Détails de l\'erreur SendGrid:', JSON.stringify(err.response.body.errors, null, 2));
+      }
+      // Only fallback to Gmail if Gmail credentials are configured
+      if (process.env.GMAIL_USER && process.env.GMAIL_PASSWORD) {
+        console.log('Tentative de fallback vers Gmail...');
+        try {
+          return await sendEmailViaGmail(params);
+        } catch (gmailError: any) {
+          console.error('Erreur Gmail (fallback):', gmailError);
+          // Re-throw the original SendGrid error if Gmail also fails
+          throw err;
+        }
+      } else {
+        // If Gmail credentials are not configured, just throw the SendGrid error
+        throw err;
+      }
     }
   } else {
-    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for email`);
     return sendEmailViaGmail(params);
   }
 };
@@ -520,14 +519,9 @@ const sendEmail = async (params: SendEmailParams) => {
  * Routes sendDeletionEmail to the appropriate provider
  */
 const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for deletion email');
-    return ResendMailer.sendDeletionEmail(params);
-  } else if (EMAIL_PROVIDER === 'sendgrid') {
-    console.log('📧 Using SendGrid for deletion email');
+  if (EMAIL_PROVIDER === 'sendgrid') {
     return SendGridMailer.sendDeletionEmail(params);
   } else {
-    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for deletion email`);
     return sendDeletionEmailViaGmail(params);
   }
 };
@@ -536,19 +530,14 @@ const sendDeletionEmail = async (params: SendDeletionEmailParams) => {
  * Routes sendStudentOrderEmail to the appropriate provider
  */
 const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for student order email');
-    return ResendMailer.sendStudentOrderEmail(params);
-  } else if (EMAIL_PROVIDER === 'sendgrid') {
-    console.log('📧 Using SendGrid for student order email');
+  if (EMAIL_PROVIDER === 'sendgrid') {
     try {
       return await SendGridMailer.sendStudentOrderEmail(params);
     } catch (err: any) {
-      console.warn('SendGrid sendStudentOrderEmail failed, falling back to Gmail:', err?.response?.body || err?.message);
+      // Fallback to Gmail if SendGrid fails
       return sendStudentOrderEmailViaGmail(params);
     }
   } else {
-    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for student order email`);
     return sendStudentOrderEmailViaGmail(params);
   }
 };
@@ -557,19 +546,14 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
  * Routes sendSaleNotificationEmail to the appropriate provider
  */
 const sendSaleNotificationEmail = async (params: SendSaleNotificationEmailParams) => {
-  if (EMAIL_PROVIDER === 'resend') {
-    console.log('📧 Using Resend for sale notification email');
-    return ResendMailer.sendSaleNotificationEmail(params);
-  } else if (EMAIL_PROVIDER === 'sendgrid') {
-    console.log('📧 Using SendGrid for sale notification email');
+  if (EMAIL_PROVIDER === 'sendgrid') {
     try {
       return await SendGridMailer.sendSaleNotificationEmail(params);
     } catch (err: any) {
-      console.warn('SendGrid sendSaleNotificationEmail failed, falling back to Gmail:', err?.response?.body || err?.message);
+      // Fallback to Gmail if SendGrid fails
       return sendSaleNotificationEmailViaGmail(params);
     }
   } else {
-    console.log(`📧 Using ${EMAIL_PROVIDER === 'outlook' ? 'Outlook/Microsoft 365' : 'Gmail'} for sale notification email`);
     return sendSaleNotificationEmailViaGmail(params);
   }
 };
@@ -589,5 +573,5 @@ export {
   sendSchoolConfirmationEmail,
   sendStudentConfirmationEmail,
   sendOrderConfirmationEmail,
-  sendMassibecConfirmationEmail
+  sendJappuieConfirmationEmail
 } from './sendgridMailer';

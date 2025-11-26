@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight, CheckCircle, AlertCircle, Building, User, Phone, Mail } from 'lucide-react'
+import { trackSchoolRegistrationStarted, trackSchoolRegistrationStep, trackSchoolRegistrationCompleted } from '@/lib/funnelAnalytics'
 
 export default function MultiStepInscriptionManagerForm() {
   const router = useRouter()
@@ -16,6 +17,7 @@ export default function MultiStepInscriptionManagerForm() {
   const [errorMessage, setErrorMessage] = useState('')
   const [emailExists, setEmailExists] = useState(false)
   const [isCheckingEmail, setIsCheckingEmail] = useState(false)
+  const hasTrackedStarted = useRef(false)
   const [formData, setFormData] = useState({
     // Step 1: Responsable de Campagne Info
     nomComplet: '',
@@ -23,7 +25,6 @@ export default function MultiStepInscriptionManagerForm() {
     motDePasse: '',
     confirmationMotDePasse: '',
     telephone: '',
-    cellulaire: '',
 
     // Step 2: School Info
     organisme: '',
@@ -31,7 +32,6 @@ export default function MultiStepInscriptionManagerForm() {
     ville: '',
     codePostal: '',
     adresse: '',
-    momentPourJoindre: '',
     logo: null // Add logo state
   })
 
@@ -45,6 +45,12 @@ export default function MultiStepInscriptionManagerForm() {
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+
+    // Track registration started on first interaction
+    if (!hasTrackedStarted.current) {
+      hasTrackedStarted.current = true
+      trackSchoolRegistrationStarted()
+    }
   }
 
   const handleLogoChange = (e) => {
@@ -55,7 +61,7 @@ export default function MultiStepInscriptionManagerForm() {
         setErrorMessage('Veuillez sélectionner un fichier image valide')
         return
       }
-      
+
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setErrorMessage('Le fichier doit faire moins de 5MB')
@@ -63,7 +69,7 @@ export default function MultiStepInscriptionManagerForm() {
       }
 
       setFormData(prev => ({ ...prev, logo: file }))
-      
+
       // Create preview
       const reader = new FileReader()
       reader.onload = (e) => {
@@ -103,6 +109,8 @@ export default function MultiStepInscriptionManagerForm() {
 
   const nextStep = () => {
     if (currentStep < 2) {
+      // Track step completion
+      trackSchoolRegistrationStep(currentStep)
       setCurrentStep(currentStep + 1)
     }
   }
@@ -134,14 +142,14 @@ export default function MultiStepInscriptionManagerForm() {
     try {
       // Create FormData for file upload
       const formDataToSend = new FormData()
-      
+
       // Add all form fields except logo
       Object.keys(formData).forEach(key => {
         if (key !== 'logo' && formData[key] !== null) {
           formDataToSend.append(key, formData[key])
         }
       })
-      
+
       // Add logo file if present
       if (formData.logo) {
         formDataToSend.append('logo', formData.logo)
@@ -153,6 +161,9 @@ export default function MultiStepInscriptionManagerForm() {
       })
 
       if (response.ok) {
+        // Track registration completion
+        trackSchoolRegistrationCompleted(formData.email)
+
         const data = await response.json()
         // Store email in sessionStorage for email verification page
         sessionStorage.setItem('pendingVerificationEmail', formData.email);
@@ -213,11 +224,10 @@ export default function MultiStepInscriptionManagerForm() {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      emailExists ? 'border-red-300 bg-red-50' :
+                    className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${emailExists ? 'border-red-300 bg-red-50' :
                       formData.email && !emailExists ? 'border-green-300 bg-green-50' :
-                      'border-gray-300'
-                    }`}
+                        'border-gray-300'
+                      }`}
                     placeholder="votre@email.com"
                     required
                   />
@@ -245,7 +255,7 @@ export default function MultiStepInscriptionManagerForm() {
 
               <div>
                 <Label htmlFor="telephone" className="block text-sm font-medium text-gray-700 mb-1">
-                  Téléphone (pour le responsable de campagne)
+                  Téléphone
                 </Label>
                 <Input
                   type="tel"
@@ -256,21 +266,6 @@ export default function MultiStepInscriptionManagerForm() {
                   className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="(819) 123-4567"
                   required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="cellulaire" className="block text-sm font-medium text-gray-700 mb-1">
-                  Cellulaire (en cas d'urgence)
-                </Label>
-                <Input
-                  type="tel"
-                  id="cellulaire"
-                  name="cellulaire"
-                  value={formData.cellulaire}
-                  onChange={handleChange}
-                  className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="(819) 123-4567"
                 />
               </div>
 
@@ -301,11 +296,10 @@ export default function MultiStepInscriptionManagerForm() {
                   value={formData.confirmationMotDePasse}
                   onChange={handleChange}
                   placeholder="Répétez votre mot de passe"
-                  className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    formData.confirmationMotDePasse && formData.motDePasse !== formData.confirmationMotDePasse
-                      ? 'border-red-300 bg-red-50'
-                      : 'border-gray-300'
-                  }`}
+                  className={`w-full py-3 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formData.confirmationMotDePasse && formData.motDePasse !== formData.confirmationMotDePasse
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-gray-300'
+                    }`}
                   required
                 />
                 {formData.confirmationMotDePasse && formData.motDePasse !== formData.confirmationMotDePasse && (
@@ -328,7 +322,7 @@ export default function MultiStepInscriptionManagerForm() {
                       Pas de stress !
                     </h3>
                     <p className="text-sm text-blue-700 mt-1">
-                      Vous pourrez inviter d'autres membres de votre organisation plus tard. 
+                      Vous pourrez inviter d'autres membres de votre organisation plus tard.
                       Pour l'instant, concentrez-vous sur vos informations personnelles.
                     </p>
                   </div>
@@ -384,9 +378,9 @@ export default function MultiStepInscriptionManagerForm() {
                   />
                   {logoPreview && (
                     <div className="flex items-center space-x-3">
-                      <img 
-                        src={logoPreview} 
-                        alt="Aperçu du logo" 
+                      <img
+                        src={logoPreview}
+                        alt="Aperçu du logo"
                         className="w-16 h-16 object-contain border border-gray-300 rounded-lg"
                       />
                       <span className="text-sm text-gray-600">Aperçu du logo</span>
@@ -463,26 +457,6 @@ export default function MultiStepInscriptionManagerForm() {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="momentPourJoindre" className="block text-sm font-medium text-gray-700 mb-1">
-                  Meilleur moment pour vous joindre
-                </Label>
-                <Select
-                  value={formData.momentPourJoindre}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, momentPourJoindre: value }))}
-                >
-                  <SelectTrigger className="w-full py-3 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <SelectValue placeholder="Sélectionnez un moment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="matin">Matin (8h-12h)</SelectItem>
-                    <SelectItem value="apres-midi">Après-midi (12h-17h)</SelectItem>
-                    <SelectItem value="soir">Soir (17h-20h)</SelectItem>
-                    <SelectItem value="weekend">Weekend</SelectItem>
-                    <SelectItem value="nimporte">N'importe quand</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </motion.div>
         )
@@ -505,11 +479,10 @@ export default function MultiStepInscriptionManagerForm() {
         <div className="flex items-center justify-center mb-8">
           {steps.map((step, index) => (
             <div key={step.id} className="flex items-center">
-              <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                currentStep >= step.id
-                  ? 'bg-blue-600 border-blue-600 text-white'
-                  : 'border-gray-300 text-gray-400'
-              }`}>
+              <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${currentStep >= step.id
+                ? 'bg-blue-600 border-blue-600 text-white'
+                : 'border-gray-300 text-gray-400'
+                }`}>
                 {currentStep > step.id ? (
                   <CheckCircle className="w-5 h-5" />
                 ) : (
@@ -517,16 +490,14 @@ export default function MultiStepInscriptionManagerForm() {
                 )}
               </div>
               <div className="ml-3 text-left">
-                <p className={`text-sm font-medium ${
-                  currentStep >= step.id ? 'text-blue-600' : 'text-gray-400'
-                }`}>
+                <p className={`text-sm font-medium ${currentStep >= step.id ? 'text-blue-600' : 'text-gray-400'
+                  }`}>
                   {step.title}
                 </p>
               </div>
               {index < steps.length - 1 && (
-                <div className={`w-16 h-0.5 mx-4 ${
-                  currentStep > step.id ? 'bg-blue-600' : 'bg-gray-300'
-                }`} />
+                <div className={`w-16 h-0.5 mx-4 ${currentStep > step.id ? 'bg-blue-600' : 'bg-gray-300'
+                  }`} />
               )}
             </div>
           ))}

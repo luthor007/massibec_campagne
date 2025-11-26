@@ -13,12 +13,15 @@ export default async function handler(req, res) {
         return res.status(404).json({ message: 'Campagne non trouvée.' });
       }
 
-      if (campaign.status !== 'pending_approval') {
-        return res.status(400).json({ message: 'Seules les campagnes en attente d\'approbation peuvent être approuvées.' });
+      // Only allow approving if campaign is in test mode
+      if (campaign.mode === 'production') {
+        return res.status(400).json({ message: 'Cette campagne est déjà en mode production.' });
       }
 
-      campaign.status = 'approved';
+      // Update campaign mode from test to production
+      campaign.mode = 'production';
       campaign.approvedAt = new Date();
+      campaign.isActive = true;
       await campaign.save();
 
       res.status(200).json({ message: 'Campagne approuvée avec succès', campaign });

@@ -9,8 +9,8 @@ export const useSupplierSchools = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await fetch('/api/schools', {
+
+      const response = await fetch('/api/supplier/schools', {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache',
@@ -18,11 +18,11 @@ export const useSupplierSchools = () => {
           'Expires': '0'
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
       setSchools(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -57,7 +57,7 @@ export const useSupplierSchools = () => {
   // Auto-refresh toutes les 30 secondes
   useEffect(() => {
     fetchSchools();
-    
+
     const interval = setInterval(() => {
       fetchSchools();
     }, 30000);

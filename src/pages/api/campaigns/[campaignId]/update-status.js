@@ -35,12 +35,12 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
 
-    // Check if the user is Massibec (only Massibec can change campaign status)
+    // Check if the user is a supplier/admin (only suppliers can change campaign status)
     const user = await User.findById(token.sub);
     const isMassibec = user && user.role === 'fournisseur';
-    
+
     if (!isMassibec) {
-      return res.status(403).json({ message: 'Seuls les utilisateurs Massibec peuvent modifier le statut des campagnes' });
+      return res.status(403).json({ message: 'Seuls les administrateurs Jappuie.ca peuvent modifier le statut des campagnes' });
     }
 
     // Find the campaign
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
     // Update campaign status
     campaign.status = status;
-    
+
     // If activating a campaign, deactivate others
     if (status === 'active') {
       school.campaigns.forEach(c => {
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 
     await school.save();
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: 'Statut de la campagne mis à jour avec succès',
       campaign: campaign.toObject()
     });

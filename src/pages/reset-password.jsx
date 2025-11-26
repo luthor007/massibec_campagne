@@ -39,8 +39,8 @@ export default function ResetPassword() {
       if (response.ok) {
         setMessage(data.message);
         setError(null);
-        // Optionally, redirect to login after a delay
-        setTimeout(() => router.push('/login'), 5000);
+        // Optionally, redirect to connexion after a delay
+        setTimeout(() => router.push('/connexion'), 5000);
       } else {
         setError(data.message || 'Erreur lors de la réinitialisation du mot de passe.');
         setMessage(null);

@@ -6,7 +6,7 @@ import { generateSlug } from '../utils/slugHelpers';
 
 // Reserved routes that cannot be used as slugs
 const RESERVED_ROUTES = [
-  'dashboard', 'dashboard-manager', 'dashboard-massibec',
+  'dashboard', 'dashboard-manager', 'dashboard-massibec', 'dashboard-supplier',
   'connexion', 'inscription', 'inscription-manager',
   'email-verification', 'email-verified', 'email-verification-error',
   'resend-verification', 'forgot-password', 'reset-password',
@@ -27,7 +27,7 @@ const StoreSchema = new mongoose.Schema({
   campaignId: { type: mongoose.Schema.Types.ObjectId, ref: 'Campaign', required: true },
   name: { type: String, required: true },
   slug: { type: String, unique: true, sparse: true }, // Unique slug for URL, sparse allows nulls
-  description: { type: String, default: "🎉 Profitez des pâtés exclusifs de Massibec (viande et poulet) ainsi que d'un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !" },
+  description: { type: String, default: "🎉 Profitez de nos produits exclusifs ainsi que d'un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !" },
   colorPalette: { type: String },
   autoDeposit: { type: Boolean, required: true },
   hoursAvailable: { type: String, default: "18h-20h" },
@@ -178,5 +178,55 @@ StoreSchema.pre('save', async function (next) {
   next();
 });
 
+// Pre-save hook to sanitize string fields to ensure valid UTF-8
+StoreSchema.pre('save', function (next) {
+  // Sanitize top-level string fields
+  const topLevelFields = ['name', 'slug', 'description', 'colorPalette', 'hoursAvailable'];
+
+  for (const field of topLevelFields) {
+    if (this[field] && typeof this[field] === 'string') {
+      try {
+        this[field] = Buffer.from(this[field], 'utf8').toString('utf8');
+      } catch (e) {
+        console.error(`Error encoding Store.${field}:`, e);
+        this[field] = '';
+      }
+    }
+  }
+
+  // Sanitize deliveryOptions array
+  if (this.deliveryOptions && Array.isArray(this.deliveryOptions)) {
+    for (const option of this.deliveryOptions) {
+      if (option && typeof option === 'object') {
+        if (option.name && typeof option.name === 'string') {
+          try {
+            option.name = Buffer.from(option.name, 'utf8').toString('utf8');
+          } catch (e) {
+            console.error(`Error encoding Store.deliveryOptions.name:`, e);
+            option.name = '';
+          }
+        }
+        if (option.pickupAddress && typeof option.pickupAddress === 'string') {
+          try {
+            option.pickupAddress = Buffer.from(option.pickupAddress, 'utf8').toString('utf8');
+          } catch (e) {
+            console.error(`Error encoding Store.deliveryOptions.pickupAddress:`, e);
+            option.pickupAddress = '';
+          }
+        }
+        if (option.deliveryRadius && typeof option.deliveryRadius === 'string') {
+          try {
+            option.deliveryRadius = Buffer.from(option.deliveryRadius, 'utf8').toString('utf8');
+          } catch (e) {
+            console.error(`Error encoding Store.deliveryOptions.deliveryRadius:`, e);
+            option.deliveryRadius = '';
+          }
+        }
+      }
+    }
+  }
+
+  next();
+});
 
 export default mongoose.models.Store || mongoose.model('Store', StoreSchema);

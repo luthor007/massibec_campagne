@@ -1,6 +1,7 @@
 import dbConnect from '../../../lib/mongodb';
 import Campaign from '../../../models/Campaign';
 import School from '../../../models/School';
+import Supplier from '../../../models/Supplier'; // Required for populate
 import { getToken } from 'next-auth/jwt';
 
 export default async function handler(req, res) {
@@ -18,17 +19,19 @@ export default async function handler(req, res) {
     }
 
     // Try to find campaign in Campaign collection first
-    let campaign = await Campaign.findById(campaignId).lean();
-    
+    let campaign = await Campaign.findById(campaignId)
+      .populate('supplier', 'name pricingSettings')
+      .lean();
+
     // If not found in Campaign collection, check school's embedded campaigns
     if (!campaign) {
       // Find school that has this campaign embedded
       const school = await School.findOne({
         'campaigns._id': campaignId
       }).lean();
-      
+
       if (school) {
-        const embeddedCampaign = school.campaigns?.find((camp) => 
+        const embeddedCampaign = school.campaigns?.find((camp) =>
           camp._id?.toString() === campaignId.toString()
         );
         if (embeddedCampaign) {
@@ -36,7 +39,7 @@ export default async function handler(req, res) {
         }
       }
     }
-    
+
     if (!campaign) {
       return res.status(404).json({ message: 'Campagne non trouvée' });
     }
@@ -44,7 +47,7 @@ export default async function handler(req, res) {
     // For public access (no token), only return public campaign data (donations config, etc.)
     // For authenticated users, return full campaign data
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    
+
     if (!token) {
       // Public access - return only public data needed for checkout
       const publicCampaign = {

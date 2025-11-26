@@ -14,7 +14,7 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Non authentifié' });
     }
 
-    // Check if user is Massibec (fournisseur)
+    // Check if user is supplier/admin (fournisseur)
     if (token.role !== 'fournisseur') {
       return res.status(403).json({ message: 'Accès non autorisé' });
     }
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     // Get all schools
     const schools = await School.find({});
     console.log(`Found ${schools.length} schools to process`);
-    
+
     // Debug: Log Test Massibec specifically
     const testMassibec = schools.find(s => s.name === 'Test Massibec');
     if (testMassibec) {
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
         await School.findByIdAndUpdate(school._id, updates);
         updatedCount++;
         schoolResult.updated = true;
-        
+
         // Debug: Log Test Massibec after update
         if (school.name === 'Test Massibec') {
           console.log('Test Massibec after fix:', {
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
       results.push(schoolResult);
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: `Correction terminée! ${updatedCount} écoles mises à jour sur ${schools.length}`,
       results: results
     });

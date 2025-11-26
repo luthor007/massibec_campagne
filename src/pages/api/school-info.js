@@ -5,6 +5,8 @@ import User from '../../models/User';
 import School from '../../models/School';
 import Campaign from '../../models/Campaign';
 import SchoolManager from '../../models/SchoolManager';
+import SupplierManager from '../../models/SupplierManager';
+import Supplier from '../../models/Supplier';
 import { getToken } from 'next-auth/jwt';  // Import getToken
 import mongoose from 'mongoose';
 
@@ -24,7 +26,8 @@ export default async function handler(req, res) {
 
       const user = await User.findById(userId).lean();  // Use .lean() for plain JS object
 
-      if (!user || user.role !== 'school_manager') {
+      // Allow both school_manager and supplier roles
+      if (!user || (user.role !== 'school_manager' && user.role !== 'supplier')) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
@@ -38,18 +41,72 @@ export default async function handler(req, res) {
           status: 'active'
         }).lean();
         schoolId = schoolManager?.school;
-        
+
         // If no schoolId from SchoolManager, check legacy schoolManagerInfo
         if (!schoolId) {
           schoolId = user.schoolManagerInfo?.organisme;
         }
-        
+
         console.log('Finding school from user associations:', {
           userId,
           schoolIdFromSchoolManager: schoolManager?.school?.toString(),
           schoolIdFromUserInfo: user.schoolManagerInfo?.organisme?.toString(),
           finalSchoolId: schoolId?.toString()
         });
+
+        // If supplier has no school, automatically create one using their supplier information
+        if (!schoolId && user.role === 'supplier') {
+          console.log('Supplier has no school, creating one automatically...');
+          try {
+            // Get supplier information
+            const supplierManager = await SupplierManager.findOne({
+              user: userId,
+              status: 'active'
+            }).populate('supplier').lean();
+
+            if (supplierManager && supplierManager.supplier) {
+              const supplier = supplierManager.supplier;
+
+              // Create school using supplier's information
+              const newSchool = new School({
+                name: supplier.name,
+                address: supplier.address || '',
+                ville: supplier.ville || '',
+                codePostal: supplier.codePostal || '',
+                telephone: supplier.phone || '',
+                email: supplier.companyEmail || supplier.email || '',
+                logo: supplier.logo || '',
+                organizationType: 'school',
+                approved: true,
+                status: 'approved',
+                profileCompleted: true,
+                currentCampaignNumber: 0
+              });
+
+              await newSchool.save();
+
+              // Create SchoolManager to link supplier to the school
+              const newSchoolManager = new SchoolManager({
+                school: newSchool._id,
+                user: userId,
+                role: 'owner',
+                invitedBy: userId,
+                status: 'active',
+                joinedAt: new Date()
+              });
+
+              await newSchoolManager.save();
+
+              schoolId = newSchool._id;
+              console.log('✅ School automatically created for supplier:', newSchool.name);
+            } else {
+              console.error('Supplier information not found for user:', userId);
+            }
+          } catch (error) {
+            console.error('Error creating school for supplier:', error);
+            // Continue - we'll return 404 if school still doesn't exist
+          }
+        }
       } else {
         // Convert schoolId to ObjectId if it's a string
         let schoolIdObj = schoolId;
@@ -63,7 +120,7 @@ export default async function handler(req, res) {
         // Verify user has access to the requested school
         // Try multiple query formats to handle different ID types
         let hasAccess = null;
-        
+
         // Try 1: ObjectId format
         hasAccess = await SchoolManager.findOne({
           school: schoolIdObj,
@@ -86,9 +143,9 @@ export default async function handler(req, res) {
             user: userId,
             status: 'active'
           }).lean();
-          
+
           const requestedSchoolIdStr = schoolIdObj?.toString() || schoolId?.toString();
-          
+
           hasAccess = schoolManagerRecords.find(sm => {
             const smSchoolIdStr = sm.school?.toString();
             return smSchoolIdStr === requestedSchoolIdStr;
@@ -99,12 +156,12 @@ export default async function handler(req, res) {
         const userSchoolId = user.schoolManagerInfo?.organisme;
         let requestedSchoolIdStr = schoolIdObj?.toString() || schoolId?.toString();
         let userSchoolIdStr = userSchoolId?.toString() || String(userSchoolId);
-        
+
         // User has access if:
         // 1. They have an active SchoolManager record, OR
         // 2. It's their legacy school (backward compatibility)
         const hasLegacyAccess = userSchoolIdStr === requestedSchoolIdStr;
-        
+
         console.log('School access check:', {
           requestedSchoolId: requestedSchoolIdStr,
           userSchoolId: userSchoolIdStr,
@@ -114,16 +171,16 @@ export default async function handler(req, res) {
           userId: userId?.toString(),
           userHasOrganisme: !!user.schoolManagerInfo?.organisme
         });
-        
+
         // If user has legacy access but no SchoolManager record, create one
         if (!hasAccess && hasLegacyAccess) {
           console.log('Creating missing SchoolManager record for legacy user');
           try {
             // Ensure schoolIdObj is a proper ObjectId
-            const schoolObjectId = mongoose.Types.ObjectId.isValid(schoolIdObj) 
+            const schoolObjectId = mongoose.Types.ObjectId.isValid(schoolIdObj)
               ? new mongoose.Types.ObjectId(schoolIdObj)
               : schoolIdObj;
-            
+
             const newSchoolManager = new SchoolManager({
               school: schoolObjectId,
               user: userId,
@@ -148,14 +205,14 @@ export default async function handler(req, res) {
                 user: userId,
                 status: 'active'
               }).lean();
-              
+
               if (hasAccess) {
                 console.log('Found existing SchoolManager record after duplicate error');
               }
             }
           }
         }
-        
+
         if (!hasAccess && !hasLegacyAccess) {
           console.log('Access denied - no SchoolManager record and no legacy access');
           return res.status(403).json({ message: 'Vous n\'êtes pas autorisé à accéder à cette école' });
@@ -167,6 +224,11 @@ export default async function handler(req, res) {
 
       if (!schoolId) {
         return res.status(404).json({ message: 'School not found for user' });
+      }
+
+      // Ensure schoolId is in ObjectId format for consistency
+      if (typeof schoolId === 'string' && mongoose.Types.ObjectId.isValid(schoolId)) {
+        schoolId = new mongoose.Types.ObjectId(schoolId);
       }
 
       // Get user's manager role for this school
@@ -191,8 +253,8 @@ export default async function handler(req, res) {
       // Si le champ preferredPaymentMethod n'existe pas, l'ajouter
       if (school.preferredPaymentMethod === undefined) {
         console.log('Champ preferredPaymentMethod manquant, ajout en cours...');
-        await School.findByIdAndUpdate(schoolId, { 
-          $set: { preferredPaymentMethod: null } 
+        await School.findByIdAndUpdate(schoolId, {
+          $set: { preferredPaymentMethod: null }
         });
         school.preferredPaymentMethod = null;
         console.log('Champ preferredPaymentMethod ajouté');
@@ -202,7 +264,7 @@ export default async function handler(req, res) {
       let deliveryDate = null;
       let endDate = null;
       let startDate = null;
-      
+
       if (school.activeCampaignId) {
         const activeCampaign = await Campaign.findById(school.activeCampaignId).lean();
         if (activeCampaign) {
@@ -230,14 +292,15 @@ export default async function handler(req, res) {
         ville: school.ville,
         codePostal: school.codePostal,
         logo: school.logo,
-        logoUrl: school.logo && school.logo.startsWith('school-logo/') 
+        logoUrl: school.logo && school.logo.startsWith('school-logo/')
           ? `https://res.cloudinary.com/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload/${school.logo}.png`
-          : school.logo && school.logo.startsWith('http') 
-            ? school.logo 
+          : school.logo && school.logo.startsWith('http')
+            ? school.logo
             : null,
         deliveryInstructions: school.deliveryInstructions,
         distributionLocation: school.distributionLocation || '',
         preferredPaymentMethod: school.preferredPaymentMethod || null,
+        paymentInfo: school.paymentInfo || {},
         organizationType: school.organizationType || 'school', // Default to school for backward compatibility
         numberOfStudents: school.numberOfStudents || null,
         // Manager role information
