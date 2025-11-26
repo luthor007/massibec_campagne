@@ -74,3 +74,4 @@ fichier_commande_*.csv
 
 # fly.io
 .fly/
+firecrawl/
