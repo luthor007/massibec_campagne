@@ -36,15 +36,15 @@ const StoreSchema = new mongoose.Schema({
   deliveryOptions: {
     type: [{
       name: { type: String, required: true },
-      enabled: { type: Boolean, default: true },
+      enabled: { type: Boolean, default: false },
       pickupAddress: { type: String, default: '' }, // For "Pickup (chez moi)"
       deliveryRadius: { type: String, default: '' }   // For "Livraison (si près de chez moi)"
     }],
     default: [
-      { name: 'Travail', enabled: true },
-      { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-      { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
-      { name: 'Autre', enabled: true }
+      { name: 'Travail', enabled: false },
+      { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+      { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+      { name: 'Autre', enabled: true } // Only "Autre" enabled by default
     ]
   }, // Options de livraison disponibles avec configuration
 });
@@ -66,7 +66,7 @@ StoreSchema.pre('save', async function (next) {
   if (this.deliveryOptions && Array.isArray(this.deliveryOptions) && this.deliveryOptions.length > 0) {
     // Check if first element is a string (old format)
     if (typeof this.deliveryOptions[0] === 'string') {
-      // Migrate from strings to objects
+      // Migrate from strings to objects - keep existing enabled state for old stores
       const migrationMap = {
         'Travail': { name: 'Travail', enabled: true },
         'Livraison (si près de chez moi)': { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
@@ -133,21 +133,21 @@ StoreSchema.pre('save', async function (next) {
       };
     }).filter(Boolean); // Remove null entries
 
-    // Ensure we have at least default options
+    // Ensure we have at least default options (only Autre enabled for new stores)
     if (this.deliveryOptions.length === 0) {
       this.deliveryOptions = [
-        { name: 'Travail', enabled: true },
-        { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-        { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
+        { name: 'Travail', enabled: false },
+        { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+        { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
         { name: 'Autre', enabled: true }
       ];
     }
   } else if (!this.deliveryOptions || !Array.isArray(this.deliveryOptions) || this.deliveryOptions.length === 0) {
-    // Set default options if not set
+    // Set default options if not set (only Autre enabled for new stores)
     this.deliveryOptions = [
-      { name: 'Travail', enabled: true },
-      { name: 'Livraison (si près de chez moi)', enabled: true, deliveryRadius: '' },
-      { name: 'Pickup (chez moi)', enabled: true, pickupAddress: '' },
+      { name: 'Travail', enabled: false },
+      { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+      { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
       { name: 'Autre', enabled: true }
     ];
   }

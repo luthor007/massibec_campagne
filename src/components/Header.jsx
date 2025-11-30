@@ -23,8 +23,6 @@ export default function Header() {
   const { data: session, status } = useSession();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [schoolLogo, setSchoolLogo] = useState(null);
-
   const isLoading = status === 'loading';
   const isAuthenticated = status === 'authenticated';
   const isSchoolManager = session?.user?.role === 'school_manager';
@@ -58,51 +56,6 @@ export default function Header() {
     fetchUserInfo()
   }, [session])
 
-  // Fetch school logo based on active campaign
-  useEffect(() => {
-    const fetchSchoolLogo = async () => {
-      if (!session?.user) {
-        setSchoolLogo(null);
-        return;
-      }
-
-      try {
-        const response = await fetch('/api/users/campaigns');
-        if (response.ok) {
-          const data = await response.json();
-          const activeCampaignId = data.activeCampaignId;
-          const campaigns = data.campaigns || [];
-
-          // Find active campaign
-          const activeCampaign = campaigns.find(c =>
-            c._id === activeCampaignId || c.isActiveCampaign
-          ) || campaigns[0];
-
-          // Get school logo from active campaign
-          if (activeCampaign?.school?.logo) {
-            setSchoolLogo(activeCampaign.school.logo);
-          } else {
-            setSchoolLogo(null);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching school logo:', error);
-        setSchoolLogo(null);
-      }
-    };
-
-    fetchSchoolLogo();
-
-    // Listen for campaign changes
-    const handleCampaignSwitched = () => {
-      fetchSchoolLogo();
-    };
-
-    window.addEventListener('campaignSwitched', handleCampaignSwitched);
-    return () => {
-      window.removeEventListener('campaignSwitched', handleCampaignSwitched);
-    };
-  }, [session]);
 
   const handleProfileClick = () => {
     setShowProfileModal(true);
@@ -190,21 +143,12 @@ export default function Header() {
                 transition={{ duration: 0.5 }}
               >
                 <div className="relative flex items-center h-full">
-                  {schoolLogo ? (
-                    <img
-                      src={schoolLogo}
-                      alt="School Logo"
-                      className="object-cover h-10 md:h-12"
-                      style={{ objectPosition: 'center top' }}
-                    />
-                  ) : (
-                    <img
-                      src="/images/jappuie_logo.svg"
-                      alt="Jappuie - Plateforme de financement scolaire"
-                      className="object-cover h-10 md:h-12"
-                      style={{ objectPosition: 'center top' }}
-                    />
-                  )}
+                  <img
+                    src="/images/jappuie_logo.svg"
+                    alt="Jappuie - Plateforme de financement scolaire"
+                    className="object-cover h-10 md:h-12"
+                    style={{ objectPosition: 'center top' }}
+                  />
                 </div>
               </motion.div>
             </Link>

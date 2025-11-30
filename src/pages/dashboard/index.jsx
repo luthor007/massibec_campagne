@@ -1,23 +1,18 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import Layout from '../../components/Layout';
 import Link from 'next/link';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BarChart, Settings, ShoppingBag, Store, TrendingUp, AlertTriangle, CheckCircle, Info, ArrowLeft, School, Loader2, Copy, Share2, Check, DollarSign, Clock } from 'lucide-react';
+import { Loader2, Copy, Check, ChevronDown, ChevronUp, Crown, Medal, Star, Trophy, ExternalLink, Share2, ShoppingBag, Settings, BarChart, TrendingUp, Info, Users, AlertTriangle, Lock, Package, Clock } from 'lucide-react';
 import CampaignSelector from '@/components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '@/components/Dashboard/JoinCampaignModal';
-import OnboardingTooltip from '@/components/Dashboard/OnboardingTooltip';
-import useOnboarding from '@/hooks/useOnboarding';
-import { getUserCampaignContext } from '@/utils/campaignHelpers';
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion, AnimatePresence } from 'framer-motion';
 import { getStoreUrl, getFullStoreUrl } from '@/utils/storeUrlHelpers';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../api/auth/[...nextauth]';
-import { getDashboardSSRData, getOrdersSSR } from '../../lib/dashboardSSR';
-import { prefetchSalesTools } from '@/utils/salesToolsPrefetcher';
+import { getDashboardSSRData, getOrdersSSR, getCampaignTotalSchoolProfitSSR } from '../../lib/dashboardSSR';
+import { getCampaignExpirationStatus } from '../../utils/campaignHelpers';
 
 export default function Dashboard({
   initialCampaignContext,
@@ -25,119 +20,56 @@ export default function Dashboard({
   initialSchoolData,
   initialCampaignData,
   initialStudentProfit = 0,
-  initialSchoolProfit = 0
+  initialSchoolProfit = 0,
+  initialTotalCampaignSchoolProfit = 0,
+  initialOrders = [],
+  initialHasInventory = false
 }) {
   const { data: session } = useSession();
   const router = useRouter();
   const [storeId, setStoreId] = useState(initialStoreInfo?.storeId || null);
   const [storeSlug, setStoreSlug] = useState(initialStoreInfo?.slug || null);
-  const [navigatingTo, setNavigatingTo] = useState(null); // Track which route we're navigating to
+  const [navigatingTo, setNavigatingTo] = useState(null);
 
-  // Check if user is in preview mode (school_manager viewing as student)
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
-
-  // Campaign-related state - initialize from SSR props
+  // Campaign state
   const [campaignContext, setCampaignContext] = useState(initialCampaignContext || null);
   const [showJoinCampaignModal, setShowJoinCampaignModal] = useState(false);
-  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [schoolData] = useState(initialSchoolData || null);
+  const [campaignData] = useState(initialCampaignData || null);
 
-  // School data for distribution message - initialize from SSR props
-  const [schoolData, setSchoolData] = useState(initialSchoolData || null);
-  const [campaignData, setCampaignData] = useState(initialCampaignData || null);
-
-  // Onboarding state
-  const [storeExists, setStoreExists] = useState(!!initialStoreInfo?.storeId);
-  const [showOnboardingTooltip, setShowOnboardingTooltip] = useState(false);
-  const [tooltipTarget, setTooltipTarget] = useState(null);
-
-  // Refs for tooltip positioning
-  const campaignSelectorRef = useRef(null);
-  const personalizeCardRef = useRef(null);
-  const storeCardRef = useRef(null);
-  const ordersCardRef = useRef(null);
-  const statsCardRef = useRef(null);
-  const toolsCardRef = useRef(null);
-
-  // Use onboarding hook
-  const {
-    progress,
-    currentStep,
-    isLoading: onboardingLoading,
-    isCompleted,
-    completionPercentage,
-    markStepComplete,
-    getStepContent
-  } = useOnboarding();
-
-  // Prefetch all dashboard routes for instant navigation - optimized
-  useEffect(() => {
-    // Prefetch all dashboard pages immediately - multiple times for aggressive caching
-    const routesToPrefetch = [
-      '/dashboard/personnalisation',
-      '/dashboard/commandes',
-      '/dashboard/statistiques',
-      '/dashboard/vendre',
-      '/detail'
-    ];
-
-    // Prefetch all routes immediately - batch prefetch for better performance
-    routesToPrefetch.forEach(route => {
-      router.prefetch(route);
-    });
-
-    // Double prefetch for extra assurance - single timeout
-    const timeoutId = setTimeout(() => {
-      routesToPrefetch.forEach(route => {
-        router.prefetch(route);
-      });
-    }, 100);
-
-    // Optimized hover listener setup - single function, reused
-    const prefetchOnHover = (e) => {
-      const link = e.currentTarget;
-      const href = link.getAttribute('href');
-      if (href && (href.startsWith('/dashboard/') || href === '/detail')) {
-        router.prefetch(href);
-      }
-    };
-
-    // Set up hover listeners - batch DOM query
-    const setupHoverListeners = () => {
-      const links = document.querySelectorAll('a[href^="/dashboard/"], a[href="/detail"]');
-      links.forEach(link => {
-        link.addEventListener('mouseenter', prefetchOnHover, { once: true, passive: true });
-        link.addEventListener('touchstart', prefetchOnHover, { once: true, passive: true });
-      });
-    };
-
-    // Set up listeners immediately
-    setupHoverListeners();
-
-    // Single delayed setup
-    const delayedSetup = setTimeout(setupHoverListeners, 300);
-
-    return () => {
-      clearTimeout(timeoutId);
-      clearTimeout(delayedSetup);
-    };
-  }, [router]);
-
-  // Memoize store URL to avoid recalculating on every render
+  // Store URL state
   const storeUrl = useMemo(() => {
     if (!storeId) return null;
     return getStoreUrl({ storeId, slug: storeSlug });
   }, [storeId, storeSlug]);
 
-  // State for full store URL (client-side only to avoid hydration issues)
   const [fullStoreUrl, setFullStoreUrl] = useState(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
-  // Mark component as mounted (client-side only)
+  // Profits state
+  const [studentProfit] = useState(initialStudentProfit);
+  const [schoolProfit] = useState(initialSchoolProfit);
+  const [totalCampaignSchoolProfit] = useState(initialTotalCampaignSchoolProfit);
+  const [daysRemaining, setDaysRemaining] = useState(null);
+
+  // Leaderboard state
+  const [leaderboard, setLeaderboard] = useState(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [showMoreOptions, setShowMoreOptions] = useState(false);
+
+  // Campaign status - calculate based on orders and end date
+  const campaignStatus = useMemo(() => {
+    const endDate = initialCampaignData?.endDate || campaignData?.endDate;
+    return getCampaignExpirationStatus(endDate, initialOrders, initialHasInventory);
+  }, [initialCampaignData?.endDate, campaignData?.endDate, initialOrders, initialHasInventory]);
+
+  // Mount effect
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Calculate full store URL on client-side only
+  // Calculate full store URL on client-side
   useEffect(() => {
     if (storeId && isMounted) {
       const url = getFullStoreUrl({ storeId, slug: storeSlug });
@@ -145,83 +77,62 @@ export default function Dashboard({
     }
   }, [storeId, storeSlug, isMounted]);
 
-  // State for copy/share functionality
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  // State for profit and campaign metrics (initialized from SSR props)
-  const [studentProfit, setStudentProfit] = useState(initialStudentProfit);
-  const [schoolProfit, setSchoolProfit] = useState(initialSchoolProfit);
-  const [daysRemaining, setDaysRemaining] = useState(null);
-  const [metricsLoading, setMetricsLoading] = useState(false);
-
-  // Memoize onboarding handlers to prevent unnecessary re-renders
-  const handleOnboardingNext = useCallback(async () => {
-    if (currentStep) {
-      const success = await markStepComplete(currentStep.key, true);
-      if (success) {
-        setShowOnboardingTooltip(false);
-      }
-    }
-  }, [currentStep, markStepComplete]);
-
-  const handleOnboardingSkip = useCallback(async () => {
-    if (currentStep) {
-      const success = await markStepComplete(currentStep.key, true);
-      if (success) {
-        setShowOnboardingTooltip(false);
-      }
-    }
-  }, [currentStep, markStepComplete]);
-
-  const handleOnboardingClose = useCallback(() => {
-    setShowOnboardingTooltip(false);
-  }, []);
-
-  // Warm up heavy sales tools so the vendre page loads instantly
+  // Calculate days remaining
   useEffect(() => {
-    prefetchSalesTools();
-  }, []);
-
-  // Memoize campaign handlers
-  const handleCampaignSwitch = useCallback((campaignId) => {
-    window.location.reload(); // Simple refresh for now
-  }, []);
-
-  const handleJoinCampaignClick = useCallback(() => {
-    setShowJoinCampaignModal(true);
-  }, []);
-
-  // Memoize campaign join success handler
-  const handleJoinCampaignSuccess = useCallback(async (campaign) => {
-    setShowJoinCampaignModal(false);
-    await markStepComplete('joinedCampaign', true);
-    window.location.reload();
-  }, [markStepComplete]);
-
-  // Memoize navigation handler
-  const handleNavigation = useCallback((href, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setNavigatingTo(href);
-    // Navigate immediately - prefetching should have already loaded the page
-    router.push(href).catch(() => {
-      // Fallback if navigation fails
-      setNavigatingTo(null);
-    });
-  }, [router]);
-
-  // Memoize detail page navigation
-  const handleDetailNavigation = useCallback((e) => {
-    e.preventDefault();
-    router.push('/detail');
-  }, [router]);
-
-  // Memoize return to manager dashboard handler
-  const handleReturnToManagerDashboard = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('viewMode');
+    const endDate = initialCampaignData?.endDate || campaignData?.endDate;
+    if (endDate) {
+      const end = new Date(endDate);
+      const now = new Date();
+      const diffTime = end - now;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setDaysRemaining(Math.max(0, diffDays));
     }
-    router.push('/dashboard-manager');
+  }, [initialCampaignData, campaignData]);
+
+  // Fetch leaderboard
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      if (!session?.user?.id || !campaignContext?.activeCampaignId) {
+        setLeaderboardLoading(false);
+        return;
+      }
+
+      try {
+        const schoolId = initialSchoolData?._id || campaignData?.school;
+        if (!schoolId) {
+          setLeaderboardLoading(false);
+          return;
+        }
+
+        const response = await fetch(`/api/schools/${schoolId}/topsellers/${session.user.id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ campaignId: campaignContext.activeCampaignId })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setLeaderboard(data);
+        }
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    };
+
+    fetchLeaderboard();
+  }, [session?.user?.id, campaignContext?.activeCampaignId, initialSchoolData, campaignData]);
+
+  // Clear navigating state on route change
+  useEffect(() => {
+    const handleRouteChangeComplete = () => setNavigatingTo(null);
+    router.events.on('routeChangeComplete', handleRouteChangeComplete);
+    router.events.on('routeChangeError', handleRouteChangeComplete);
+    return () => {
+      router.events.off('routeChangeComplete', handleRouteChangeComplete);
+      router.events.off('routeChangeError', handleRouteChangeComplete);
+    };
   }, [router]);
 
   // Copy link handler
@@ -238,7 +149,7 @@ export default function Dashboard({
     }
   }, [fullStoreUrl, storeUrl, isMounted]);
 
-  // Share link handler (uses native share on mobile)
+  // Share link handler
   const handleShareLink = useCallback(async () => {
     const urlToShare = fullStoreUrl || (isMounted && storeUrl ? `${window.location.origin}${storeUrl}` : '');
     if (!urlToShare) return;
@@ -246,655 +157,579 @@ export default function Dashboard({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Ma boutique Jappuie.ca',
-          text: 'Découvrez ma boutique de financement scolaire!',
+          title: '🎁 Ma boutique de financement!',
+          text: 'Salut! Regarde les produits que je vends pour aider mon école! 🏫',
           url: urlToShare
         });
       } catch (error) {
-        // User cancelled or error occurred - silently fail
         if (error.name !== 'AbortError') {
-          console.log('Error sharing:', error);
+          handleCopyLink();
         }
       }
     } else {
-      // Fallback to copy if share is not available
       handleCopyLink();
     }
   }, [fullStoreUrl, storeUrl, isMounted, handleCopyLink]);
 
-  // Memoize modal close handler
-  const handleCloseJoinCampaignModal = useCallback(() => {
-    setShowJoinCampaignModal(false);
-  }, []);
-
-  // Memoize completion percentage to avoid recalculation
-  const completionPercentageDisplay = useMemo(() => completionPercentage, [completionPercentage]);
-
-  // Clear navigating state when route changes
-  useEffect(() => {
-    const handleRouteChangeComplete = () => {
-      setNavigatingTo(null);
-    };
-
-    router.events.on('routeChangeComplete', handleRouteChangeComplete);
-    router.events.on('routeChangeError', handleRouteChangeComplete);
-
-    return () => {
-      router.events.off('routeChangeComplete', handleRouteChangeComplete);
-      router.events.off('routeChangeError', handleRouteChangeComplete);
-    };
+  // Navigation handlers
+  const handleNavigation = useCallback((href, e) => {
+    e?.preventDefault();
+    setNavigatingTo(href);
+    router.push(href).catch(() => setNavigatingTo(null));
   }, [router]);
 
-  // Only fetch if data wasn't provided via SSR (fallback for client-side updates)
-  useEffect(() => {
-    // Only fetch store if we don't have it from SSR and campaign context is available
-    if (session && campaignContext?.activeCampaignId && !initialStoreInfo?.storeId) {
-      const fetchStore = async () => {
-        try {
-          const response = await fetch('/api/get-store', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              campaignId: campaignContext.activeCampaignId
-            }),
-          });
-          const data = await response.json();
-          setStoreId(data.storeId);
-          setStoreSlug(data.slug || null);
-          setStoreExists(!!data.storeId);
-        } catch (error) {
-          console.error('Error fetching store ID:', error);
-        }
-      };
-      fetchStore();
-    }
-  }, [session, campaignContext?.activeCampaignId, initialStoreInfo]);
+  const handleCampaignSwitch = useCallback(() => {
+    window.location.reload();
+  }, []);
 
-  // Refresh campaign context on client-side updates (only if not provided via SSR)
-  useEffect(() => {
-    if (!session?.user || initialCampaignContext) return;
+  const handleJoinCampaignSuccess = useCallback(() => {
+    setShowJoinCampaignModal(false);
+    window.location.reload();
+  }, []);
 
-    const fetchCampaignContext = async () => {
-      setCampaignsLoading(true);
-      try {
-        const response = await fetch('/api/users/campaigns');
-        if (response.ok) {
-          const data = await response.json();
-          const context = getUserCampaignContext(data);
-          setCampaignContext(context);
-        }
-      } catch (error) {
-        console.error('Error fetching campaign context:', error);
-      } finally {
-        setCampaignsLoading(false);
-      }
-    };
-
-    fetchCampaignContext();
-  }, [session, initialCampaignContext]);
-
-  // Check if in preview mode on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const viewMode = localStorage.getItem('viewMode');
-      const isPreview = viewMode === 'student_preview' && (session?.user?.role === 'school_manager' || session?.user?.role === 'supplier' || session?.user?.role === 'fournisseur');
-      setIsPreviewMode(isPreview);
-    }
-  }, [session]);
-
-  // Calculate days remaining from campaign end date
-  useEffect(() => {
-    if (initialCampaignData?.endDate) {
-      const endDate = new Date(initialCampaignData.endDate);
-      const now = new Date();
-      const diffTime = endDate - now;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      setDaysRemaining(Math.max(0, diffDays));
-    } else if (campaignData?.endDate) {
-      const endDate = new Date(campaignData.endDate);
-      const now = new Date();
-      const diffTime = endDate - now;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      setDaysRemaining(Math.max(0, diffDays));
-    }
-  }, [initialCampaignData, campaignData]);
-
-
-  // Show onboarding tooltip when current step is available
-  useEffect(() => {
-    if (!onboardingLoading && currentStep && !isCompleted) {
-      // Use a small delay to ensure refs are attached
-      const timer = setTimeout(() => {
-        setShowOnboardingTooltip(true);
-
-        // Set tooltip target based on current step
-        switch (currentStep.key) {
-          case 'joinedCampaign':
-            setTooltipTarget(campaignSelectorRef.current);
-            break;
-          case 'personalizedStore':
-            setTooltipTarget(personalizeCardRef.current);
-            break;
-          case 'visitedStore':
-            setTooltipTarget(storeCardRef.current);
-            break;
-          case 'viewedOrders':
-            setTooltipTarget(ordersCardRef.current);
-            break;
-          case 'viewedStats':
-            setTooltipTarget(statsCardRef.current);
-            break;
-          case 'viewedTools':
-            setTooltipTarget(toolsCardRef.current);
-            break;
-          default:
-            setTooltipTarget(null);
-        }
-      }, 100); // Small delay to ensure refs are attached
-
-      return () => clearTimeout(timer);
-    } else {
-      setShowOnboardingTooltip(false);
-    }
-  }, [currentStep, onboardingLoading, isCompleted]);
-
-  // Check if in preview mode on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const viewMode = localStorage.getItem('viewMode');
-      const isPreview = viewMode === 'student_preview' && (session?.user?.role === 'school_manager' || session?.user?.role === 'supplier' || session?.user?.role === 'fournisseur');
-      setIsPreviewMode(isPreview);
-    }
-  }, [session]);
-
-  // Show onboarding tooltip when current step is available
+  // Get rank display info
+  const getRankInfo = (rank) => {
+    if (rank === 1) return { emoji: '🥇', text: '1er', color: 'text-yellow-600', bg: 'bg-yellow-100' };
+    if (rank === 2) return { emoji: '🥈', text: '2e', color: 'text-gray-500', bg: 'bg-gray-100' };
+    if (rank === 3) return { emoji: '🥉', text: '3e', color: 'text-orange-600', bg: 'bg-orange-100' };
+    return { emoji: '⭐', text: `${rank}e`, color: 'text-blue-600', bg: 'bg-blue-50' };
+  };
 
   return (
     <Layout>
-      <div className="pt-12 sm:pt-16 md:pt-20 overflow-x-hidden max-w-full px-3 sm:px-4 md:px-6">
-        {/* Header with Campaign Management */}
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 sm:gap-6 mb-6">
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Tableau de bord</h1>
-            {!isCompleted && currentStep && (
-              <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                <div className="text-xs sm:text-sm text-gray-600">
-                  Formation en cours ({completionPercentageDisplay}%)
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50">
+        <div className="pt-16 sm:pt-20 pb-8 px-4 sm:px-6 max-w-2xl mx-auto">
+
+          {/* Header - Super simple */}
+          <div className="text-center mb-6">
+            <motion.h1
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-2xl sm:text-3xl font-bold text-gray-800"
+            >
+              Salut {session?.user?.name?.split(' ')[0] || 'toi'}! 👋
+            </motion.h1>
+            <p className="text-gray-600 mt-1">Prêt à vendre?</p>
+          </div>
+
+          {/* Campaign Selector - Compact */}
+          <div className="mb-6">
+            <CampaignSelector
+              onCampaignSwitch={handleCampaignSwitch}
+              onJoinCampaign={() => setShowJoinCampaignModal(true)}
+              initialCampaigns={initialCampaignContext?.campaigns || []}
+              initialActiveCampaignId={initialCampaignContext?.activeCampaignId || null}
+            />
+          </div>
+
+          {/* Campaign Status Banners */}
+          {campaignStatus.status === 'expired_must_submit' && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-5 shadow-xl"
+            >
+              <div className="flex items-start gap-4 text-white">
+                <div className="bg-white/20 rounded-full p-3 flex-shrink-0">
+                  <AlertTriangle className="h-8 w-8" />
                 </div>
-                <div className="w-full sm:w-24 h-1.5 sm:h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${completionPercentageDisplay}%` }}
-                    transition={{ duration: 0.5 }}
-                  />
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-2">⚠️ Action requise aujourd'hui!</h3>
+                  <p className="text-white/90 text-sm mb-4">
+                    La campagne est terminée. Vous avez <strong>{campaignStatus.paidOrdersCount} commande{campaignStatus.paidOrdersCount > 1 ? 's' : ''}</strong> payée{campaignStatus.paidOrdersCount > 1 ? 's' : ''} à soumettre à Massibec.
+                    <br />
+                    <strong>Votre boutique est verrouillée</strong> jusqu'à ce que vous passiez votre commande.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <Link href="/dashboard/commandes">
+                      <Button className="bg-white text-red-600 hover:bg-white/90 font-bold">
+                        <Package className="h-5 w-5 mr-2" />
+                        Passer ma commande maintenant
+                      </Button>
+                    </Link>
+                  </div>
+                  <p className="text-white/80 text-xs mt-3">
+                    💡 Si vous souhaitez continuer à vendre, prenez de l'inventaire lors du passage de commande.
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
-          <motion.div
-            ref={campaignSelectorRef}
-            className="flex-shrink-0 w-full sm:w-auto"
-            animate={currentStep?.key === 'joinedCampaign' ? {
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={{
-              duration: 2,
-              repeat: currentStep?.key === 'joinedCampaign' ? Infinity : 0,
-              ease: "easeInOut"
-            }}
-          >
-            <div className={currentStep?.key === 'joinedCampaign' ? 'ring-4 ring-blue-500 rounded-lg p-2 shadow-2xl' : ''}>
-              <CampaignSelector
-                onCampaignSwitch={handleCampaignSwitch}
-                onJoinCampaign={handleJoinCampaignClick}
-                initialCampaigns={initialCampaignContext?.campaigns || []}
-                initialActiveCampaignId={initialCampaignContext?.activeCampaignId || null}
-              />
-            </div>
-          </motion.div>
-        </div>
+            </motion.div>
+          )}
 
-        {/* Boutique Link Share Section */}
-        {storeExists && storeUrl && (
-          <Card className="mb-6 border-2 border-primary/20 bg-gradient-to-r from-blue-50 to-purple-50">
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg sm:text-xl">
-                <Store className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-primary" />
-                Lien de votre boutique
-              </CardTitle>
-              <CardDescription>
-                Partagez ce lien avec vos clients pour qu&apos;ils puissent commander vos produits
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                <div className="flex-1 bg-white border border-gray-300 rounded-lg px-4 py-3 flex items-center min-w-0">
-                  <code className="text-sm sm:text-base text-gray-800 truncate flex-1">
-                    {isMounted && fullStoreUrl ? fullStoreUrl : storeUrl || 'Chargement...'}
+          {campaignStatus.status === 'closed_no_orders' && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-gradient-to-r from-gray-600 to-gray-700 rounded-2xl p-5 shadow-xl"
+            >
+              <div className="flex items-start gap-4 text-white">
+                <div className="bg-white/20 rounded-full p-3 flex-shrink-0">
+                  <Lock className="h-8 w-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-2">🔒 Boutique fermée</h3>
+                  <p className="text-white/90 text-sm mb-3">
+                    La campagne est terminée et vous n'avez eu aucune commande.
+                    Votre boutique est maintenant fermée.
+                  </p>
+                  <Button
+                    onClick={() => setShowJoinCampaignModal(true)}
+                    className="bg-white text-gray-700 hover:bg-white/90 font-bold"
+                  >
+                    Rejoindre une nouvelle campagne
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {campaignStatus.status === 'ordering_window' && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-5 shadow-xl"
+            >
+              <div className="flex items-start gap-4 text-white">
+                <div className="bg-white/20 rounded-full p-3 flex-shrink-0">
+                  <Clock className="h-8 w-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-2">⏰ C'est le moment de passer ta commande!</h3>
+                  <p className="text-white/90 text-sm mb-4">
+                    Tu as <strong>{campaignStatus.paidOrdersCount} commande{campaignStatus.paidOrdersCount > 1 ? 's' : ''}</strong> payée{campaignStatus.paidOrdersCount > 1 ? 's' : ''} prête{campaignStatus.paidOrdersCount > 1 ? 's' : ''} à être envoyée{campaignStatus.paidOrdersCount > 1 ? 's' : ''}.
+                    {campaignStatus.daysRemaining === 0
+                      ? " C'est le dernier jour!"
+                      : campaignStatus.daysRemaining === 1
+                        ? " Il reste 1 jour!"
+                        : ` Il reste ${campaignStatus.daysRemaining} jours.`
+                    }
+                  </p>
+                  <Link href="/dashboard/commandes">
+                    <Button className="bg-white text-orange-600 hover:bg-white/90 font-bold">
+                      <Package className="h-5 w-5 mr-2" />
+                      Voir mes commandes et passer la commande
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {campaignStatus.status === 'expired_with_inventory' && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-5 shadow-xl"
+            >
+              <div className="flex items-start gap-4 text-white">
+                <div className="bg-white/20 rounded-full p-3 flex-shrink-0">
+                  <Package className="h-8 w-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-2">📦 Mode inventaire actif</h3>
+                  <p className="text-white/90 text-sm mb-3">
+                    La campagne est terminée mais vous avez pris de l'inventaire.
+                    Votre boutique reste ouverte pour écouler votre stock!
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* HERO - Share Your Store (hidden when shop is closed) */}
+          {storeUrl && campaignStatus.isShopOpen && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-3xl p-6 sm:p-8 mb-6 shadow-xl"
+            >
+              <div className="text-center text-white">
+                <motion.div
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ repeat: Infinity, duration: 2, repeatDelay: 3 }}
+                  className="text-5xl sm:text-6xl mb-3 flex justify-center items-center"
+                >
+                  <Share2 className="h-12 w-12 sm:h-14 sm:w-14 text-white" />
+                </motion.div>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2">
+                  Partage ta boutique!
+                </h2>
+                <p className="text-white/90 text-sm sm:text-base mb-4">
+                  Envoie ce lien à ta famille et tes amis
+                </p>
+
+                {/* Link display */}
+                <div className="bg-white/20 backdrop-blur rounded-xl p-3 mb-4">
+                  <code className="text-white/90 text-xs sm:text-sm break-all">
+                    {isMounted && fullStoreUrl ? fullStoreUrl : storeUrl}
                   </code>
                 </div>
-                <div className="flex gap-2 sm:flex-shrink-0">
+
+                {/* Action buttons */}
+                <div className="flex gap-3 justify-center">
                   <Button
                     onClick={handleCopyLink}
-                    variant="outline"
-                    className="flex-1 sm:flex-none"
-                    disabled={linkCopied}
+                    className="flex-1 max-w-[140px] bg-white text-purple-600 hover:bg-white/90 font-bold py-3 rounded-xl shadow-lg"
                   >
                     {linkCopied ? (
                       <>
-                        <Check className="h-4 w-4 mr-2 text-green-600" />
-                        <span className="hidden sm:inline">Copié!</span>
-                        <span className="sm:hidden">Copié!</span>
+                        <Check className="h-5 w-5 mr-2" />
+                        Copié!
                       </>
                     ) : (
                       <>
-                        <Copy className="h-4 w-4 mr-2" />
-                        <span className="hidden sm:inline">Copier</span>
-                        <span className="sm:hidden">Copier</span>
+                        <Copy className="h-5 w-5 mr-2" />
+                        Copier
                       </>
                     )}
                   </Button>
                   <Button
                     onClick={handleShareLink}
-                    variant="default"
-                    className="flex-1 sm:flex-none bg-primary hover:bg-primary/90"
+                    className="flex-1 max-w-[140px] bg-yellow-400 text-yellow-900 hover:bg-yellow-300 font-bold py-3 rounded-xl shadow-lg"
                   >
-                    <Share2 className="h-4 w-4 mr-2" />
-                    <span className="hidden sm:inline">Partager</span>
-                    <span className="sm:hidden">Partager</span>
+                    <Share2 className="h-5 w-5 mr-2" />
+                    Partager
                   </Button>
                 </div>
               </div>
+            </motion.div>
+          )}
 
-              {/* Metrics Section */}
-              <div className={`grid gap-3 pt-3 border-t border-gray-200 ${daysRemaining !== null
-                ? 'grid-cols-1 sm:grid-cols-3'
-                : 'grid-cols-1 sm:grid-cols-2'
-                }`}>
-                {/* Student Profit */}
-                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200">
-                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-600">Vos profits</div>
-                    <div className="text-sm sm:text-base font-bold text-gray-900">
-                      {metricsLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin inline" />
-                      ) : (
-                        `${(studentProfit || 0).toFixed(2)}$`
-                      )}
-                    </div>
+          {/* Stats Cards - Combined Money Card + Days Left */}
+          <div className={`grid ${daysRemaining !== null ? 'grid-cols-2' : 'grid-cols-1'} gap-4 mb-6`}>
+            {/* Combined Money Card - Your Money + School Money */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white rounded-2xl shadow-md border-2 border-green-200 overflow-hidden"
+            >
+              <div className="grid grid-cols-2 divide-x divide-gray-100">
+                {/* Your Money */}
+                <div className="p-4 text-center">
+                  <div className="text-2xl sm:text-3xl mb-1">💰</div>
+                  <div className="text-xl sm:text-2xl font-bold text-green-600">
+                    {studentProfit.toFixed(2)}$
                   </div>
+                  <div className="text-xs text-gray-600">Tes sous</div>
                 </div>
-
-                {/* School Profit */}
-                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200">
-                  <School className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs text-gray-600">Profits école</div>
-                    <div className="text-sm sm:text-base font-bold text-gray-900">
-                      {metricsLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin inline" />
-                      ) : (
-                        `${(schoolProfit || 0).toFixed(2)}$`
-                      )}
-                    </div>
+                {/* School Money - Pizza Fund (Total from all students) */}
+                <div className="p-4 text-center bg-orange-50/50">
+                  <div className="text-2xl sm:text-3xl mb-1">🍕</div>
+                  <div className="text-xl sm:text-2xl font-bold text-orange-600">
+                    {totalCampaignSchoolProfit.toFixed(2)}$
                   </div>
+                  <div className="text-xs text-gray-600">Pour la pizza</div>
                 </div>
-
-                {/* Days Remaining */}
-                {daysRemaining !== null && (
-                  <div className={`flex items-center gap-2 bg-white rounded-lg px-3 py-2 border ${daysRemaining <= 7
-                    ? 'border-red-300 bg-red-50'
-                    : daysRemaining <= 14
-                      ? 'border-yellow-300 bg-yellow-50'
-                      : 'border-gray-200'
-                    }`}>
-                    <Clock className={`h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 ${daysRemaining <= 7
-                      ? 'text-red-600'
-                      : daysRemaining <= 14
-                        ? 'text-yellow-600'
-                        : 'text-gray-600'
-                      }`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-gray-600">Jours restants</div>
-                      <div className={`text-sm sm:text-base font-bold ${daysRemaining <= 7
-                        ? 'text-red-700'
-                        : daysRemaining <= 14
-                          ? 'text-yellow-700'
-                          : 'text-gray-900'
-                        }`}>
-                        {daysRemaining === 0 ? (
-                          <span className="text-red-600">Terminé</span>
-                        ) : daysRemaining === 1 ? (
-                          <span className="text-red-600">Dernier jour!</span>
-                        ) : (
-                          `${daysRemaining} jours`
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </motion.div>
 
-        {/* Distribution Information 
-        {schoolData && campaignData && campaignData.deliveryDate && (
-          <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-md">
-            <p className="text-blue-800 text-sm">
-              <strong>📦 Distribution :</strong> La distribution se fera à <strong>{schoolData.address || 'l\'adresse de l\'école'}</strong> le <strong>{new Date(campaignData.deliveryDate).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>. Assurez-vous d'apporter cette confirmation de commande ou du moins votre numéro de commande (#commande).
-            </p>
-          </div>
-        )}*/}
-
-        {/* Campaign Status Alert */}
-        {/*!campaignsLoading && campaignContext && (
-          <div className="mb-6">
-            {campaignContext.mode === 'none' ? (
-              <Alert className="border-orange-200 bg-orange-50">
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                <AlertDescription className="text-orange-800">
-                  <strong>Action requise :</strong> Vous devez rejoindre une campagne pour commencer à vendre. 
-                  Utilisez le sélecteur de campagne ci-dessus pour rejoindre une campagne active.
-                </AlertDescription>
-              </Alert>
-            ) : campaignContext.mode === 'legacy' ? (
-              <Alert className="border-blue-200 bg-blue-50">
-                <CheckCircle className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-blue-800">
-                  <strong>Campagne active :</strong> Vous participez à la campagne de votre organisation. 
-                  Vous pouvez maintenant vendre et gagner des commissions.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
-                  <strong>Campagne active :</strong> Vous participez à {campaignContext.campaigns?.length || 0} campagne(s). 
-                  Vous pouvez maintenant vendre et gagner des commissions.
-                </AlertDescription>
-              </Alert>
+            {/* Days Left - Only show if campaign has end date */}
+            {daysRemaining !== null && (
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+                className={`bg-white rounded-2xl p-4 shadow-md border-2 ${daysRemaining <= 7 ? 'border-red-200' : 'border-blue-200'}`}
+              >
+                <div className="text-3xl mb-1">⏰</div>
+                <div className={`text-2xl sm:text-3xl font-bold ${daysRemaining <= 7 ? 'text-red-600' : 'text-blue-600'}`}>
+                  {daysRemaining === 0 ? 'Fini!' : `${daysRemaining}`}
+                </div>
+                <div className="text-xs sm:text-sm text-gray-600">
+                  {daysRemaining === 0 ? 'La campagne est finie' : daysRemaining === 1 ? 'jour restant!' : 'jours restants'}
+                </div>
+              </motion.div>
             )}
           </div>
-        )}*/}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <motion.div
-            ref={personalizeCardRef}
-            animate={currentStep?.key === 'personalizedStore' ? {
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={{
-              duration: 2,
-              repeat: currentStep?.key === 'personalizedStore' ? Infinity : 0,
-              ease: "easeInOut"
-            }}
-          >
-            <Card className={`flex flex-col h-full ${currentStep?.key === 'personalizedStore' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
-              <CardHeader className="flex-shrink-0">
-                <CardTitle className="flex items-center">
-                  <Settings className="h-5 w-5 mr-2 text-primary" />
-                  Personnaliser ma boutique
-                </CardTitle>
-                <CardDescription className="min-h-[3rem]">Modifiez l&apos;apparence et les détails de votre boutique en ligne.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow flex items-end w-full">
-                <Link href="/dashboard/personnalisation" passHref className="w-full block">
-                  <Button
-                    className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-all"
-                    onClick={(e) => handleNavigation('/dashboard/personnalisation', e)}
-                    disabled={navigatingTo === '/dashboard/personnalisation'}
-                  >
-                    {navigatingTo === '/dashboard/personnalisation' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Chargement...
-                      </>
-                    ) : (
-                      <>
-                        Personnaliser
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
+          {/* Leaderboard - Fun Competition */}
+          {(() => {
+            // Get group data if user is in a group
+            const userGroupData = leaderboard?.userGroup && leaderboard?.groups?.length > 0
+              ? leaderboard.groups.find(g => g.name === leaderboard.userGroup)
+              : null;
+
+            // Use group students if available, otherwise use general leaderboard
+            const displayStudents = userGroupData?.students?.length > 0
+              ? userGroupData.students
+              : leaderboard?.topPerformers || [];
+
+            // Find user's rank in group
+            const userRankInGroup = userGroupData?.students?.find(
+              s => s._id === session?.user?.id || s.userId === session?.user?.id
+            )?.rank;
+
+            const displayRank = userGroupData ? userRankInGroup : leaderboard?.userRank;
+            const groupName = leaderboard?.userGroup;
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="bg-white rounded-2xl p-5 shadow-md border-2 border-purple-200 mb-6"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center">
+                      <Trophy className="h-5 w-5 mr-2 text-purple-500" />
+                      Classement 🏆
+                    </h3>
+                    {groupName && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <Users className="h-3 w-3 text-purple-400" />
+                        <span className="text-xs text-purple-600 font-medium">
+                          Classe {groupName}
+                        </span>
+                      </div>
                     )}
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </motion.div>
+                  </div>
+                  {displayRank && (
+                    <div className={`px-3 py-1 rounded-full text-sm font-bold ${getRankInfo(displayRank).bg} ${getRankInfo(displayRank).color}`}>
+                      Tu es {getRankInfo(displayRank).text}!
+                    </div>
+                  )}
+                </div>
 
-          <motion.div
-            ref={ordersCardRef}
-            animate={currentStep?.key === 'viewedOrders' ? {
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={{
-              duration: 2,
-              repeat: currentStep?.key === 'viewedOrders' ? Infinity : 0,
-              ease: "easeInOut"
-            }}
-          >
-            <Card className={`flex flex-col h-full ${currentStep?.key === 'viewedOrders' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
-              <CardHeader className="flex-shrink-0">
-                <CardTitle className="flex items-center">
-                  <ShoppingBag className="h-5 w-5 mr-2 text-primary" />
-                  Mes commandes
-                </CardTitle>
-                <CardDescription className="min-h-[3rem]">Consultez et gérez les commandes de vos clients.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow flex items-end w-full">
-                <Link href="/dashboard/commandes" passHref className="w-full block">
-                  <Button
-                    className="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-all"
-                    onClick={(e) => handleNavigation('/dashboard/commandes', e)}
-                    disabled={navigatingTo === '/dashboard/commandes'}
-                  >
-                    {navigatingTo === '/dashboard/commandes' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Chargement...
-                      </>
-                    ) : (
-                      <>
-                        Voir les commandes
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
+                {leaderboardLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-500" />
+                  </div>
+                ) : displayStudents.length > 0 ? (
+                  <div className="space-y-2">
+                    {/* Scrollable leaderboard container */}
+                    <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-purple-200 scrollbar-track-transparent">
+                      {/* All performers in group */}
+                      {displayStudents.map((performer, index) => {
+                        const isCurrentUser = performer._id === session?.user?.id || performer.userId === session?.user?.id;
+                        const rankInfo = getRankInfo(performer.rank);
+
+                        return (
+                          <motion.div
+                            key={performer._id || index}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: Math.min(index * 0.05, 0.25) }}
+                            className={`flex items-center justify-between p-3 rounded-xl transition-all ${isCurrentUser
+                              ? 'bg-gradient-to-r from-purple-100 to-pink-100 border-2 border-purple-300'
+                              : 'bg-gray-50 hover:bg-gray-100'
+                              }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${rankInfo.bg}`}>
+                                {performer.rank <= 3 ? rankInfo.emoji : performer.rank}
+                              </div>
+                              <div>
+                                <div className={`font-semibold text-sm ${isCurrentUser ? 'text-purple-800' : 'text-gray-800'}`}>
+                                  {performer.name?.split(' ')[0] || 'Vendeur'}
+                                  {isCurrentUser && <span className="ml-2 text-xs">(toi! 🎉)</span>}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {performer.totalProductsSold || 0} produit{(performer.totalProductsSold || 0) !== 1 ? 's' : ''} vendu{(performer.totalProductsSold || 0) !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-green-600 text-sm">
+                                {parseFloat(performer.totalEarnings || 0).toFixed(0)}$
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Scroll hint if there are more than 5 students */}
+                    {displayStudents.length > 5 && (
+                      <div className="text-center text-xs text-gray-400 pt-1">
+                        ↕️ Défile pour voir plus
+                      </div>
                     )}
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </motion.div>
 
-          <motion.div
-            ref={statsCardRef}
-            animate={currentStep?.key === 'viewedStats' ? {
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={{
-              duration: 2,
-              repeat: currentStep?.key === 'viewedStats' ? Infinity : 0,
-              ease: "easeInOut"
-            }}
-          >
-            <Card className={`flex flex-col h-full ${currentStep?.key === 'viewedStats' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
-              <CardHeader className="flex-shrink-0">
-                <CardTitle className="flex items-center">
-                  <BarChart className="h-5 w-5 mr-2 text-primary" />
-                  Statistiques
-                </CardTitle>
-                <CardDescription className="min-h-[3rem]">Suivez les performances de votre campagne.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow flex items-end w-full">
-                <Link href="/dashboard/statistiques" passHref className="w-full block">
-                  <Button
-                    className="w-full bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition-all"
-                    onClick={(e) => handleNavigation('/dashboard/statistiques', e)}
-                    disabled={navigatingTo === '/dashboard/statistiques'}
-                  >
-                    {navigatingTo === '/dashboard/statistiques' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Chargement...
-                      </>
-                    ) : (
-                      <>
-                        Voir les statistiques
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
+                    {/* Motivation message */}
+                    {displayRank && displayRank > 1 && (
+                      <div className="text-center text-sm text-purple-600 mt-3 p-2 bg-purple-50 rounded-lg">
+                        💪 Continue! Tu peux monter dans le classement{groupName ? ` de ta classe` : ''}!
+                      </div>
                     )}
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* New Card to View the Store */}
-          <motion.div
-            ref={storeCardRef}
-            animate={currentStep?.key === 'visitedStore' ? {
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={{
-              duration: 2,
-              repeat: currentStep?.key === 'visitedStore' ? Infinity : 0,
-              ease: "easeInOut"
-            }}
-          >
-            <Card className={`flex flex-col h-full ${currentStep?.key === 'visitedStore' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
-              <CardHeader className="flex-shrink-0">
-                <CardTitle className="flex items-center">
-                  <Store className="h-5 w-5 mr-2 text-primary" />
-                  Voir ma boutique
-                </CardTitle>
-                <CardDescription className="min-h-[3rem]">Accédez à votre boutique en ligne pour la voir comme vos clients.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow flex items-end w-full">
-                {storeUrl ? (
-                  <Link href={storeUrl} passHref className="w-full block">
-                    <Button className="w-full bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                      Voir la boutique
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
+                  </div>
                 ) : (
-                  <Button className="w-full bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded" disabled>
-                    Chargement de la boutique...
-                  </Button>
+                  <div className="text-center py-6 text-gray-500">
+                    <div className="text-4xl mb-2">🎯</div>
+                    <p>Pas encore de ventes{groupName ? ` dans ta classe` : ''}!</p>
+                    <p className="text-sm">Partage ta boutique pour commencer</p>
+                  </div>
                 )}
-              </CardContent>
-            </Card>
-          </motion.div>
+              </motion.div>
+            );
+          })()}
 
-          {/* New Card for Sales Tools */}
-          <motion.div
-            ref={toolsCardRef}
-            animate={currentStep?.key === 'viewedTools' ? {
-              scale: [1, 1.05, 1],
-            } : {}}
-            transition={{
-              duration: 2,
-              repeat: currentStep?.key === 'viewedTools' ? Infinity : 0,
-              ease: "easeInOut"
-            }}
-          >
-            <Card className={`flex flex-col h-full ${currentStep?.key === 'viewedTools' ? 'ring-4 ring-blue-500 shadow-2xl' : ''}`}>
-              <CardHeader className="flex-shrink-0">
-                <CardTitle className="flex items-center">
-                  <TrendingUp className="h-5 w-5 mr-2 text-primary" />
-                  Outils de Vente
-                </CardTitle>
-                <CardDescription className="min-h-[3rem]">Boostez vos ventes avec nos outils marketing prêts à utiliser.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow flex items-end w-full">
-                <Link href="/dashboard/vendre" passHref className="w-full block">
-                  <Button
-                    className="w-full bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-all"
-                    onClick={(e) => handleNavigation('/dashboard/vendre', e)}
-                    disabled={navigatingTo === '/dashboard/vendre'}
-                  >
-                    {navigatingTo === '/dashboard/vendre' ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Chargement...
-                      </>
-                    ) : (
-                      <>
-                        Voir les outils
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Card for Campaign Details */}
-          <Card className="flex flex-col h-full">
-            <CardHeader className="flex-shrink-0">
-              <CardTitle className="flex items-center">
-                <Info className="h-5 w-5 mr-2 text-primary" />
-                Détail de la campagne
-              </CardTitle>
-              <CardDescription className="min-h-[3rem]">Consultez les détails de votre campagne et les profits par produit.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-grow flex items-end w-full">
-              <Link href="/detail" passHref className="w-full block">
-                <Button
-                  className="w-full bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-all"
-                  onClick={handleDetailNavigation}
+          {/* Main Actions - Big Buttons */}
+          <div className="space-y-3 mb-6">
+            {/* View Store */}
+            {storeUrl && (
+              <Link href={storeUrl} className="block">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg flex items-center justify-center gap-3 text-lg"
                 >
-                  Voir les détails
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                  <span className="text-2xl">👀</span>
+                  Voir ma boutique
+                  <ExternalLink className="h-5 w-5" />
+                </motion.button>
               </Link>
-            </CardContent>
-          </Card>
-        </div>
+            )}
 
-        {/* Loading overlay for navigation - ultra-fast, minimal */}
-        {navigatingTo && (
-          <div className="fixed inset-0 bg-white/40 backdrop-blur-[2px] z-50 flex items-center justify-center pointer-events-none transition-opacity duration-75">
-            <div className="flex flex-col items-center space-y-2">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-            </div>
+            {/* View Orders */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={(e) => handleNavigation('/dashboard/commandes', e)}
+              disabled={navigatingTo === '/dashboard/commandes'}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg flex items-center justify-center gap-3 text-lg disabled:opacity-70"
+            >
+              {navigatingTo === '/dashboard/commandes' ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  <span className="text-2xl">📦</span>
+                  Mes commandes
+                  <ShoppingBag className="h-5 w-5" />
+                </>
+              )}
+            </motion.button>
           </div>
-        )}
 
-        {/* Onboarding Tooltip */}
-        {showOnboardingTooltip && currentStep && tooltipTarget && (
-          <OnboardingTooltip
-            isVisible={showOnboardingTooltip}
-            position={
-              currentStep.key === 'joinedCampaign' ? 'bottom' :
-                currentStep.key === 'viewedStats' ? 'left' : 'right'
-            }
-            title={getStepContent(currentStep.key).title}
-            message={getStepContent(currentStep.key).message}
-            tip={getStepContent(currentStep.key).tip}
-            stats={getStepContent(currentStep.key).stats}
-            benefit={getStepContent(currentStep.key).benefit}
-            onNext={handleOnboardingNext}
-            onSkip={handleOnboardingSkip}
-            onClose={handleOnboardingClose}
-            currentStep={currentStep.order}
-            totalSteps={6}
-            showCelebration={false}
-            targetElement={tooltipTarget}
-          />
-        )}
+          {/* More Options - Collapsible */}
+          <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+            <button
+              onClick={() => setShowMoreOptions(!showMoreOptions)}
+              className="w-full p-4 flex items-center justify-between text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <span className="font-semibold flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Plus d&apos;options
+              </span>
+              {showMoreOptions ? (
+                <ChevronUp className="h-5 w-5" />
+              ) : (
+                <ChevronDown className="h-5 w-5" />
+              )}
+            </button>
 
-        {/* Join Campaign Modal */}
-        <JoinCampaignModal
-          isOpen={showJoinCampaignModal}
-          onClose={handleCloseJoinCampaignModal}
-          onSuccess={handleJoinCampaignSuccess}
-        />
+            <AnimatePresence>
+              {showMoreOptions && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="border-t border-gray-100"
+                >
+                  <div className="p-4 space-y-2">
+                    {/* Statistics */}
+                    <Link href="/dashboard/statistiques" className="block">
+                      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                        <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+                          <BarChart className="h-5 w-5 text-yellow-600" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800">📊 Mes statistiques</div>
+                          <div className="text-xs text-gray-500">Voir tous mes chiffres</div>
+                        </div>
+                      </div>
+                    </Link>
+
+                    {/* Sales Tools */}
+                    <Link href="/dashboard/vendre" className="block">
+                      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                          <TrendingUp className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800">🛠️ Outils pour vendre</div>
+                          <div className="text-xs text-gray-500">Affiches et codes QR</div>
+                        </div>
+                      </div>
+                    </Link>
+
+                    {/* Campaign Details */}
+                    <Link href="/detail" className="block">
+                      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                          <Info className="h-5 w-5 text-indigo-600" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800">ℹ️ Ma campagne</div>
+                          <div className="text-xs text-gray-500">Les produits et les prix</div>
+                        </div>
+                      </div>
+                    </Link>
+
+                    {/* Customize Store */}
+                    <Link href="/dashboard/personnalisation" className="block">
+                      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                        <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+                          <Settings className="h-5 w-5 text-gray-600" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800">⚙️ Personnaliser</div>
+                          <div className="text-xs text-gray-500">Changer les options de ma boutique</div>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Help tip */}
+          <div className="mt-6 text-center text-sm text-gray-500">
+            <p>💡 <strong>Astuce:</strong> Plus tu partages, plus tu gagnes!</p>
+          </div>
+
+          {/* No store message */}
+          {!storeUrl && !campaignContext?.activeCampaignId && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-4 bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-6 text-center"
+            >
+              <div className="text-4xl mb-3">🎯</div>
+              <h3 className="font-bold text-yellow-800 mb-2">Rejoins une campagne!</h3>
+              <p className="text-yellow-700 text-sm mb-4">
+                Pour commencer à vendre, tu dois d&apos;abord rejoindre une campagne.
+              </p>
+              <Button
+                onClick={() => setShowJoinCampaignModal(true)}
+                className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold px-6 py-3 rounded-xl"
+              >
+                Rejoindre une campagne
+              </Button>
+            </motion.div>
+          )}
+
+        </div>
       </div>
+
+      {/* Loading overlay */}
+      {navigatingTo && (
+        <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-6 shadow-xl flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-purple-600 mb-2" />
+            <p className="text-gray-600">Chargement...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Join Campaign Modal */}
+      <JoinCampaignModal
+        isOpen={showJoinCampaignModal}
+        onClose={() => setShowJoinCampaignModal(false)}
+        onSuccess={handleJoinCampaignSuccess}
+      />
     </Layout>
   );
 }
@@ -924,25 +759,31 @@ export async function getServerSideProps(context) {
     // Calculate profits from orders
     let initialStudentProfit = 0;
     let initialSchoolProfit = 0;
+    let initialTotalCampaignSchoolProfit = 0;
+    let initialOrders = [];
+    let initialHasInventory = false;
 
     if (dashboardData.initialCampaignContext?.activeCampaignId) {
       try {
         const orders = await getOrdersSSR(session, dashboardData.initialCampaignContext.activeCampaignId);
         const campaignData = dashboardData.initialCampaignData;
 
+        // Store orders for campaign status calculation (simplified version)
+        initialOrders = orders.map(order => ({
+          _id: order._id?.toString(),
+          status: order.status,
+          isTest: order.isTest || false,
+        }));
+
         orders.forEach(order => {
-          // Skip test orders
           if (order.isTest) return;
 
-          // Add student donations to student profit
           const studentDonation = order.studentDonation || order.tip || 0;
           initialStudentProfit += studentDonation;
 
-          // Add school donations to school profit
           const schoolDonation = order.schoolDonation || 0;
           initialSchoolProfit += schoolDonation;
 
-          // Calculate product profits
           if (order.products && Array.isArray(order.products)) {
             order.products.forEach(product => {
               const quantity = product.quantity || 0;
@@ -978,6 +819,26 @@ export async function getServerSideProps(context) {
             });
           }
         });
+
+        // Get total campaign school profit from ALL students
+        initialTotalCampaignSchoolProfit = await getCampaignTotalSchoolProfitSSR(
+          dashboardData.initialCampaignContext.activeCampaignId,
+          campaignData
+        );
+
+        // Check if user has inventory (limited inventory mode)
+        try {
+          const dbConnect = (await import('../../lib/mongodb')).default;
+          await dbConnect();
+          const StudentInventory = (await import('../../models/StudentInventory')).default;
+          const inventory = await StudentInventory.findOne({
+            userId: session.user.id,
+            campaignId: dashboardData.initialCampaignContext.activeCampaignId
+          }).lean();
+          initialHasInventory = !!(inventory && inventory.products && inventory.products.length > 0);
+        } catch (inventoryError) {
+          console.error('Error checking inventory:', inventoryError);
+        }
       } catch (orderError) {
         console.error('Error fetching orders for profit calculation:', orderError);
       }
@@ -988,6 +849,9 @@ export async function getServerSideProps(context) {
         ...dashboardData,
         initialStudentProfit: Math.round(initialStudentProfit * 100) / 100,
         initialSchoolProfit: Math.round(initialSchoolProfit * 100) / 100,
+        initialTotalCampaignSchoolProfit,
+        initialOrders,
+        initialHasInventory,
       },
     };
   } catch (error) {
@@ -1000,6 +864,9 @@ export async function getServerSideProps(context) {
         initialCampaignData: null,
         initialStudentProfit: 0,
         initialSchoolProfit: 0,
+        initialTotalCampaignSchoolProfit: 0,
+        initialOrders: [],
+        initialHasInventory: false,
       },
     };
   }

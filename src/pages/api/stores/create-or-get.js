@@ -99,9 +99,15 @@ export default async function handler(req, res) {
       campaignId: activeCampaignId,
       name: `Boutique de ${schoolName}`,
       description: "🎉 Profitez de nos produits exclusifs ainsi que d'un choix de délicieuses tartes pour les fêtes ! Économisez plus en achetant plus : 5 % de rabais dès 6 produits. Chaque achat soutient directement nos activités scolaires ! 📚 Commandez dès maintenant et récupérez facilement vos produits. 🙏 Merci pour votre générosité !",
-      autoDeposit: false,
+      autoDeposit: false, // Disabled by default
       hoursAvailable: "18h-20h",
-      discountEnabled: true
+      discountEnabled: true,
+      deliveryOptions: [
+        { name: 'Travail', enabled: false },
+        { name: 'Livraison (si près de chez moi)', enabled: false, deliveryRadius: '' },
+        { name: 'Pickup (chez moi)', enabled: false, pickupAddress: '' },
+        { name: 'Autre', enabled: true } // Only "Autre" enabled by default
+      ]
     });
 
     await newStore.save();

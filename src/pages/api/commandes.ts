@@ -49,6 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       deliveryOption,
       customDeliveryOption,
       customerDeliveryAddress,
+      paymentMethod,
     } = req.body;
 
     // Ensure tip and donations are numbers (default to 0 if undefined)
@@ -476,6 +477,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         deliveryOption: deliveryOption || '',
         customDeliveryOption: customDeliveryOption || '',
         customerDeliveryAddress: customerDeliveryAddress || '',
+        paymentMethod: paymentMethod || 'interac',
         //orderDate: new Date(),
         //orderDeadline: schoolData.finCampagne,
         //deliveryDate: schoolData.dateDeLivraison,

@@ -53,8 +53,18 @@ export default async function handler(req, res) {
         return res.status(200).json({ campaigns: [] });
       }
 
+      // Check if we should include stopped campaigns (default: exclude them)
+      const includeStopped = req.query.includeStopped === 'true';
+
       // Get all campaigns for all schools this user manages
-      let campaigns = await Campaign.find({ school: { $in: schoolIds } })
+      const campaignQuery = { school: { $in: schoolIds } };
+
+      // By default, exclude stopped campaigns from the list
+      if (!includeStopped) {
+        campaignQuery.status = { $ne: 'stopped' };
+      }
+
+      let campaigns = await Campaign.find(campaignQuery)
         .populate('supplier', 'name logo email phone pricingSettings')
         .populate('customPrices.productId', 'name price cost image')
         .populate('profitSplits.productId', 'name')

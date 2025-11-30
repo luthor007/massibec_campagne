@@ -27,7 +27,8 @@ import {
   Loader2,
   Info,
   Users,
-  Edit
+  Edit,
+  StopCircle
 } from 'lucide-react';
 import { getMarkupMultiplier, roundDownToFiveCents } from '@/utils/supplierPricing';
 import { toast } from 'react-toastify';
@@ -84,6 +85,8 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
   const [saving, setSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [minimumDeliveryDays, setMinimumDeliveryDays] = useState(21); // Default to 21 days
   const [showChatModal, setShowChatModal] = useState(false);
   const [isTogglingMode, setIsTogglingMode] = useState(false);
@@ -1240,6 +1243,39 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!campaign) return;
+
+    setIsStopping(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaign._id}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        toast.success('Campagne arrêtée avec succès');
+        // Trigger refresh of campaigns list
+        if (onUpdate) {
+          onUpdate();
+        }
+        // Reload page to refresh data
+        window.location.reload();
+      } else {
+        const data = await response.json();
+        toast.error(data.message || 'Erreur lors de l\'arrêt de la campagne');
+      }
+    } catch (error) {
+      console.error('Error stopping campaign:', error);
+      toast.error('Erreur lors de l\'arrêt de la campagne');
+    } finally {
+      setIsStopping(false);
+      setShowStopConfirm(false);
     }
   };
 
@@ -2533,6 +2569,28 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
           )}
         </Card>
 
+        {/* Bouton d'arrêt de campagne (visible pour les campagnes actives ou en production) */}
+        {campaign.status !== 'stopped' && (isProductionMode || campaign.status === 'active') && (
+          <div className="pt-6 border-t border-gray-200 mt-6">
+            <div className="flex flex-col items-center space-y-3">
+              <div className="text-center mb-2">
+                <p className="text-sm text-gray-600">
+                  Arrêter cette campagne la retirera de la liste des campagnes actives.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => setShowStopConfirm(true)}
+                className="flex items-center space-x-2 w-full sm:w-auto border-orange-500 text-orange-600 hover:bg-orange-50"
+                disabled={isStopping}
+              >
+                <StopCircle className="h-4 w-4" />
+                <span className="text-sm sm:text-base">Arrêter la campagne</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Bouton de suppression en bas du formulaire (uniquement si non approuvée) */}
         {!isProductionMode && campaign.status !== 'active' && (
           <div className="pt-6 border-t border-gray-200 mt-6">
@@ -2550,6 +2608,63 @@ const CampaignEditor = ({ campaign, onUpdate, loading, school }) => {
           </div>
         )}
       </div>
+
+      {/* Dialog de confirmation d'arrêt */}
+      <Dialog open={showStopConfirm} onOpenChange={setShowStopConfirm}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-orange-600 flex items-center space-x-2">
+              <StopCircle className="h-5 w-5" />
+              <span>Arrêter la campagne</span>
+            </DialogTitle>
+            <DialogDescription className="pt-4 space-y-3">
+              <p className="text-sm text-gray-700">
+                Cette action va <strong className="text-orange-600">arrêter</strong> la campagne et la retirer de la liste des campagnes actives.
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-gray-600 ml-2">
+                <li>La campagne ne sera plus visible dans le sélecteur</li>
+                <li>Les participants ne pourront plus y accéder</li>
+                <li>Les données et commandes existantes seront conservées</li>
+              </ul>
+              {campaign?.name && (
+                <div className="mt-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <p className="text-xs text-orange-600 mb-1">Campagne à arrêter :</p>
+                  <p className="font-semibold text-gray-900">
+                    {campaign.name} (Campagne #{campaign.campaignNumber})
+                  </p>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowStopConfirm(false)}
+              disabled={isStopping}
+              className="w-full sm:w-auto order-2 sm:order-1"
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={handleStop}
+              disabled={isStopping}
+              className="w-full sm:w-auto order-1 sm:order-2 bg-orange-600 hover:bg-orange-700 text-white"
+            >
+              {isStopping ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Arrêt en cours...
+                </>
+              ) : (
+                <>
+                  <StopCircle className="h-4 w-4 mr-2" />
+                  Arrêter la campagne
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog de confirmation de suppression */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

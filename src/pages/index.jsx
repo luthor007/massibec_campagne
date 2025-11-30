@@ -222,13 +222,13 @@ export default function Home() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.3, ease: "easeOut" }}
-                  className="flex flex-col sm:flex-row gap-4 justify-center items-center max-w-4xl mx-auto"
+                  className="flex flex-col md:flex-row flex-wrap gap-3 md:gap-4 justify-center items-center max-w-4xl mx-auto px-2"
                   style={{ willChange: 'opacity, transform' }}
                 >
                   <Link href="/inscription" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto bg-white/95 hover:bg-white text-blue-700 hover:text-blue-800 font-bold px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation border-2 border-blue-200"
+                      className="w-full sm:w-auto bg-white/95 hover:bg-white text-blue-700 hover:text-blue-800 font-bold px-5 md:px-8 py-4 md:py-6 text-base md:text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation border-2 border-blue-200"
                       onClick={() => trackHeroCtaClick('student')}
                     >
                       <Users className="mr-2 h-5 w-5" />
@@ -238,7 +238,7 @@ export default function Home() {
                   <Link href="/ecole" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto bg-white/95 hover:bg-white text-green-700 hover:text-green-800 font-bold px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation border-2 border-green-200"
+                      className="w-full sm:w-auto bg-white/95 hover:bg-white text-green-700 hover:text-green-800 font-bold px-5 md:px-8 py-4 md:py-6 text-base md:text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation border-2 border-green-200"
                       onClick={() => trackHeroCtaClick('ecole')}
                     >
                       <Building2 className="mr-2 h-5 w-5" />
@@ -248,7 +248,7 @@ export default function Home() {
                   <Link href="/fournisseur" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto bg-white/95 hover:bg-white text-purple-700 hover:text-purple-800 font-bold px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation border-2 border-purple-200"
+                      className="w-full sm:w-auto bg-white/95 hover:bg-white text-purple-700 hover:text-purple-800 font-bold px-5 md:px-8 py-4 md:py-6 text-base md:text-lg shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation border-2 border-purple-200"
                       onClick={() => trackHeroCtaClick('fournisseur')}
                     >
                       <ShoppingBag className="mr-2 h-5 w-5" />
@@ -734,32 +734,32 @@ export default function Home() {
                 <p className="text-xl sm:text-2xl text-blue-100 mb-10 max-w-3xl mx-auto">
                   Rejoignez les écoles, élèves et fournisseurs qui ont découvert la façon simple et rentable de financer leurs projets.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+                <div className="flex flex-col md:flex-row flex-wrap gap-3 md:gap-4 justify-center items-center mb-8 px-2">
                   <Link href="/inscription-manager" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto bg-white text-green-700 hover:bg-green-50 font-bold px-6 sm:px-10 py-4 sm:py-8 text-lg sm:text-xl shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation"
+                      className="w-full sm:w-auto bg-white text-green-700 hover:bg-green-50 font-bold px-5 md:px-10 py-4 md:py-8 text-base md:text-xl shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation"
                     >
                       Je suis une École
-                      <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
+                      <ArrowRight className="ml-2 h-5 w-5 md:h-6 md:w-6" />
                     </Button>
                   </Link>
                   <Link href="/inscription" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto bg-white text-blue-700 hover:bg-blue-50 font-bold px-6 sm:px-10 py-4 sm:py-8 text-lg sm:text-xl shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation"
+                      className="w-full sm:w-auto bg-white text-blue-700 hover:bg-blue-50 font-bold px-5 md:px-10 py-4 md:py-8 text-base md:text-xl shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation"
                     >
                       Je suis un Élève
-                      <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
+                      <ArrowRight className="ml-2 h-5 w-5 md:h-6 md:w-6" />
                     </Button>
                   </Link>
                   <Link href="/inscription-supplier" className="w-full sm:w-auto">
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto bg-white text-purple-700 hover:bg-purple-50 font-bold px-6 sm:px-10 py-4 sm:py-8 text-lg sm:text-xl shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation"
+                      className="w-full sm:w-auto bg-white text-purple-700 hover:bg-purple-50 font-bold px-5 md:px-10 py-4 md:py-8 text-base md:text-xl shadow-2xl transform hover:scale-105 transition-all duration-300 min-h-[44px] touch-manipulation"
                     >
                       Je suis un Fournisseur
-                      <ArrowRight className="ml-2 h-5 w-5 sm:h-6 sm:w-6" />
+                      <ArrowRight className="ml-2 h-5 w-5 md:h-6 md:w-6" />
                     </Button>
                   </Link>
                 </div>

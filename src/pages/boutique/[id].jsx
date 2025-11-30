@@ -1010,42 +1010,109 @@ export async function getServerSideProps(context) {
           schoolName = campaign.school.name
         }
 
-        // Check if store is closed (delivery date + 2 weeks)
-        if (campaign.deliveryDate) {
+        // Check if store should be closed based on campaign status, orders, and inventory
+        const now = new Date()
+        const campaignEndDate = campaign.endDate ? new Date(campaign.endDate) : null
+
+        // Calculate the ordering window end (1 day after campaign end)
+        let orderingWindowEnd = null
+        if (campaignEndDate) {
+          orderingWindowEnd = new Date(campaignEndDate)
+          orderingWindowEnd.setDate(orderingWindowEnd.getDate() + 1)
+          orderingWindowEnd.setHours(23, 59, 59, 999)
+        }
+
+        // Check if past the ordering window
+        const isPastOrderingWindow = orderingWindowEnd && now > orderingWindowEnd
+
+        if (isPastOrderingWindow) {
+          // Check if user has orders and inventory
+          const Order = (await import('../../models/Order')).default
+
+          // Get store owner's orders for this campaign
+          const storeOwnerOrders = await Order.find({
+            store: store._id,
+            campaignId: campaignIdToUse,
+            isTest: { $ne: true }
+          }).lean()
+
+          const hasOrders = storeOwnerOrders.length > 0
+          const hasPaidOrders = storeOwnerOrders.some(o => o.status === 'Payé')
+          const hasSubmittedOrders = storeOwnerOrders.some(o => o.status === 'Commandé' || o.status === 'Complété')
+
+          // Check for inventory
+          let hasInventory = false
+          try {
+            const StudentInventory = (await import('../../models/StudentInventory')).default
+            const inventory = await StudentInventory.findOne({
+              userId: store.user,
+              campaignId: campaignIdToUse
+            }).lean()
+            hasInventory = !!(inventory && inventory.products && inventory.products.length > 0)
+          } catch (e) {
+            console.error('Error checking inventory:', e)
+          }
+
+          // Determine if shop should be closed
+          if (!hasOrders) {
+            // No orders at all - shop is closed
+            isStoreClosed = true
+          } else if (hasPaidOrders && !hasSubmittedOrders && !hasInventory) {
+            // Has unsubmitted orders but no inventory - shop is locked/closed
+            isStoreClosed = true
+          } else if (hasSubmittedOrders && !hasInventory) {
+            // Orders submitted and no inventory - shop is closed
+            isStoreClosed = true
+          }
+          // If hasInventory, shop stays open
+        }
+
+        // Fallback: Also close shop after delivery date + 2 weeks (original logic)
+        if (!isStoreClosed && campaign.deliveryDate) {
           const deliveryDate = new Date(campaign.deliveryDate)
           const twoWeeksAfterDelivery = new Date(deliveryDate)
           twoWeeksAfterDelivery.setDate(twoWeeksAfterDelivery.getDate() + 14)
-          const now = new Date()
 
           if (now > twoWeeksAfterDelivery) {
             isStoreClosed = true
+          }
+        }
 
-            // Find the latest active store for this user
-            // Get all stores for this user, sorted by creation date
-            const userStores = await Store.find({ user: store.user })
-              .populate('campaignId')
-              .sort({ createdAt: -1 })
-              .lean()
+        // If store is closed, find the latest active store
+        if (isStoreClosed) {
+          const userStores = await Store.find({ user: store.user })
+            .populate('campaignId')
+            .sort({ createdAt: -1 })
+            .lean()
 
-            // Find the first store that is not closed
-            for (const userStore of userStores) {
-              if (!userStore.campaignId) continue
+          // Find the first store that is not closed
+          for (const userStore of userStores) {
+            if (!userStore.campaignId || userStore._id.toString() === store._id.toString()) continue
 
-              const storeCampaign = await Campaign.findById(userStore.campaignId).lean()
-              if (!storeCampaign || !storeCampaign.deliveryDate) continue
+            const storeCampaign = await Campaign.findById(userStore.campaignId).lean()
+            if (!storeCampaign) continue
 
-              const storeDeliveryDate = new Date(storeCampaign.deliveryDate)
-              const storeTwoWeeksAfter = new Date(storeDeliveryDate)
-              storeTwoWeeksAfter.setDate(storeTwoWeeksAfter.getDate() + 14)
+            // Check if this campaign is still active
+            const storeEndDate = storeCampaign.endDate ? new Date(storeCampaign.endDate) : null
+            const storeDeliveryDate = storeCampaign.deliveryDate ? new Date(storeCampaign.deliveryDate) : null
 
-              // If this store is not closed and has a slug, use it
-              if (now <= storeTwoWeeksAfter && userStore.slug) {
-                latestActiveStore = {
-                  slug: userStore.slug,
-                  name: userStore.name
-                }
-                break
+            let storeOrderingWindowEnd = null
+            if (storeEndDate) {
+              storeOrderingWindowEnd = new Date(storeEndDate)
+              storeOrderingWindowEnd.setDate(storeOrderingWindowEnd.getDate() + 1)
+              storeOrderingWindowEnd.setHours(23, 59, 59, 999)
+            }
+
+            // Check if this store is still within its ordering window or hasn't reached delivery + 2 weeks
+            const isStoreOpen = (storeOrderingWindowEnd && now <= storeOrderingWindowEnd) ||
+              (storeDeliveryDate && now <= new Date(storeDeliveryDate.getTime() + 14 * 24 * 60 * 60 * 1000))
+
+            if (isStoreOpen && userStore.slug) {
+              latestActiveStore = {
+                slug: userStore.slug,
+                name: userStore.name
               }
+              break
             }
           }
         }

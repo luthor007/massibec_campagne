@@ -115,8 +115,24 @@ export default function StickyCartMobile({ id, campaignId, schoolId, onCheckoutO
 
   return (
     <>
-      {/* Sticky Cart Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 to-indigo-700 border-t-2 border-blue-400 shadow-2xl">
+      {/* Sticky Cart Bar - Fixed to true bottom of viewport on mobile/tablet */}
+      <div
+        className="lg:hidden z-50 bg-gradient-to-r from-blue-600 to-indigo-700 border-t-2 border-blue-400 shadow-2xl"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          // GPU acceleration and rendering stability for iOS/iPad
+          WebkitTransform: 'translateZ(0)',
+          transform: 'translateZ(0)',
+          WebkitBackfaceVisibility: 'hidden',
+          backfaceVisibility: 'hidden',
+          // Ensure the element doesn't bounce with page scroll
+          touchAction: 'none'
+        }}
+      >
         {!showFullCart ? (
           <div
             className="px-4 py-3 flex items-center justify-between cursor-pointer"

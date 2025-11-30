@@ -22,7 +22,7 @@ const CampaignSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: false },
   status: {
     type: String,
-    enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed', 'pending_school_approval'],
+    enum: ['pending_approval', 'approved', 'rejected', 'active', 'completed', 'pending_school_approval', 'stopped'],
     default: 'approved' // Auto-approved by default
   },
   // Campaign mode: test (can modify) or production (locked)

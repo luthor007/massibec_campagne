@@ -42,8 +42,8 @@ export async function getServerSideProps(context) {
 
     // Check if it's a reserved route
     if (slug && RESERVED_ROUTES.includes(slug.toLowerCase())) {
-        // Return empty props and let Next.js handle the route normally
-        return { props: {} }
+        // Reserved routes should not be handled by this page
+        return { notFound: true }
     }
 
     try {

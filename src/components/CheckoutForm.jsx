@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check, PartyPopper, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle, CreditCard, Mail, Phone, User, DollarSign, Copy, Check, PartyPopper, AlertCircle, Banknote } from 'lucide-react'
 import { getTerminology } from '@/utils/organizationHelpers'
 import { trackPaymentCompleted } from '@/lib/analytics'
 import { useSession } from 'next-auth/react'
@@ -45,6 +45,9 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
   const [customStudentDonation, setCustomStudentDonation] = useState('')
   const [schoolDonation, setSchoolDonation] = useState(0)
   const [customSchoolDonation, setCustomSchoolDonation] = useState('')
+
+  // Payment method state
+  const [paymentMethod, setPaymentMethod] = useState('interac') // 'interac' or 'cash'
 
   // StoreId can come from props or router query
   const [storeIdFromRouter, setStoreIdFromRouter] = useState(null)
@@ -148,6 +151,11 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
       const enabledOptions = normalizedOptions.filter(opt => opt.enabled);
       setDeliveryOptions(enabledOptions);
 
+      // Auto-select "Autre" if it's the only enabled option
+      if (enabledOptions.length === 1 && enabledOptions[0].name === 'Autre') {
+        setSelectedDeliveryOption('Autre');
+      }
+
       // Store pickup address and delivery radius from all options
       const pickupOption = normalizedOptions.find(opt => opt.name === 'Pickup (chez moi)');
       if (pickupOption && pickupOption.pickupAddress) {
@@ -213,6 +221,11 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
         // Filter to only show enabled options
         const enabledOptions = normalizedOptions.filter(opt => opt.enabled);
         setDeliveryOptions(enabledOptions);
+
+        // Auto-select "Autre" if it's the only enabled option
+        if (enabledOptions.length === 1 && enabledOptions[0].name === 'Autre') {
+          setSelectedDeliveryOption('Autre');
+        }
 
         // Store pickup address and delivery radius from all options (not just enabled ones)
         const pickupOption = normalizedOptions.find(opt => opt.name === 'Pickup (chez moi)');
@@ -448,13 +461,16 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
     }
 
     // Validate delivery option
-    if (deliveryOptions && deliveryOptions.length > 0 && !selectedDeliveryOption) {
+    // If only "Autre" is enabled, we auto-selected it, so just check customDeliveryOption
+    const onlyAutreEnabled = deliveryOptions && deliveryOptions.length === 1 && deliveryOptions[0].name === 'Autre';
+
+    if (deliveryOptions && deliveryOptions.length > 0 && !onlyAutreEnabled && !selectedDeliveryOption) {
       toast.error('Veuillez sélectionner une option de livraison.')
       return
     }
 
-    if (selectedDeliveryOption === 'Autre' && !customDeliveryOption.trim()) {
-      toast.error('Veuillez préciser votre option de livraison personnalisée.')
+    if ((selectedDeliveryOption === 'Autre' || onlyAutreEnabled) && !customDeliveryOption.trim()) {
+      toast.error('Veuillez préciser comment vous souhaitez récupérer votre commande.')
       return
     }
 
@@ -498,6 +514,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
         deliveryOption: (deliveryOptions && deliveryOptions.length > 0) ? selectedDeliveryOption : '',
         customDeliveryOption: (deliveryOptions && deliveryOptions.length > 0 && selectedDeliveryOption === 'Autre') ? customDeliveryOption.trim() : '',
         customerDeliveryAddress: (deliveryOptions && deliveryOptions.length > 0 && selectedDeliveryOption === 'Livraison (si près de chez moi)') ? customerDeliveryAddress.trim() : '',
+        paymentMethod: paymentMethod,
       }
 
       // Validate that we have products before sending
@@ -729,8 +746,8 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
               </div>
             </div>
 
-            {/* Delivery Options Section */}
-            {deliveryOptions && deliveryOptions.length > 0 && (
+            {/* Delivery Options Section - Only show if more than just "Autre" is enabled */}
+            {deliveryOptions && deliveryOptions.length > 0 && !(deliveryOptions.length === 1 && deliveryOptions[0].name === 'Autre') && (
               <>
                 <Separator className="my-4" />
                 <div className="space-y-3">
@@ -842,6 +859,71 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                 </div>
               </>
             )}
+
+            {/* Simplified delivery input when only "Autre" is enabled */}
+            {deliveryOptions && deliveryOptions.length === 1 && deliveryOptions[0].name === 'Autre' && (
+              <>
+                <Separator className="my-4" />
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-gray-900">
+                    Comment souhaitez-vous récupérer votre commande? <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="text"
+                    placeholder="Ex: À l'école, chez un voisin, au travail..."
+                    value={customDeliveryOption}
+                    onChange={(e) => setCustomDeliveryOption(e.target.value)}
+                    className="w-full py-3 text-base border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg"
+                    required
+                  />
+                </div>
+              </>
+            )}
+
+            <Separator className="my-4" />
+
+            {/* Payment Method Section */}
+            <div className="space-y-3">
+              <Label className="text-base font-semibold text-gray-900">Méthode de paiement <span className="text-red-500">*</span></Label>
+              <RadioGroup
+                value={paymentMethod}
+                onValueChange={setPaymentMethod}
+                className="space-y-2"
+              >
+                <div
+                  className={`flex items-center space-x-3 p-3.5 rounded-lg border-2 cursor-pointer transition-all ${paymentMethod === 'interac'
+                    ? 'border-blue-500 bg-blue-50 shadow-sm'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  onClick={() => setPaymentMethod('interac')}
+                >
+                  <RadioGroupItem value="interac" id="payment-interac" className="flex-shrink-0 h-5 w-5" />
+                  <CreditCard className={`h-5 w-5 flex-shrink-0 ${paymentMethod === 'interac' ? 'text-blue-600' : 'text-gray-400'}`} />
+                  <Label
+                    htmlFor="payment-interac"
+                    className={`flex-1 cursor-pointer text-sm sm:text-base font-medium ${paymentMethod === 'interac' ? 'text-blue-900' : 'text-gray-800'}`}
+                  >
+                    Virement Interac
+                  </Label>
+                </div>
+                <div
+                  className={`flex items-center space-x-3 p-3.5 rounded-lg border-2 cursor-pointer transition-all ${paymentMethod === 'cash'
+                    ? 'border-green-500 bg-green-50 shadow-sm'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  onClick={() => setPaymentMethod('cash')}
+                >
+                  <RadioGroupItem value="cash" id="payment-cash" className="flex-shrink-0 h-5 w-5" />
+                  <Banknote className={`h-5 w-5 flex-shrink-0 ${paymentMethod === 'cash' ? 'text-green-600' : 'text-gray-400'}`} />
+                  <Label
+                    htmlFor="payment-cash"
+                    className={`flex-1 cursor-pointer text-sm sm:text-base font-medium ${paymentMethod === 'cash' ? 'text-green-900' : 'text-gray-800'}`}
+                  >
+                    Argent comptant
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
 
             <Separator className="my-4" />
 
@@ -1072,206 +1154,251 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
             >
               <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
               <DialogTitle className="text-2xl font-bold text-green-600 mb-2 text-center">Merci pour votre commande!</DialogTitle>
-              <DialogDescription className="text-center text-gray-700 mb-6">
-                Votre commande a été enregistrée avec succès. Veuillez suivre les étapes ci-dessous pour finaliser votre paiement par virement Interac.
-              </DialogDescription>
 
-              {/* Payment Instructions */}
-              <div className="w-full space-y-4 mb-6">
-                {/* Bank Links */}
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-                  <p className="text-sm font-medium text-gray-700 mb-3">1. Choisissez votre banque :</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <a href="https://www.desjardins.com/fr/" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
-                        <img src="/images/desjardins.svg" alt="Desjardins" className="w-8 h-8 object-contain" />
-                        <span className="text-xs font-medium">Desjardins</span>
-                      </Button>
-                    </a>
-                    <a href="https://www.bnc.ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
-                        <img src="/images/bnc.svg" alt="BNC" className="w-8 h-8 object-contain" />
-                        <span className="text-xs font-medium">BNC</span>
-                      </Button>
-                    </a>
-                    <a href="https://www.rbcbanqueroyale.com/" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
-                        <img src="/images/rbc.svg" alt="RBC" className="w-8 h-8 object-contain" />
-                        <span className="text-xs font-medium">RBC</span>
-                      </Button>
-                    </a>
-                    <a href="https://www.td.com/ca/fr/perso/" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
-                        <img src="/images/TD.svg" alt="TD" className="w-8 h-8 object-contain" />
-                        <span className="text-xs font-medium">TD</span>
-                      </Button>
-                    </a>
-                    <a href="https://www.scotiabank.com/ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
-                        <img src="/images/Scotiabank.svg" alt="Scotiabank" className="w-8 h-8 object-contain" />
-                        <span className="text-xs font-medium">Scotiabank</span>
-                      </Button>
-                    </a>
-                    <a href="https://www.cibc.com/fr/personal-banking.html" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
-                        <img src="/images/cibc.svg" alt="CIBC" className="w-8 h-8 object-contain" />
-                        <span className="text-xs font-medium">CIBC</span>
-                      </Button>
-                    </a>
+              {/* Cash Payment - Simple confirmation */}
+              {paymentMethod === 'cash' ? (
+                <>
+                  <DialogDescription className="text-center text-gray-700 mb-6">
+                    Votre commande a été enregistrée avec succès. Le paiement sera effectué en argent comptant.
+                  </DialogDescription>
+
+                  <div className="w-full space-y-4 mb-6">
+                    {/* Order Summary */}
+                    <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-r-lg">
+                      <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                        <Banknote className="h-5 w-5" />
+                        Paiement en argent comptant
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        {orderId && (
+                          <p className="text-gray-700">
+                            <strong>Numéro de commande :</strong> #{orderId}
+                          </p>
+                        )}
+                        <p className="text-gray-700">
+                          <strong>Montant à payer :</strong> {displayTotal.toFixed(2)} $
+                        </p>
+                        {owner && (
+                          <p className="text-gray-700">
+                            <strong>Vendeur :</strong> {owner.name || owner.firstName || 'N/A'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-r-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Rappel :</strong> Vous recevrez un courriel de confirmation avec les détails de votre commande.
+                        Veuillez remettre le montant de <strong>{displayTotal.toFixed(2)} $</strong> en argent comptant au vendeur.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </>
+              ) : (
+                <>
+                  {/* Interac Payment - Full instructions */}
+                  <DialogDescription className="text-center text-gray-700 mb-6">
+                    Votre commande a été enregistrée avec succès. Veuillez suivre les étapes ci-dessous pour finaliser votre paiement par virement Interac.
+                  </DialogDescription>
 
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
-                  <h3 className="font-semibold text-blue-900 mb-3">Instructions pour le virement Interac</h3>
-                  <p className="text-xs text-blue-700 mb-3">Veuillez utiliser les informations ci-dessous pour effectuer votre virement Interac :</p>
-
-                  {owner && (
-                    <div className="space-y-3 text-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-gray-700 flex-1">
-                          <strong>2. Destinataire :</strong> {owner.name || owner.firstName || 'N/A'}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 shrink-0"
-                          onClick={() => copyToClipboard(owner.name || owner.firstName || '', 'destinataire')}
-                          title="Copier le destinataire"
-                        >
-                          {copiedField === 'destinataire' ? (
-                            <Check className="h-3.5 w-3.5 text-green-600" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5 text-gray-500" />
-                          )}
-                        </Button>
-                      </div>
-
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-gray-700 flex-1">
-                          <strong>3. Adresse courriel :</strong> {ownerEmail}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 shrink-0"
-                          onClick={() => copyToClipboard(ownerEmail, 'email')}
-                          title="Copier l'email"
-                        >
-                          {copiedField === 'email' ? (
-                            <Check className="h-3.5 w-3.5 text-green-600" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5 text-gray-500" />
-                          )}
-                        </Button>
-                      </div>
-
-                      {!autoDeposit && (
-                        <>
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-gray-700 flex-1">
-                              <strong>4. Question de sécurité :</strong> Numéro de commande
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard('Numéro de commande', 'question')}
-                              title="Copier la question"
-                            >
-                              {copiedField === 'question' ? (
-                                <Check className="h-3.5 w-3.5 text-green-600" />
-                              ) : (
-                                <Copy className="h-3.5 w-3.5 text-gray-500" />
-                              )}
-                            </Button>
-                          </div>
-
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-gray-700 flex-1">
-                              <strong>5. Réponse :</strong> {orderId ? `Cmd-${orderId}` : 'N/A'}
-                            </p>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 shrink-0"
-                              onClick={() => copyToClipboard(orderId ? `Cmd-${orderId}` : '', 'reponse')}
-                              title="Copier la réponse"
-                            >
-                              {copiedField === 'reponse' ? (
-                                <Check className="h-3.5 w-3.5 text-green-600" />
-                              ) : (
-                                <Copy className="h-3.5 w-3.5 text-gray-500" />
-                              )}
-                            </Button>
-                          </div>
-                        </>
-                      )}
-
-                      {!autoDeposit && orderId && (
-                        <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg mt-3">
-                          <p className="text-xs text-amber-800">
-                            <strong>Note importante :</strong> Comme vous n'avez pas activé le dépôt automatique, vous devez utiliser <strong>Cmd-{orderId}</strong> comme réponse à la question de sécurité lors du transfert Interac.
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-gray-700 flex-1">
-                          <strong>{autoDeposit ? '4' : '6'}. Montant :</strong> {displayTotal.toFixed(2)} $
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 shrink-0"
-                          onClick={() => copyToClipboard(displayTotal.toFixed(2), 'montant')}
-                          title="Copier le montant"
-                        >
-                          {copiedField === 'montant' ? (
-                            <Check className="h-3.5 w-3.5 text-green-600" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5 text-gray-500" />
-                          )}
-                        </Button>
-                      </div>
-
-                      {orderId && (
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-gray-700 flex-1">
-                            <strong>{autoDeposit ? '5' : '7'}. Message :</strong> #{orderId}
-                          </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 shrink-0"
-                            onClick={() => copyToClipboard(`#${orderId}`, 'message')}
-                            title="Copier le message"
-                          >
-                            {copiedField === 'message' ? (
-                              <Check className="h-3.5 w-3.5 text-green-600" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5 text-gray-500" />
-                            )}
+                  {/* Payment Instructions */}
+                  <div className="w-full space-y-4 mb-6">
+                    {/* Bank Links */}
+                    <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
+                      <p className="text-sm font-medium text-gray-700 mb-3">1. Choisissez votre banque :</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <a href="https://www.desjardins.com/fr/" target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                            <img src="/images/desjardins.svg" alt="Desjardins" className="w-8 h-8 object-contain" />
+                            <span className="text-xs font-medium">Desjardins</span>
                           </Button>
+                        </a>
+                        <a href="https://www.bnc.ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                            <img src="/images/bnc.svg" alt="BNC" className="w-8 h-8 object-contain" />
+                            <span className="text-xs font-medium">BNC</span>
+                          </Button>
+                        </a>
+                        <a href="https://www.rbcbanqueroyale.com/" target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                            <img src="/images/rbc.svg" alt="RBC" className="w-8 h-8 object-contain" />
+                            <span className="text-xs font-medium">RBC</span>
+                          </Button>
+                        </a>
+                        <a href="https://www.td.com/ca/fr/perso/" target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                            <img src="/images/TD.svg" alt="TD" className="w-8 h-8 object-contain" />
+                            <span className="text-xs font-medium">TD</span>
+                          </Button>
+                        </a>
+                        <a href="https://www.scotiabank.com/ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                            <img src="/images/Scotiabank.svg" alt="Scotiabank" className="w-8 h-8 object-contain" />
+                            <span className="text-xs font-medium">Scotiabank</span>
+                          </Button>
+                        </a>
+                        <a href="https://www.cibc.com/fr/personal-banking.html" target="_blank" rel="noopener noreferrer" className="w-full">
+                          <Button variant="outline" className="w-full h-auto py-2 px-2 flex flex-col items-center justify-center gap-1.5">
+                            <img src="/images/cibc.svg" alt="CIBC" className="w-8 h-8 object-contain" />
+                            <span className="text-xs font-medium">CIBC</span>
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                      <h3 className="font-semibold text-blue-900 mb-3">Instructions pour le virement Interac</h3>
+                      <p className="text-xs text-blue-700 mb-3">Veuillez utiliser les informations ci-dessous pour effectuer votre virement Interac :</p>
+
+                      {owner && (
+                        <div className="space-y-3 text-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-gray-700 flex-1">
+                              <strong>2. Destinataire :</strong> {owner.name || owner.firstName || 'N/A'}
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 shrink-0"
+                              onClick={() => copyToClipboard(owner.name || owner.firstName || '', 'destinataire')}
+                              title="Copier le destinataire"
+                            >
+                              {copiedField === 'destinataire' ? (
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 text-gray-500" />
+                              )}
+                            </Button>
+                          </div>
+
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-gray-700 flex-1">
+                              <strong>3. Adresse courriel :</strong> {ownerEmail}
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 shrink-0"
+                              onClick={() => copyToClipboard(ownerEmail, 'email')}
+                              title="Copier l'email"
+                            >
+                              {copiedField === 'email' ? (
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 text-gray-500" />
+                              )}
+                            </Button>
+                          </div>
+
+                          {!autoDeposit && (
+                            <>
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-gray-700 flex-1">
+                                  <strong>4. Question de sécurité :</strong> Numéro de commande
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 shrink-0"
+                                  onClick={() => copyToClipboard('Numéro de commande', 'question')}
+                                  title="Copier la question"
+                                >
+                                  {copiedField === 'question' ? (
+                                    <Check className="h-3.5 w-3.5 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-3.5 w-3.5 text-gray-500" />
+                                  )}
+                                </Button>
+                              </div>
+
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-gray-700 flex-1">
+                                  <strong>5. Réponse :</strong> {orderId ? `Cmd-${orderId}` : 'N/A'}
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 shrink-0"
+                                  onClick={() => copyToClipboard(orderId ? `Cmd-${orderId}` : '', 'reponse')}
+                                  title="Copier la réponse"
+                                >
+                                  {copiedField === 'reponse' ? (
+                                    <Check className="h-3.5 w-3.5 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-3.5 w-3.5 text-gray-500" />
+                                  )}
+                                </Button>
+                              </div>
+                            </>
+                          )}
+
+                          {!autoDeposit && orderId && (
+                            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg mt-3">
+                              <p className="text-xs text-amber-800">
+                                <strong>Note importante :</strong> Comme vous n'avez pas activé le dépôt automatique, vous devez utiliser <strong>Cmd-{orderId}</strong> comme réponse à la question de sécurité lors du transfert Interac.
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-gray-700 flex-1">
+                              <strong>{autoDeposit ? '4' : '6'}. Montant :</strong> {displayTotal.toFixed(2)} $
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 shrink-0"
+                              onClick={() => copyToClipboard(displayTotal.toFixed(2), 'montant')}
+                              title="Copier le montant"
+                            >
+                              {copiedField === 'montant' ? (
+                                <Check className="h-3.5 w-3.5 text-green-600" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 text-gray-500" />
+                              )}
+                            </Button>
+                          </div>
+
+                          {orderId && (
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-gray-700 flex-1">
+                                <strong>{autoDeposit ? '5' : '7'}. Message :</strong> #{orderId}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 shrink-0"
+                                onClick={() => copyToClipboard(`#${orderId}`, 'message')}
+                                title="Copier le message"
+                              >
+                                {copiedField === 'message' ? (
+                                  <Check className="h-3.5 w-3.5 text-green-600" />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5 text-gray-500" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
                         </div>
+                      )}
+
+                      {!owner && (
+                        <p className="text-sm text-gray-600">
+                          Les informations de paiement seront envoyées par email.
+                        </p>
                       )}
                     </div>
-                  )}
 
-                  {!owner && (
-                    <p className="text-sm text-gray-600">
-                      Les informations de paiement seront envoyées par email.
-                    </p>
-                  )}
-                </div>
-
-                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-lg">
-                  <p className="text-sm text-yellow-800">
-                    <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page.
-                    Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement.
-                    Ne pas tenir compte du paiement si c'est déjà fait. Il se peut qu'il soit dans les indésirables.
-                  </p>
-                </div>
-              </div>
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-r-lg">
+                      <p className="text-sm text-yellow-800">
+                        <strong>IMPORTANT :</strong> Assurez-vous de faire le virement avant de quitter cette page.
+                        Vous allez sous peu recevoir un courriel de confirmation avec ces mêmes informations de paiement.
+                        Ne pas tenir compte du paiement si c'est déjà fait. Il se peut qu'il soit dans les indésirables.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <Button
                 onClick={handleSuccessCloseButton}
@@ -1295,7 +1422,7 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
         <DialogContent className="sm:max-w-[500px] md:max-w-[550px] bg-white p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="pr-8">
             <DialogTitle className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
-              {showMerciAnimation ? 'Merci!' : 'Confirmation de paiement'}
+              {showMerciAnimation ? 'Merci!' : (paymentMethod === 'cash' ? 'Confirmation' : 'Confirmation de paiement')}
             </DialogTitle>
             <DialogDescription className="text-gray-700 text-sm">
               {showMerciAnimation
@@ -1326,7 +1453,9 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                     Merci!
                   </p>
                   <p className="text-sm text-gray-600 max-w-sm">
-                    Votre confirmation nous permet de finaliser la commande. Nous préparons la suite et la page se rafraîchira sous peu.
+                    {paymentMethod === 'cash'
+                      ? 'Votre commande a été enregistrée. N\'oubliez pas de remettre le paiement en argent comptant au vendeur.'
+                      : 'Votre confirmation nous permet de finaliser la commande. Nous préparons la suite et la page se rafraîchira sous peu.'}
                   </p>
                 </motion.div>
               ) : (
@@ -1339,7 +1468,9 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                   className="space-y-3 w-full"
                 >
                   <p className="text-sm text-gray-600 break-words">
-                    Avez-vous reçu la confirmation de paiement de votre institution financière ?
+                    {paymentMethod === 'cash'
+                      ? 'Avez-vous bien noté les informations de votre commande ?'
+                      : 'Avez-vous reçu la confirmation de paiement de votre institution financière ?'}
                   </p>
 
                 </motion.div>
@@ -1354,13 +1485,13 @@ export default function CheckoutForm({ total, originalTotal, discount = 0, disco
                 onClick={handlePaymentCancel}
                 className="w-full sm:flex-1 text-sm sm:text-sm"
               >
-                Non, je n&apos;ai pas reçu la confirmation
+                {paymentMethod === 'cash' ? 'Non, retour aux informations' : 'Non, je n\'ai pas reçu la confirmation'}
               </Button>
               <Button
                 onClick={handlePaymentConfirmed}
                 className="w-full sm:flex-1 bg-green-600 hover:bg-green-700 text-white text-sm sm:text-sm"
               >
-                Oui, j&apos;ai reçu la confirmation
+                {paymentMethod === 'cash' ? 'Oui, tout est noté' : 'Oui, j\'ai reçu la confirmation'}
               </Button>
             </DialogFooter>
           )}

@@ -42,10 +42,8 @@ export default function Document() {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
-        {/* Security Headers via Meta Tags */}
-        <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
-        <meta httpEquiv="X-Frame-Options" content="SAMEORIGIN" />
-        <meta httpEquiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+        {/* Security Headers - Note: X-Frame-Options, X-Content-Type-Options, and Referrer-Policy 
+            are already set via HTTP headers in next.config.mjs for better browser support */}
       </Head>
       <body>
         <Main />

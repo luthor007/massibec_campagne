@@ -541,6 +541,66 @@ export async function getOrdersSSR(session, campaignId = null) {
 }
 
 /**
+ * Get total campaign school profit from ALL orders in a campaign
+ */
+export async function getCampaignTotalSchoolProfitSSR(campaignId, campaignData = null) {
+    if (!campaignId) {
+        return 0;
+    }
+
+    await dbConnect();
+
+    let totalSchoolProfit = 0;
+
+    try {
+        // Fetch ALL orders for this campaign (not filtered by user)
+        const queryConditions = {
+            campaignId: mongoose.Types.ObjectId.isValid(campaignId)
+                ? new mongoose.Types.ObjectId(campaignId)
+                : campaignId,
+            isTest: { $ne: true }
+        };
+
+        const allOrders = await Order.find(queryConditions).lean();
+
+        allOrders.forEach(order => {
+            // Add school donations
+            const schoolDonation = order.schoolDonation || 0;
+            totalSchoolProfit += schoolDonation;
+
+            // Calculate profit from products
+            if (order.products && Array.isArray(order.products)) {
+                order.products.forEach(product => {
+                    const quantity = product.quantity || 0;
+                    const price = product.productPrice || product.price || 0;
+                    const cost = product.productCost || product.cost || 0;
+                    const rawProfit = (price - cost) * quantity;
+
+                    let schoolProject = 0;
+
+                    if (campaignData?.profitSplitType === 'absolute' && campaignData?.profitSplits) {
+                        const productId = product.product?.toString() || product.productId;
+                        const profitSplit = campaignData.profitSplits?.find(ps =>
+                            ps.productId?.toString() === productId
+                        );
+
+                        if (profitSplit) {
+                            schoolProject = (profitSplit.schoolProject || 0) * quantity;
+                        }
+                    }
+
+                    totalSchoolProfit += schoolProject;
+                });
+            }
+        });
+    } catch (error) {
+        console.error('Error calculating campaign total school profit:', error);
+    }
+
+    return Math.round(totalSchoolProfit * 100) / 100;
+}
+
+/**
  * Fetch products server-side
  */
 export async function getProductsSSR() {

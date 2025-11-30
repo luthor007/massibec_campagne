@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { getServerSession } from 'next-auth/next';
 import Layout from '../../components/Layout';
-import { calculateOrderProfits, calculateOrderProfitsDetailed, getCampaignDataWithFallback, isTestCampaign } from '../../utils/campaignHelpers';
+import { calculateOrderProfits, calculateOrderProfitsDetailed, getCampaignDataWithFallback, isTestCampaign, getCampaignExpirationStatus } from '../../utils/campaignHelpers';
 import { getTerminology } from '../../utils/organizationHelpers';
 import CampaignSelector from '../../components/Dashboard/CampaignSelector';
 import JoinCampaignModal from '../../components/Dashboard/JoinCampaignModal';
@@ -36,7 +36,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2, AlertTriangle, AlertCircle, Copy, Check, CheckCircle, Edit2 } from 'lucide-react';
+import { ArrowLeft, Trash2, AlertTriangle, AlertCircle, Copy, Check, CheckCircle, Edit2, Clock, Lock, Package } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
@@ -911,6 +911,11 @@ export default function Commandes({
       currentDate.getTime() <= orderingEnd.getTime();
   }, [campaignEndDateInfo?.raw]);
 
+  // Calculate campaign status for showing banners
+  const campaignStatus = useMemo(() => {
+    return getCampaignExpirationStatus(campaignEndDateInfo?.raw, orders, false);
+  }, [campaignEndDateInfo?.raw, orders]);
+
   // Show loading if session is loading or if we're still fetching orders
   if (status === 'loading' || loading) {
     return <p>Chargement des commandes...</p>;
@@ -971,6 +976,58 @@ export default function Commandes({
             </div>
           </CardHeader>
           <CardContent>
+            {/* Campaign Status Banners */}
+            {campaignStatus.status === 'expired_must_submit' && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 bg-gradient-to-r from-red-500 to-orange-500 rounded-xl p-5 shadow-lg"
+              >
+                <div className="flex items-start gap-4 text-white">
+                  <div className="bg-white/20 rounded-full p-3 flex-shrink-0">
+                    <AlertTriangle className="h-8 w-8" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold mb-2">⚠️ Passez votre commande maintenant!</h3>
+                    <p className="text-white/90 text-sm mb-3">
+                      La campagne est terminée. Vous avez <strong>{campaignStatus.paidOrdersCount} commande{campaignStatus.paidOrdersCount > 1 ? 's' : ''}</strong> payée{campaignStatus.paidOrdersCount > 1 ? 's' : ''} à soumettre à Massibec.
+                      <br />
+                      <strong>Votre boutique est verrouillée</strong> jusqu'à ce que vous passiez votre commande.
+                    </p>
+                    <p className="text-white/80 text-xs">
+                      💡 Si vous souhaitez continuer à vendre, prenez de l'inventaire lors du passage de commande.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {campaignStatus.status === 'ordering_window' && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl p-5 shadow-lg"
+              >
+                <div className="flex items-start gap-4 text-white">
+                  <div className="bg-white/20 rounded-full p-3 flex-shrink-0">
+                    <Clock className="h-8 w-8" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold mb-2">⏰ C'est le moment de passer votre commande!</h3>
+                    <p className="text-white/90 text-sm">
+                      Vous avez <strong>{campaignStatus.paidOrdersCount} commande{campaignStatus.paidOrdersCount > 1 ? 's' : ''}</strong> payée{campaignStatus.paidOrdersCount > 1 ? 's' : ''} prête{campaignStatus.paidOrdersCount > 1 ? 's' : ''} à être envoyée{campaignStatus.paidOrdersCount > 1 ? 's' : ''}.
+                      {campaignStatus.daysRemaining === 0
+                        ? " C'est le dernier jour pour passer votre commande!"
+                        : campaignStatus.daysRemaining === 1
+                          ? " Il reste 1 jour!"
+                          : ` Il reste ${campaignStatus.daysRemaining} jours.`
+                      }
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {orders.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-gray-500 text-lg">Aucune commande trouvée</p>

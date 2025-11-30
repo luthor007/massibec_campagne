@@ -393,6 +393,13 @@ type NewStudentOrderParams = {
     studentSchoolAccount: number;
     schoolProject: number;
   };
+  // New Interac payment instruction fields
+  sellerName?: string;
+  sellerEmail?: string;
+  autoDeposit?: boolean;
+  amountToPay?: number;
+  paymentMethod?: 'interac' | 'cash';
+  organizationType?: string;
 };
 
 export const sendStudentOrderEmail = async (params: LegacyStudentOrderParams | NewStudentOrderParams) => {
@@ -454,6 +461,13 @@ export const sendStudentOrderEmail = async (params: LegacyStudentOrderParams | N
             schoolProjectBenefit: p.schoolProjectBenefit,
             raffleBenefit: p.raffleBenefit,
             tipBreakdown: p.tipBreakdown,
+            // New Interac payment instruction props
+            sellerName: p.sellerName,
+            sellerEmail: p.sellerEmail,
+            autoDeposit: p.autoDeposit ?? true,
+            amountToPay: p.amountToPay,
+            paymentMethod: p.paymentMethod || 'interac',
+            organizationType: p.organizationType,
           } as any)}
         />
       );

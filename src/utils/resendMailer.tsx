@@ -89,7 +89,13 @@ interface SendStudentOrderEmailParams {
   totalAmount: number;
   amountPaid: number;
   paymentInstructions: string;
-  organizationType?: string; // New field for dynamic terminology
+  organizationType?: string;
+  // New Interac payment instruction fields
+  sellerName?: string;
+  sellerEmail?: string;
+  autoDeposit?: boolean;
+  amountToPay?: number;
+  paymentMethod?: 'interac' | 'cash';
 }
 
 interface SendVerificationEmailParams {
@@ -367,6 +373,11 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
     totalAmount,
     amountPaid,
     paymentInstructions,
+    sellerName,
+    sellerEmail,
+    autoDeposit,
+    amountToPay,
+    paymentMethod,
   } = params;
 
   try {
@@ -385,6 +396,11 @@ const sendStudentOrderEmail = async (params: SendStudentOrderEmailParams) => {
         amountPaid={amountPaid}
         paymentInstructions={paymentInstructions}
         organizationType={params.organizationType || 'school'}
+        sellerName={sellerName}
+        sellerEmail={sellerEmail}
+        autoDeposit={autoDeposit ?? true}
+        amountToPay={amountToPay}
+        paymentMethod={paymentMethod || 'interac'}
       />
     );
 

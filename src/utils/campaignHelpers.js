@@ -528,3 +528,144 @@ export const calculateDonationProfits = (tipAmount, campaign) => {
     schoolProject: Math.round((tipAmount * split.schoolProject / 100) * 100) / 100
   };
 };
+
+/**
+ * Get the campaign expiration status and determine what actions are available
+ * @param {Date|string} endDate - Campaign end date
+ * @param {Array} orders - Array of orders (can be empty)
+ * @param {boolean} hasInventory - Whether user has taken inventory
+ * @returns {Object} Campaign status object
+ */
+export const getCampaignExpirationStatus = (endDate, orders = [], hasInventory = false) => {
+  if (!endDate) {
+    return {
+      isExpired: false,
+      isCampaignActive: true,
+      isShopOpen: true,
+      canPlaceOrder: true,
+      daysRemaining: null,
+      status: 'no_end_date',
+      message: null
+    };
+  }
+
+  const now = new Date();
+  const campaignEnd = new Date(endDate);
+
+  // Set to end of day for the campaign end date
+  const campaignEndEOD = new Date(campaignEnd);
+  campaignEndEOD.setHours(23, 59, 59, 999);
+
+  // Calculate days remaining
+  const diffTime = campaignEndEOD - now;
+  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  // Check if campaign has ended
+  const isExpired = now > campaignEndEOD;
+
+  // Check if user has any paid orders that haven't been submitted to Massibec
+  const paidOrders = orders.filter(o => o.status === 'Payé' && !o.isTest);
+  const submittedOrders = orders.filter(o => (o.status === 'Commandé' || o.status === 'Complété') && !o.isTest);
+  const hasUnsubmittedOrders = paidOrders.length > 0;
+  const hasAnyOrders = orders.filter(o => !o.isTest).length > 0;
+
+  // Ordering window: 2 days before until 1 day after campaign end
+  const orderingStart = new Date(campaignEnd);
+  orderingStart.setDate(orderingStart.getDate() - 2);
+  orderingStart.setHours(0, 0, 0, 0);
+
+  const orderingEnd = new Date(campaignEnd);
+  orderingEnd.setDate(orderingEnd.getDate() + 1);
+  orderingEnd.setHours(23, 59, 59, 999);
+
+  const isInOrderingWindow = now >= orderingStart && now <= orderingEnd;
+  const isPastOrderingWindow = now > orderingEnd;
+
+  // Determine status
+  let status = 'active';
+  let message = null;
+  let isShopOpen = true;
+  let canPlaceOrder = true;
+  let mustPlaceOrderToday = false;
+
+  if (isExpired) {
+    if (!hasAnyOrders) {
+      // No orders at all - shop is closed
+      status = 'closed_no_orders';
+      message = 'La campagne est terminée et vous n\'avez aucune commande. Votre boutique est fermée.';
+      isShopOpen = false;
+      canPlaceOrder = false;
+    } else if (hasUnsubmittedOrders) {
+      // Has orders but not submitted - shop is locked, must submit
+      if (hasInventory) {
+        // Has inventory - shop is open but must submit
+        status = 'expired_with_inventory';
+        message = 'La campagne est terminée. Vous avez pris de l\'inventaire, votre boutique reste ouverte.';
+        isShopOpen = true;
+        canPlaceOrder = true;
+      } else {
+        // No inventory - shop is locked, must submit
+        status = 'expired_must_submit';
+        message = 'La campagne est terminée. Vous devez passer votre commande à Massibec maintenant. Si vous souhaitez continuer à vendre, prenez de l\'inventaire.';
+        isShopOpen = false;
+        canPlaceOrder = true;
+        mustPlaceOrderToday = true;
+      }
+    } else if (submittedOrders.length > 0) {
+      // Orders have been submitted
+      status = 'completed';
+      message = 'Votre commande a été passée. La campagne est terminée.';
+      isShopOpen = false;
+      canPlaceOrder = false;
+    } else {
+      // Expired with no paid orders (might have pending orders)
+      status = 'expired_pending_payment';
+      message = 'La campagne est terminée. Vous avez des commandes en attente de paiement.';
+      isShopOpen = false;
+      canPlaceOrder = false;
+    }
+  } else if (isInOrderingWindow) {
+    // In the ordering window
+    if (hasUnsubmittedOrders) {
+      status = 'ordering_window';
+      message = `C'est le moment de passer votre commande! Vous avez jusqu'au ${formatDateFr(orderingEnd)} pour soumettre vos commandes à Massibec.`;
+      mustPlaceOrderToday = daysRemaining <= 0;
+    } else {
+      status = 'ordering_window_no_orders';
+      message = `La fin de la campagne approche (${formatDateFr(campaignEnd)}). Partagez votre boutique pour obtenir plus de commandes!`;
+    }
+  } else if (daysRemaining <= 7) {
+    // Less than a week remaining
+    status = 'ending_soon';
+    message = `Il reste ${daysRemaining} jour${daysRemaining > 1 ? 's' : ''} avant la fin de la campagne!`;
+  }
+
+  return {
+    isExpired,
+    isCampaignActive: !isExpired,
+    isShopOpen,
+    canPlaceOrder,
+    mustPlaceOrderToday,
+    daysRemaining: Math.max(0, daysRemaining),
+    isInOrderingWindow,
+    isPastOrderingWindow,
+    hasUnsubmittedOrders,
+    hasAnyOrders,
+    paidOrdersCount: paidOrders.length,
+    status,
+    message,
+    campaignEndDate: campaignEnd,
+    orderingWindowEnd: orderingEnd
+  };
+};
+
+/**
+ * Format date in French
+ * @param {Date} date - Date to format
+ * @returns {string} Formatted date string
+ */
+const formatDateFr = (date) => {
+  if (!date) return '';
+  const options = { day: 'numeric', month: 'long', year: 'numeric' };
+  return new Date(date).toLocaleDateString('fr-CA', options);
+};

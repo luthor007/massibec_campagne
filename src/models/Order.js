@@ -41,6 +41,7 @@ const OrderSchema = new mongoose.Schema({
   deliveryOption: { type: String, default: '' }, // Option de livraison choisie (e.g., "Travail", "Pickup (chez moi)")
   customDeliveryOption: { type: String, default: '' }, // Option personnalisée si "Autre" est sélectionné
   customerDeliveryAddress: { type: String, default: '' }, // Adresse du client pour livraison
+  paymentMethod: { type: String, enum: ['interac', 'cash'], default: 'interac' }, // Méthode de paiement: 'interac' ou 'cash' (argent comptant)
 });
 
 // Keep orderId compatible with TS pre-save

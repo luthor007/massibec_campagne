@@ -1912,7 +1912,14 @@ export default function OrderPlacementModal({
                                     <span>Total unités à commander:</span>
                                     <span className="text-2xl text-indigo-600">{calculatedTotals.totalQuantity}</span>
                                 </div>
-                                {!allProductsAreMultiplesOfBox && (
+                                {allProductsAreMultiplesOfBox ? (
+                                    <Alert className="bg-green-50 border-green-200">
+                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-sm text-green-700">
+                                            ✅ Parfait, votre commande est ajustée en caisses complètes. Merci beaucoup!
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : (
                                     <Alert className="bg-orange-50 border-orange-200">
                                         <AlertCircle className="h-4 w-4 text-orange-600" />
                                         <AlertDescription className="text-sm">

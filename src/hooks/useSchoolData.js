@@ -21,31 +21,33 @@ export const useSchoolData = (schoolIdOrUserId) => {
       const queryParam = isSchoolId ? `schoolId=${schoolIdOrUserId}` : '';
       const timestampParam = forceRefresh ? `t=${Date.now()}` : '';
       const params = [queryParam, timestampParam].filter(Boolean).join('&');
-      
+
       const url = params ? `/api/school-info?${params}` : '/api/school-info';
-      
+
       const response = await fetch(url, {
         cache: 'no-store',
+        credentials: 'include', // Ensure cookies are sent with the request
         headers: {
           'Cache-Control': 'no-cache'
         }
       });
-      
+
       if (!response.ok) {
         // If 403 and we were using a schoolId, clear it and retry without schoolId
         if (response.status === 403 && isSchoolId) {
           console.log('403 Forbidden - invalid schoolId, retrying without schoolId parameter');
           console.log('This means the schoolId in localStorage is invalid and should be cleared');
-          
+
           // Retry without schoolId to let API find from user associations
           const retryUrl = forceRefresh ? `/api/school-info?t=${Date.now()}` : '/api/school-info';
           const retryResponse = await fetch(retryUrl, {
             cache: 'no-store',
+            credentials: 'include', // Ensure cookies are sent with the request
             headers: {
               'Cache-Control': 'no-cache'
             }
           });
-          
+
           if (retryResponse.ok) {
             const data = await retryResponse.json();
             setSchool(data);
