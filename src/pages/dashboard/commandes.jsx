@@ -25,7 +25,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2, History, ChevronDown, ChevronRight, Package } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import {
@@ -56,6 +56,10 @@ export default function Commandes() {
   const [isHovered, setIsHovered] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [showConfirmOrder, setShowConfirmOrder] = useState(false);
+  const [commandesPassees, setCommandesPassees] = useState([]);
+  const [loadingPassees, setLoadingPassees] = useState(true);
+  const [expandedPassee, setExpandedPassee] = useState({});
 
   const schoolId = session?.user?.school;
   const name = session?.user?.name;
@@ -113,10 +117,22 @@ export default function Commandes() {
       }
     };
 
+    const fetchCommandesPassees = async () => {
+      try {
+        const res = await fetch('/api/student/mes-commandes-passees');
+        if (res.ok) {
+          const data = await res.json();
+          setCommandesPassees(data);
+        }
+      } catch (e) {
+        console.error('Erreur commandes passées:', e);
+      } finally {
+        setLoadingPassees(false);
+      }
+    };
+
     fetchOrders();
-    // La génération de orderId doit se faire lors de la création de la commande, pas au chargement de la page
-    // Donc, nous pouvons supprimer ou commenter cette partie si non nécessaire
-    // getNewOrderId();
+    fetchCommandesPassees();
   }, []);
 
   // Fonction pour calculer le total des commandes payées
@@ -473,7 +489,7 @@ export default function Commandes() {
                       </TableCell>
                       <TableCell>{(order.totalAmount).toFixed(2)}$</TableCell>
                       <TableCell>{order.tip}$</TableCell>
-                      <TableCell>{calculateProfit(order.products).toFixed(2) + order.tip}$</TableCell>
+                      <TableCell>{(calculateProfit(order.products) + (order.tip || 0)).toFixed(2)}$</TableCell>
                       <TableCell>{new Date(order.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Select
@@ -508,9 +524,37 @@ export default function Commandes() {
 
               <CommandeButton 
                 school={school} 
-                handlePlaceOrder={handlePlaceOrder}
+                handlePlaceOrder={() => setShowConfirmOrder(true)}
                 isSubmitting={isSubmitting}
               />
+
+              {/* Dialog de confirmation avant envoi à Massibec */}
+              <Dialog open={showConfirmOrder} onOpenChange={setShowConfirmOrder}>
+                <DialogContent className="bg-white p-6 rounded-md shadow-md max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Confirmer la commande à Massibec</DialogTitle>
+                    <DialogDescription>
+                      Veuillez lire attentivement avant de confirmer.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="mt-4 space-y-3 text-gray-700">
+                    <p>Parfait, votre commande a été ajustée à 6 unités par caisse. Merci beaucoup !</p>
+                    <p className="font-semibold text-amber-600">La boutique sera maintenant fermée, à l'exception des items que vous avez commandés en surplus.</p>
+                    <p className="font-bold">Êtes-vous absolument certain de vouloir passer votre commande à Massibec ?</p>
+                  </div>
+                  <DialogFooter className="mt-6 flex gap-3">
+                    <Button variant="outline" onClick={() => setShowConfirmOrder(false)}>
+                      Non, pas encore — j'aimerais ajouter quelques items supplémentaires.
+                    </Button>
+                    <Button
+                      variant="default"
+                      onClick={() => { setShowConfirmOrder(false); handlePlaceOrder(); }}
+                    >
+                      Oui, passer la commande
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* Popup pour les instructions de paiement */}
               <Dialog open={showPopup} onOpenChange={handlePopupClose}>
@@ -523,64 +567,38 @@ export default function Commandes() {
                   </DialogHeader>
 
                   <div className="mt-4 space-y-4">
-                    <p>1. Choisissez votre banque :</p>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                      <a href="https://www.desjardins.com/fr/" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          Desjardins
-                        </Button>
-                      </a>
-                      <a href="https://www.bnc.ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          BNC
-                        </Button>
-                      </a>
-                      <a href="https://www.rbcbanqueroyale.com/" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          RBC
-                        </Button>
-                      </a>
-                      <a href="https://www.td.com/ca/fr/perso/" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          TD
-                        </Button>
-                      </a>
-                      <a href="https://www.scotiabank.com/ca/fr/particuliers.html" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          Scotiabank
-                        </Button>
-                      </a>
-                      <a href="https://www.cibc.com/fr/personal-banking.html" target="_blank" rel="noopener noreferrer">
-                        <Button as="a" variant="outline" className="w-full">
-                          CIBC
-                        </Button>
-                      </a>
+                    <p className="text-sm text-gray-600">Voici comment effectuer votre paiement à Massibec :</p>
+
+                    {/* ── Virement Interac ── */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                      <h3 className="font-semibold text-blue-800 mb-3">💳 Virement Interac</h3>
+                      <div className="space-y-2">
+                        <p className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm text-gray-600">Destinataire :</span>
+                          <strong>facturation@massibec.com</strong>
+                          <Button variant="outline" size="sm" onClick={() => copyToClipboard('facturation@massibec.com')}>
+                            Copier
+                          </Button>
+                        </p>
+                        <p className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm text-gray-600">Montant :</span>
+                          <strong>{priceToPay} $</strong>
+                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(`${priceToPay}`)}>
+                            Copier
+                          </Button>
+                        </p>
+                        <p className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm text-gray-600">Message :</span>
+                          <strong className="font-mono text-xs">@#&*-{school.code}-{newOrderId || 'N/A'}-{name}</strong>
+                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(`@#&*-${school.code}-${newOrderId || ''}-${name}`)}>
+                            Copier
+                          </Button>
+                        </p>
+                      </div>
                     </div>
 
-                    <p>
-                      2. Envoyez un virement Interac à <strong>facturation@massibec.com</strong>
-                      <Button variant="outline" className="ml-2" onClick={() => copyToClipboard('facturation@massibec.com')}>
-                        Copier
-                      </Button>
-                    </p>
-
-                    <p>
-                      3. Montant à payer : <strong>{priceToPay}$</strong>
-                      <Button variant="outline" className="ml-2" onClick={() => copyToClipboard(`${priceToPay}`)}>
-                        Copier
-                      </Button>
-                    </p>
-
-                    <p>
-                      4. Message de virement : <strong>@#&*-{school.code}-{newOrderId || 'N/A'}-{name}</strong>
-                      <Button variant="outline" className="ml-2" onClick={() => copyToClipboard(`@#&*-${school.code}-${newOrderId || ''}-${name}`)}>
-                        Copier
-                      </Button>
-                    </p>
-
-                    <p>
-                      <strong>IMPORTANT : Assurez-vous de faire le virement avant de quitter cette page.</strong>
-                      Vous allez sous peu recevoir un courriel de confirmation, il se peut qu'il soit dans les indésirables.
+                    <p className="text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                      ⚠️ IMPORTANT : Effectuez votre paiement avant de quitter cette page. Vous recevrez sous peu un courriel de confirmation (vérifiez vos indésirables).
                     </p>
                   </div>
 
@@ -626,6 +644,104 @@ export default function Commandes() {
                 </DialogContent>
               </Dialog>
             </>
+          )}
+        </CardContent>
+      </Card>
+      {/* ── Section : Mes commandes passées (soumises à Massibec) ─────────── */}
+      <Card className="mt-8">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-xl">Mes commandes passées à Massibec</CardTitle>
+          </div>
+          <CardDescription>
+            Historique de toutes vos commandes soumises à l'usine Massibec
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPassees ? (
+            <p className="text-gray-500 text-center py-6">Chargement…</p>
+          ) : commandesPassees.length === 0 ? (
+            <p className="text-gray-400 text-center py-6 italic">
+              Aucune commande soumise à Massibec pour l'instant.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {commandesPassees.map((c) => {
+                const isOpen = expandedPassee[c._id];
+                return (
+                  <div key={c._id} className="border rounded-lg overflow-hidden">
+                    <button
+                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 text-left"
+                      onClick={() => setExpandedPassee(prev => ({ ...prev, [c._id]: !prev[c._id] }))}
+                    >
+                      <div className="flex items-center gap-3">
+                        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <span className="font-semibold text-sm">Commande #{c.orderId}</span>
+                        <span className="text-xs text-gray-500">
+                          {c.timestamp ? new Date(c.timestamp).toLocaleDateString('fr-CA') : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="font-mono">{c.totalUnits} unités</span>
+                        <span className="font-bold text-green-700">{Number(c.totalAmount).toFixed(2)} $</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          c.amountPaid >= c.totalAmount
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {c.amountPaid >= c.totalAmount ? 'Payé ✓' : `Payé: ${Number(c.amountPaid || 0).toFixed(2)} $`}
+                        </span>
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="px-4 pb-4 pt-2 bg-white">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3 text-xs">
+                          <div className="bg-blue-50 rounded p-2 text-center">
+                            <p className="font-bold text-blue-700 text-base">{Number(c.studentBenefit || 0).toFixed(2)} $</p>
+                            <p className="text-gray-500">Votre bénéfice</p>
+                          </div>
+                          <div className="bg-purple-50 rounded p-2 text-center">
+                            <p className="font-bold text-purple-700 text-base">{Number(c.raffleBenefit || 0).toFixed(2)} $</p>
+                            <p className="text-gray-500">Bénéf. tirage</p>
+                          </div>
+                          <div className="bg-orange-50 rounded p-2 text-center">
+                            <p className="font-bold text-orange-700 text-base">{Number(c.organizationBenefit || 0).toFixed(2)} $</p>
+                            <p className="text-gray-500">Bénéf. organisation</p>
+                          </div>
+                        </div>
+
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-gray-500 border-b text-xs">
+                              <th className="pb-1">Produit</th>
+                              <th className="pb-1 text-right">Qté</th>
+                              <th className="pb-1 text-right">Prix unit.</th>
+                              <th className="pb-1 text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(c.products || []).map((p, i) => (
+                              <tr key={i} className="border-b last:border-0">
+                                <td className="py-1 flex items-center gap-1">
+                                  <Package className="h-3 w-3 text-gray-400" /> {p.productName}
+                                </td>
+                                <td className="py-1 text-right font-mono">{p.quantity}</td>
+                                <td className="py-1 text-right font-mono">{Number(p.price || 0).toFixed(2)} $</td>
+                                <td className="py-1 text-right font-mono font-medium">
+                                  {(Number(p.price || 0) * p.quantity).toFixed(2)} $
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

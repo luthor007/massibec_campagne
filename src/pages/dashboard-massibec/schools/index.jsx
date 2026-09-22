@@ -38,7 +38,9 @@ import {
   XCircle,
   AlertCircle,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Landmark,
+  CreditCard
 } from 'lucide-react';
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -676,6 +678,67 @@ const SchoolsPage = () => {
                                     />
                                     <SchoolOrders schoolId={school._id} school={expandedSchoolData[school._id]} />
                                     <SchoolSalesData schoolId={school._id} />
+
+                                    {/* Coordonnées bancaires — pour le versement Massibec → École */}
+                                    {(() => {
+                                      const s = expandedSchoolData[school._id];
+                                      const hasBankInfo = s.paymentMethod === 'virement'
+                                        ? (s.bankInstitution || s.bankTransit || s.bankAccount || s.bankInteracEmail)
+                                        : s.bankPayableTo;
+                                      return (
+                                        <Card className="border border-blue-200 bg-blue-50">
+                                          <CardHeader className="pb-2">
+                                            <div className="flex items-center gap-2">
+                                              <Landmark className="h-5 w-5 text-blue-600" />
+                                              <CardTitle className="text-base text-blue-800">
+                                                Coordonnées bancaires — versement Massibec → École
+                                              </CardTitle>
+                                            </div>
+                                          </CardHeader>
+                                          <CardContent>
+                                            {!hasBankInfo ? (
+                                              <p className="text-sm text-gray-500 italic">
+                                                Aucune coordonnée bancaire fournie par l'école.
+                                              </p>
+                                            ) : s.paymentMethod === 'cheque' ? (
+                                              <div className="flex items-center gap-3">
+                                                <CreditCard className="h-4 w-4 text-gray-500" />
+                                                <div>
+                                                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Chèque — à l'ordre de</p>
+                                                  <p className="font-semibold text-gray-800">{s.bankPayableTo || '—'}</p>
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Virement bancaire (EFT)</p>
+                                                  <div className="grid grid-cols-3 gap-2 font-mono text-sm">
+                                                    <div>
+                                                      <span className="text-xs text-gray-400 block">Institution</span>
+                                                      <span className="font-bold">{s.bankInstitution || '—'}</span>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-xs text-gray-400 block">Transit</span>
+                                                      <span className="font-bold">{s.bankTransit || '—'}</span>
+                                                    </div>
+                                                    <div>
+                                                      <span className="text-xs text-gray-400 block">Compte</span>
+                                                      <span className="font-bold">{s.bankAccount || '—'}</span>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                                {s.bankInteracEmail && (
+                                                  <div>
+                                                    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Virement Interac (comptabilité)</p>
+                                                    <p className="text-sm font-semibold text-blue-700">{s.bankInteracEmail}</p>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </CardContent>
+                                        </Card>
+                                      );
+                                    })()}
                                   </div>
                                 ) : (
                                   <div className="text-center py-8">

@@ -84,7 +84,12 @@ import {
   Percent,
   Trash2,
   Copy,
-  Check
+  Check,
+  ExternalLink,
+  ShoppingCart,
+  Landmark,
+  CreditCard,
+  Building2
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -105,6 +110,12 @@ export default function DashboardManager() {
   const [participants, setParticipants] = useState([]);
   const [salesData, setSalesData] = useState([]);
   const [totalRaised, setTotalRaised] = useState(0);
+
+  // Onglet commandes élèves
+  const [commandesEleves, setCommandesEleves] = useState([]);
+  const [commandesLoading, setCommandesLoading] = useState(false);
+  const [commandesFilter, setCommandesFilter] = useState('');
+  const [commandesCampagne, setCommandesCampagne] = useState('');
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true); // New loading state
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
@@ -121,6 +132,10 @@ export default function DashboardManager() {
   const [reviewingCampaign, setReviewingCampaign] = useState(null);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
 
+  // Coordonnées bancaires
+  const [bankForm, setBankForm] = useState({ paymentMethod: 'cheque', bankInstitution: '', bankTransit: '', bankAccount: '', bankInteracEmail: '', bankPayableTo: '' });
+  const [savingBank, setSavingBank] = useState(false);
+  const [bankSaved, setBankSaved] = useState(false);
 
 const handleCopy = (code) => {
   if (!navigator.clipboard) {
@@ -138,6 +153,29 @@ const handleCopy = (code) => {
     });
 };
 
+  const saveBankInfo = async () => {
+    setSavingBank(true);
+    try {
+      const res = await fetch('/api/school-info', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bankForm),
+      });
+      if (res.ok) {
+        setBankSaved(true);
+        toast.success('Coordonnées bancaires sauvegardées.');
+        setTimeout(() => setBankSaved(false), 3000);
+      } else {
+        const data = await res.json();
+        toast.error(data.message || 'Erreur lors de la sauvegarde.');
+      }
+    } catch (e) {
+      toast.error('Erreur réseau.');
+    } finally {
+      setSavingBank(false);
+    }
+  };
+
   // Fetch School Info
   useEffect(() => {
     const fetchSchoolInfo = async () => {
@@ -149,6 +187,15 @@ const handleCopy = (code) => {
           const data = await response.json();
           console.log('School info received:', data);
           setSchool(data);
+          // Pré-remplir le formulaire bancaire avec les données existantes
+          setBankForm({
+            paymentMethod: data.paymentMethod || 'cheque',
+            bankInstitution: data.bankInstitution || '',
+            bankTransit: data.bankTransit || '',
+            bankAccount: data.bankAccount || '',
+            bankInteracEmail: data.bankInteracEmail || '',
+            bankPayableTo: data.bankPayableTo || '',
+          });
           console.log('School info state updated');
         } else {
           const errorData = await response.json();
@@ -245,6 +292,26 @@ const handleCopy = (code) => {
       fetchParticipants();
     }
   }, [session, school]); // Added 'school' to dependencies
+
+  // Charger les commandes élèves quand l'onglet est ouvert
+  const fetchCommandesEleves = async () => {
+    setCommandesLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (commandesCampagne) params.append('campaignNumber', commandesCampagne);
+      const res = await fetch(`/api/manager/commandes-eleves?${params}`);
+      if (!res.ok) throw new Error('Erreur API');
+      setCommandesEleves(await res.json());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCommandesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'commandes') fetchCommandesEleves();
+  }, [activeTab]);
 
   // Handle Logout
   const handleLogout = async () => {
@@ -574,7 +641,7 @@ const handleCopy = (code) => {
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4 rounded-xl bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200/50 p-1">
+          <TabsList className="grid w-full grid-cols-5 rounded-xl bg-white/80 backdrop-blur-sm shadow-lg border border-gray-200/50 p-1">
             <TabsTrigger 
               value="overview" 
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
@@ -596,12 +663,19 @@ const handleCopy = (code) => {
               <Users className="h-4 w-4 mr-2" />
               Participants
             </TabsTrigger>
-            <TabsTrigger 
+            <TabsTrigger
               value="sales"
               className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
             >
               <PieChartIcon className="h-4 w-4 mr-2" />
               Ventes
+            </TabsTrigger>
+            <TabsTrigger
+              value="commandes"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-md"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Commandes
             </TabsTrigger>
           </TabsList>
 
@@ -1194,8 +1268,178 @@ const handleCopy = (code) => {
                           </p>
                         </div>
                       </div>
+
+                      {/* Bouton portail vendeur */}
+                      {school.code && (
+                        <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200">
+                          <div className="flex items-center space-x-3 mb-3">
+                            <div className="p-2 bg-green-600 rounded-lg">
+                              <ShoppingCart className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-green-700">Portail de commande</p>
+                              <p className="text-xs text-green-600">Ouvrir le portail élève directement</p>
+                            </div>
+                          </div>
+                          <a
+                            href={`/order/${school.code}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold">
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              Ouvrir le portail vendeur
+                            </Button>
+                          </a>
+                          <p className="text-xs text-green-700 mt-2 text-center">
+                            campagne.massibec.com/order/{school.code}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Coordonnées bancaires — versement Massibec → École */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.1 }}
+            >
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Landmark className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Coordonnées bancaires</CardTitle>
+                      <CardDescription className="text-sm">
+                        Où Massibec doit vous verser le montant de votre campagne
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Moyen de paiement préféré */}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4" />
+                      Moyen de paiement préféré
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setBankForm(f => ({ ...f, paymentMethod: 'cheque' }))}
+                        className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                          bankForm.paymentMethod === 'cheque'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <Check className={`h-4 w-4 ${bankForm.paymentMethod === 'cheque' ? 'opacity-100' : 'opacity-0'}`} />
+                        Chèque
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBankForm(f => ({ ...f, paymentMethod: 'virement' }))}
+                        className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                          bankForm.paymentMethod === 'virement'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <Check className={`h-4 w-4 ${bankForm.paymentMethod === 'virement' ? 'opacity-100' : 'opacity-0'}`} />
+                        Virement bancaire
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Chèque */}
+                  {bankForm.paymentMethod === 'cheque' && (
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Chèque — à l'ordre de :</p>
+                      <div>
+                        <Label htmlFor="bankPayableTo" className="text-sm">Nom de l'organisme / école</Label>
+                        <Input
+                          id="bankPayableTo"
+                          value={bankForm.bankPayableTo}
+                          onChange={e => setBankForm(f => ({ ...f, bankPayableTo: e.target.value }))}
+                          placeholder="Ex: Comité de parents École Bois-Joli"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Virement bancaire */}
+                  {bankForm.paymentMethod === 'virement' && (
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Coordonnées bancaires</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label htmlFor="bankInstitution" className="text-sm">Institution #</Label>
+                          <Input
+                            id="bankInstitution"
+                            value={bankForm.bankInstitution}
+                            onChange={e => setBankForm(f => ({ ...f, bankInstitution: e.target.value }))}
+                            placeholder="815"
+                            maxLength={4}
+                            className="mt-1 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="bankTransit" className="text-sm">Transit #</Label>
+                          <Input
+                            id="bankTransit"
+                            value={bankForm.bankTransit}
+                            onChange={e => setBankForm(f => ({ ...f, bankTransit: e.target.value }))}
+                            placeholder="00015"
+                            maxLength={5}
+                            className="mt-1 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="bankAccount" className="text-sm">Compte #</Label>
+                          <Input
+                            id="bankAccount"
+                            value={bankForm.bankAccount}
+                            onChange={e => setBankForm(f => ({ ...f, bankAccount: e.target.value }))}
+                            placeholder="00401942"
+                            className="mt-1 font-mono"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="bankInteracEmail" className="text-sm">Courriel Virement Interac (comptabilité)</Label>
+                        <Input
+                          id="bankInteracEmail"
+                          type="email"
+                          value={bankForm.bankInteracEmail}
+                          onChange={e => setBankForm(f => ({ ...f, bankInteracEmail: e.target.value }))}
+                          placeholder="comptabilite@ecole.qc.ca"
+                          className="mt-1"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Optionnel — pour les petits montants par Interac</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={saveBankInfo}
+                    disabled={savingBank}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {savingBank ? (
+                      <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Sauvegarde…</>
+                    ) : bankSaved ? (
+                      <><CheckCircle className="h-4 w-4 mr-2 text-green-300" />Sauvegardé !</>
+                    ) : (
+                      <><Building2 className="h-4 w-4 mr-2" />Sauvegarder les coordonnées</>
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
             </motion.div>
@@ -1784,6 +2028,140 @@ const handleCopy = (code) => {
                   </Table>
                 </div>
               </CardFooter>
+            </Card>
+          </TabsContent>
+
+          {/* Commandes Élèves Tab */}
+          <TabsContent value="commandes" className="space-y-6">
+            <Card className="border-0 shadow-xl">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <CardTitle className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      📦 Commandes des élèves
+                    </CardTitle>
+                    <CardDescription className="text-base">
+                      Toutes les commandes passées via le compte de vos élèves
+                    </CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={fetchCommandesEleves}>
+                    <RefreshCw className="h-4 w-4 mr-1" /> Actualiser
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Filtres */}
+                <div className="flex flex-wrap gap-3 bg-gray-50 p-3 rounded-lg">
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Recherche élève / client</label>
+                    <Input
+                      placeholder="Nom de l'élève ou client…"
+                      value={commandesFilter}
+                      onChange={e => setCommandesFilter(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-32">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Campagne #</label>
+                    <Input
+                      type="number"
+                      placeholder="ex: 1"
+                      value={commandesCampagne}
+                      onChange={e => setCommandesCampagne(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button size="sm" onClick={fetchCommandesEleves}>Appliquer</Button>
+                  </div>
+                </div>
+
+                {commandesLoading ? (
+                  <div className="flex items-center gap-2 justify-center py-8 text-gray-500">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                    </svg>
+                    Chargement…
+                  </div>
+                ) : (() => {
+                  const q = commandesFilter.toLowerCase();
+                  const displayed = commandesEleves.filter(o =>
+                    !q ||
+                    (o.studentName || '').toLowerCase().includes(q) ||
+                    (o.email || '').toLowerCase().includes(q) ||
+                    (o.phoneNumber || '').toLowerCase().includes(q)
+                  );
+
+                  if (displayed.length === 0) {
+                    return <p className="text-gray-500 text-center py-8">Aucune commande trouvée.</p>;
+                  }
+
+                  // Totaux
+                  const totalUnites = displayed.reduce((a, o) => a + (o.totalUnits || 0), 0);
+                  const totalMontant = displayed.reduce((a, o) => a + (o.totalAmount || 0), 0);
+                  const totalBenefice = displayed.reduce((a, o) => a + (o.studentBenefit || 0), 0);
+
+                  return (
+                    <>
+                      {/* KPIs */}
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        {[
+                          { label: 'Commandes', val: displayed.length },
+                          { label: 'Unités', val: totalUnites },
+                          { label: 'Montant total', val: `$${totalMontant.toFixed(2)}` },
+                        ].map(m => (
+                          <div key={m.label} className="bg-blue-50 border border-blue-100 rounded-lg py-3">
+                            <p className="text-2xl font-bold text-blue-700">{m.val}</p>
+                            <p className="text-xs text-gray-500 mt-1">{m.label}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Tableau */}
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>#Cmd</TableHead>
+                              <TableHead>Élève</TableHead>
+                              <TableHead>Campagne</TableHead>
+                              <TableHead>Produits</TableHead>
+                              <TableHead className="text-right">Unités</TableHead>
+                              <TableHead className="text-right">Montant</TableHead>
+                              <TableHead className="text-right">Bénéfice élève</TableHead>
+                              <TableHead>Date</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {displayed.map(o => (
+                              <TableRow key={o._id}>
+                                <TableCell className="font-mono text-xs">{o.orderId}</TableCell>
+                                <TableCell>
+                                  <p className="font-medium">{o.studentName || '—'}</p>
+                                  {o.email && <p className="text-xs text-gray-400">{o.email}</p>}
+                                </TableCell>
+                                <TableCell>#{o.campaignNumber || '—'}</TableCell>
+                                <TableCell className="text-sm text-gray-600">
+                                  {(o.products || []).map(p => `${p.productName} ×${p.quantity}`).join(', ')}
+                                </TableCell>
+                                <TableCell className="text-right font-mono">{o.totalUnits}</TableCell>
+                                <TableCell className="text-right font-semibold text-green-700">
+                                  ${(o.totalAmount || 0).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right text-blue-700">
+                                  ${(o.studentBenefit || 0).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-xs text-gray-500">
+                                  {o.timestamp ? new Date(o.timestamp).toLocaleDateString('fr-CA') : '—'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
+                  );
+                })()}
+              </CardContent>
             </Card>
           </TabsContent>
 

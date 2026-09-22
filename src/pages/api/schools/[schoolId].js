@@ -141,12 +141,12 @@ export default async function handler(req, res) {
 
       case 'PATCH':
         const updates = req.body;
-        const allowedUpdates = ['expNum', 'accumba'];
-        
+        const allowedUpdates = ['expNum', 'accumba', 'paymentMethod', 'bankInstitution', 'bankTransit', 'bankAccount', 'bankInteracEmail', 'bankPayableTo'];
+
         // Validate and sanitize updates
         Object.keys(updates).forEach(key => {
-          if (allowedUpdates.includes(key) && updates[key]) {
-            school[key] = sanitizeHtml(updates[key].toString().trim());
+          if (allowedUpdates.includes(key)) {
+            school[key] = sanitizeHtml((updates[key] || '').toString().trim());
           }
         });
 
@@ -157,7 +157,12 @@ export default async function handler(req, res) {
           id: school._id.toString(),
           name: school.name,
           expNum: school.expNum,
-          accumba: school.accumba
+          accumba: school.accumba,
+          bankInstitution: school.bankInstitution,
+          bankTransit: school.bankTransit,
+          bankAccount: school.bankAccount,
+          bankInteracEmail: school.bankInteracEmail,
+          bankPayableTo: school.bankPayableTo,
         });
         break;
 

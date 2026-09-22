@@ -90,6 +90,13 @@ const SchoolSchema = new mongoose.Schema({
   },
   accumba: { type: String },
   expNum: { type: String },
+  // Coordonnées bancaires de l'école (pour le versement Massibec → École)
+  paymentMethod: { type: String, enum: ['cheque', 'virement'], default: 'cheque' },
+  bankInstitution: { type: String },
+  bankTransit: { type: String },
+  bankAccount: { type: String },
+  bankInteracEmail: { type: String },
+  bankPayableTo: { type: String }, // Nom au chèque / à l'ordre de
   customFields: { type: mongoose.Schema.Types.Mixed, default: {} }
 });
 
