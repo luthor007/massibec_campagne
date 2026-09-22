@@ -37,7 +37,7 @@ Migration complète du système d'email vers SendGrid Web API avec gestion dynam
 
 ```env
 EMAIL_PROVIDER=sendgrid
-SENDGRID_API_KEY=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
+SENDGRID_API_KEY=SG.VOTRE_CLE_ICI
 ```
 
 ### Sender Management dans SendGrid
